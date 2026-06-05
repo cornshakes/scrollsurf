@@ -1,5 +1,5 @@
-import WikiArticle from '@/components/WikiArticle';
+import WikiArticles from '@/components/WikiArticles';
 
 export default function Home() {
-  return <WikiArticle />;
+  return <WikiArticles />;
 }
