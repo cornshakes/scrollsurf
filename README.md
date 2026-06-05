@@ -17,3 +17,4 @@ npm run dev
 
 [http://localhost:3000](http://localhost:3000)
 
+Check out the [Diary](./DIARY.md)!
