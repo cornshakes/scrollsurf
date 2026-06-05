@@ -1,6 +1,13 @@
 'use server';
 
-import { insert_articles, get_next_articles, count_unseen, type Article } from '@/lib/db';
+import {
+  insert_articles,
+  get_next_articles,
+  count_unseen,
+  set_like,
+  get_voted_articles,
+  type Article,
+} from '@/lib/db';
 
 const FETCH_BATCH_SIZE = 500;
 const REPLENISH_THRESHOLD = 50;
@@ -55,4 +62,12 @@ export async function get_next_wiki_articles(count: number): Promise<Article[]> 
     populate_articles().catch(console.error);
   }
   return get_next_articles(count);
+}
+
+export async function set_article_like(article_id: number, value: -1 | 0 | 1) {
+  set_like(article_id, value);
+}
+
+export async function get_voted_wiki_articles(vote: -1 | 1): Promise<Article[]> {
+  return get_voted_articles(vote);
 }
