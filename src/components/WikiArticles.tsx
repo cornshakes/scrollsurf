@@ -13,6 +13,7 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import Chip from '@mui/material/Chip';
 import MenuIcon from '@mui/icons-material/Menu';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
@@ -84,7 +85,28 @@ function ArticleCard({
           </IconButton>
         </Box>
       </Box>
-      {article.extract && <Typography variant="body1">{article.extract}</Typography>}
+      {article.extract && (
+        <Typography variant="body1" sx={{ mb: article.categories.length ? 2 : 0 }}>
+          {article.extract}
+        </Typography>
+      )}
+      {article.categories.length > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {article.categories.map((cat) => (
+            <Chip
+              key={cat}
+              label={cat}
+              size="small"
+              variant="outlined"
+              component="a"
+              href={`https://en.wikipedia.org/wiki/Category:${encodeURIComponent(cat)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              clickable
+            />
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
