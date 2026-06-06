@@ -198,10 +198,19 @@ function VotedFeed({ vote }: { vote: -1 | 1 }) {
   );
 }
 
-function TopicLeaf({ topic }: { topic: TopicStat }) {
+function TopicLeaf({
+  topic,
+  indent,
+  display_label,
+}: {
+  topic: TopicStat;
+  indent: number;
+  display_label?: string;
+}) {
+  const label = display_label ?? topic.label;
   return (
-    <ListItem sx={{ pl: 5 }}>
-      <ListItemText primary={topic.label} secondary={`${topic.article_count} articles`} />
+    <ListItem sx={{ pl: indent }}>
+      <ListItemText primary={label} secondary={`${topic.article_count} articles`} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
         {topic.liked > 0 && (
           <Chip
@@ -226,21 +235,175 @@ function TopicLeaf({ topic }: { topic: TopicStat }) {
   );
 }
 
-function TopicNode({ name, topics }: { name: string; topics: TopicStat[] }) {
+function TopicGroup({
+  name,
+  topics,
+  indent,
+}: {
+  name: string;
+  topics: TopicStat[];
+  indent: number;
+}) {
   const [open, setOpen] = useState(false);
-  const total = topics.reduce((sum, t) => sum + t.article_count, 0);
+
+  const nested = new Map<string, TopicStat[]>();
+  for (const topic of topics) {
+    const dot_idx = topic.label.indexOf('.');
+    const first_segment = dot_idx > 0 ? topic.label.slice(0, dot_idx) : topic.label;
+    if (first_segment.endsWith('*')) continue;
+    let list = nested.get(first_segment);
+    if (!list) {
+      list = [];
+      nested.set(first_segment, list);
+    }
+    list.push({
+      ...topic,
+      label: dot_idx > 0 ? topic.label.slice(dot_idx + 1) : topic.label,
+    });
+  }
+
+  const sorted_nested = Array.from(nested.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  // Collapse: single child with same name and no further nesting → render as leaf
+  if (
+    sorted_nested.length === 1 &&
+    sorted_nested[0][0] === name &&
+    !sorted_nested[0][1].some((t) => t.label.includes('.'))
+  ) {
+    const leaf = sorted_nested[0][1][0];
+    return <TopicLeaf topic={leaf} indent={indent} display_label={name} />;
+  }
+
+  const total = Array.from(nested.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.article_count, 0),
+    0
+  );
+  const total_liked = Array.from(nested.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.liked, 0),
+    0
+  );
+  const total_disliked = Array.from(nested.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.disliked, 0),
+    0
+  );
+
+  return (
+    <>
+      <ListItemButton onClick={() => setOpen((o) => !o)} sx={{ pl: indent }}>
+        <FolderIcon sx={{ mr: 1.5, color: 'text.secondary', fontSize: '1.2rem' }} />
+        <ListItemText primary={name} secondary={`${total} articles`} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, mr: 2 }}>
+          {total_liked > 0 && (
+            <Chip
+              icon={<ThumbUpIcon />}
+              label={total_liked}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {total_disliked > 0 && (
+            <Chip
+              icon={<ThumbDownIcon />}
+              label={total_disliked}
+              size="small"
+              color="error"
+              variant="outlined"
+            />
+          )}
+        </Box>
+        {open ? <ExpandLess /> : <ExpandMore />}
+      </ListItemButton>
+      <Collapse in={open} unmountOnExit>
+        <List disablePadding>
+          {sorted_nested.map(([segment_name, segment_topics]) => {
+            const has_further_nesting = segment_topics.some((t) => t.label.includes('.'));
+            if (segment_topics.length === 1 && !has_further_nesting) {
+              return (
+                <TopicLeaf
+                  key={segment_topics[0].topic}
+                  topic={segment_topics[0]}
+                  indent={indent + 3}
+                  display_label={segment_name}
+                />
+              );
+            }
+            return (
+              <TopicGroup
+                key={segment_name}
+                name={segment_name}
+                topics={segment_topics}
+                indent={indent + 3}
+              />
+            );
+          })}
+        </List>
+      </Collapse>
+    </>
+  );
+}
+
+function TopicRoot({ name, topics }: { name: string; topics: TopicStat[] }) {
+  const [open, setOpen] = useState(false);
+
+  const grouped = new Map<string, TopicStat[]>();
+  for (const topic of topics) {
+    const first_dot = topic.label.indexOf('.');
+    const group_key = first_dot > 0 ? topic.label.slice(0, first_dot) : topic.label;
+    if (group_key.endsWith('*')) continue;
+    let list = grouped.get(group_key);
+    if (!list) {
+      list = [];
+      grouped.set(group_key, list);
+    }
+    list.push({ ...topic, label: first_dot > 0 ? topic.label.slice(first_dot + 1) : topic.label });
+  }
+
+  const sorted_groups = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const total = Array.from(grouped.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.article_count, 0),
+    0
+  );
+  const total_liked = Array.from(grouped.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.liked, 0),
+    0
+  );
+  const total_disliked = Array.from(grouped.values()).reduce(
+    (sum, list) => sum + list.reduce((s, t) => s + t.disliked, 0),
+    0
+  );
 
   return (
     <>
       <ListItemButton onClick={() => setOpen((o) => !o)}>
         <FolderIcon sx={{ mr: 1.5, color: 'text.secondary' }} />
-        <ListItemText primary={name} secondary={`${topics.length} topics · ${total} articles`} />
+        <ListItemText primary={name} secondary={`${total} articles`} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, mr: 2 }}>
+          {total_liked > 0 && (
+            <Chip
+              icon={<ThumbUpIcon />}
+              label={total_liked}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {total_disliked > 0 && (
+            <Chip
+              icon={<ThumbDownIcon />}
+              label={total_disliked}
+              size="small"
+              color="error"
+              variant="outlined"
+            />
+          )}
+        </Box>
         {open ? <ExpandLess /> : <ExpandMore />}
       </ListItemButton>
       <Collapse in={open} unmountOnExit>
         <List disablePadding>
-          {topics.map((topic) => (
-            <TopicLeaf key={topic.topic} topic={topic} />
+          {sorted_groups.map(([group_name, group_topics]) => (
+            <TopicGroup key={group_name} name={group_name} topics={group_topics} indent={4} />
           ))}
         </List>
       </Collapse>
@@ -274,7 +437,7 @@ function TopicsFeed() {
       ) : (
         <List>
           {tree.roots.map((root) => (
-            <TopicNode key={root.name} name={root.name} topics={root.topics} />
+            <TopicRoot key={root.name} name={root.name} topics={root.topics} />
           ))}
         </List>
       )}

@@ -47,3 +47,13 @@ Then I got a warning that I had used more than 90% (reaching 95% without further
 With my next request (remove a button), I hit my session limit. It feels dirty having to go manually dig in the code like a cave person, but I guess I'll do what I have to. So the normal subscription seems to be ok for a "light" coding afternoon but not enough for all day heavy lifting.
 
 In the end, I let the haiku model with thinking turned off (whatever that means) refactor it all to snake_case. It did some extra cleanup by itself.
+
+# More Category Nesting
+
+Some Categories looked like this:
+
+Geography.Regions.Africa.Northern Africa
+Geography.Regions.Africa.Southern Africa
+
+I used the Haiku model with thinking turned off to make all that nested (in the UI). Very fast, reacting well to more inputs.
+In the end it got stuck when I asked it to merge groups like Regions.Regions. I switched to sonnet medium and it improved the code and fixed it after one more nudge.
