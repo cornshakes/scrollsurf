@@ -47,22 +47,44 @@ function ArticleCard({
 
   return (
     <Box sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}>
-      <Typography variant="h5" component="h2" gutterBottom>
-        <Link href={article.url} target="_blank" rel="noopener noreferrer" underline="hover">
-          {article.title}
-        </Link>
-      </Typography>
-      <Typography variant="body1" sx={{ mb: 2 }}>
-        {article.extract}
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <IconButton onClick={() => vote(1)} color={like === 1 ? 'primary' : 'default'} size="small">
-          <ThumbUpIcon fontSize="small" />
-        </IconButton>
-        <IconButton onClick={() => vote(-1)} color={like === -1 ? 'error' : 'default'} size="small">
-          <ThumbDownIcon fontSize="small" />
-        </IconButton>
+      <Box sx={{ display: 'flex', gap: 2, mb: article.extract ? 2 : 0 }}>
+        {article.image_url && (
+          <Box
+            component="img"
+            src={article.image_url}
+            sx={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }}
+          />
+        )}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h5" component="h2">
+            <Link href={article.url} target="_blank" rel="noopener noreferrer" underline="hover">
+              {article.title}
+            </Link>
+          </Typography>
+          {article.description && (
+            <Typography variant="body2" color="text.secondary">
+              {article.description}
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+          <IconButton
+            onClick={() => vote(1)}
+            color={like === 1 ? 'primary' : 'default'}
+            size="small"
+          >
+            <ThumbUpIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            onClick={() => vote(-1)}
+            color={like === -1 ? 'error' : 'default'}
+            size="small"
+          >
+            <ThumbDownIcon fontSize="small" />
+          </IconButton>
+        </Box>
       </Box>
+      {article.extract && <Typography variant="body1">{article.extract}</Typography>}
     </Box>
   );
 }

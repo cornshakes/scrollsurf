@@ -18,9 +18,11 @@ async function populate_articles() {
     generator: 'random',
     grnnamespace: '0',
     grnlimit: String(FETCH_BATCH_SIZE),
-    prop: 'extracts',
+    prop: 'extracts|description|pageimages',
     exintro: '1',
     explaintext: '1',
+    piprop: 'thumbnail',
+    pithumbsize: '400',
     format: 'json',
     origin: '*',
   });
@@ -41,14 +43,21 @@ async function populate_articles() {
   if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
   const data = await res.json();
 
-  const articles = Object.values(
-    data.query.pages as Record<string, { title: string; extract: string }>
-  )
+  type WikiPage = {
+    title: string;
+    extract: string;
+    description: string;
+    thumbnail?: { source: string };
+  };
+
+  const articles = Object.values(data.query.pages as Record<string, WikiPage>)
     .filter((p) => !!p.extract)
     .map((p) => ({
       title: p.title,
       extract: p.extract,
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
+      description: p.description ?? null,
+      image_url: p.thumbnail?.source ?? null,
     }));
 
   insert_articles(articles);
