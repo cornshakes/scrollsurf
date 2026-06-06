@@ -59,3 +59,18 @@ I used the Haiku model with thinking turned off to make all that nested (in the 
 In the end it got stuck when I asked it to merge groups like Regions.Regions. I switched to sonnet medium and it improved the code and fixed it after one more nudge.
 
 ## another chill haiku refactor...
+
+[Model, Effort and Thinking Settings](https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings)
+
+I switched the model settings back to default and made it
+create a script that loads the [vital 50000 articles](https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5).
+The script behaves nicely with wikipedia request limits and such and therefore should take like 30 min to run.
+That's why it creates its own separate sqlite db (270 MB), which is then used to populate the app db on startup. Claude knew to use the nextjs instrumentation file for that.
+
+When at first the seeding didn't work, it used a few curls to figure out the problem (subcategories by quality) and moved on.
+
+There are now two competing ideas:
+The topics ie curated sublists of the vital 50000.
+Categories as taken from LiftWing, Wikipedias machine learning auto categorizing thingy. I have removed most of the code for those now (they are still used as clickable tags on articles) - because there are no more random articles anyway, they all have nice topics.
+
+But the categories were nice too, all resolving to four top level Categories. They will be back in a sec.
