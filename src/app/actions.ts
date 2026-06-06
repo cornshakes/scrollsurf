@@ -6,13 +6,18 @@ import {
   count_unseen,
   set_like,
   get_voted_articles,
+  get_unclassified_articles,
+  record_article_topics,
+  get_topic_tree,
   type Article,
   type ArticleInput,
+  type TopicTree,
 } from '@/lib/db';
 
 const TITLES_PER_RUN = 500;
-const TITLES_PER_BATCH = 15; // keeps total cats well under cllimit=500
+const TITLES_PER_BATCH = 15;
 const REPLENISH_THRESHOLD = 50;
+const TOPICS_PER_SETTLE = 30;
 
 type WikiCategory = { title: string; hidden?: string };
 type WikiPage = {
@@ -23,9 +28,9 @@ type WikiPage = {
   categories?: WikiCategory[];
 };
 
-async function api_fetch(params: URLSearchParams): Promise<Response> {
+async function api_fetch(params: URLSearchParams, host = 'en.wikipedia.org'): Promise<Response> {
   while (true) {
-    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+    const res = await fetch(`https://${host}/w/api.php?${params}`, {
       headers: { 'User-Agent': 'scrollsurf/1.0' },
     });
     if (res.status === 429) {
@@ -104,7 +109,9 @@ export async function get_next_wiki_articles(count: number): Promise<Article[]> 
   } else if (unseen < REPLENISH_THRESHOLD) {
     populate_articles().catch(console.error);
   }
-  return get_next_articles(count);
+  const articles = get_next_articles(count);
+  settle_topics().catch(console.error);
+  return articles;
 }
 
 export async function set_article_like(article_id: number, value: -1 | 0 | 1) {
@@ -113,4 +120,87 @@ export async function set_article_like(article_id: number, value: -1 | 0 | 1) {
 
 export async function get_voted_wiki_articles(vote: -1 | 1): Promise<Article[]> {
   return get_voted_articles(vote);
+}
+
+async function fetch_revids(titles: string[]): Promise<Map<string, number>> {
+  const params = new URLSearchParams({
+    action: 'query',
+    prop: 'revisions',
+    rvprop: 'ids',
+    titles: titles.join('|'),
+    format: 'json',
+    origin: '*',
+  });
+  const res = await api_fetch(params);
+  if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
+  const data = await res.json();
+  const pages = data.query.pages as Record<
+    string,
+    { title: string; revisions?: { revid: number }[] }
+  >;
+  const result = new Map<string, number>();
+  for (const page of Object.values(pages)) {
+    const revid = page.revisions?.[0]?.revid;
+    if (revid) result.set(page.title, revid);
+  }
+  return result;
+}
+
+async function fetch_article_topics(revid: number): Promise<string[]> {
+  while (true) {
+    const res = await fetch(
+      'https://api.wikimedia.org/service/lw/inference/v1/models/enwiki-articletopic:predict',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
+        },
+        body: JSON.stringify({ rev_id: revid, lang: 'en' }),
+      }
+    );
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      await new Promise((resolve) => setTimeout(resolve, (retryAfter || 1) * 1000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`LiftWing error: ${res.status}`);
+    const data = await res.json();
+    const score = data.enwiki.scores[String(revid)].articletopic.score;
+    const prediction = score.prediction as string[];
+    if (prediction.length > 0) return prediction;
+    let best = '';
+    let best_p = -1;
+    for (const [topic, p] of Object.entries(score.probability as Record<string, number>)) {
+      if (p > best_p) {
+        best_p = p;
+        best = topic;
+      }
+    }
+    return best ? [best] : [];
+  }
+}
+
+let settling = false;
+
+async function settle_topics() {
+  if (settling) return;
+  settling = true;
+  try {
+    const articles = get_unclassified_articles(TOPICS_PER_SETTLE);
+    if (articles.length === 0) return;
+    const revids = await fetch_revids(articles.map((a) => a.title));
+    for (const article of articles) {
+      const revid = revids.get(article.title);
+      if (!revid) continue;
+      const topics = await fetch_article_topics(revid);
+      if (topics.length > 0) record_article_topics(article.id, topics);
+    }
+  } finally {
+    settling = false;
+  }
+}
+
+export async function get_wiki_topic_tree(): Promise<TopicTree> {
+  return get_topic_tree();
 }

@@ -21,6 +21,23 @@ export interface ArticleInput {
   categories: { name: string; hidden: boolean }[];
 }
 
+export interface UnclassifiedArticle {
+  id: number;
+  title: string;
+}
+
+export interface TopicStat {
+  topic: string;
+  label: string;
+  article_count: number;
+  liked: number;
+  disliked: number;
+}
+
+export interface TopicTree {
+  roots: { name: string; topics: TopicStat[] }[];
+}
+
 const db = new DatabaseSync(path.join(process.cwd(), 'scrollsurf.db'));
 
 db.exec(`
@@ -50,12 +67,19 @@ db.exec(`
     PRIMARY KEY (article_id, category_id)
   );
 
-  CREATE TABLE IF NOT EXISTS category_parents (
-    category_id INTEGER NOT NULL REFERENCES categories(id),
-    parent_id   INTEGER NOT NULL REFERENCES categories(id),
-    PRIMARY KEY (category_id, parent_id)
+  CREATE TABLE IF NOT EXISTS article_topics (
+    article_id INTEGER NOT NULL REFERENCES articles(id),
+    topic      TEXT    NOT NULL,
+    PRIMARY KEY (article_id, topic)
   );
 `);
+
+const VISIBLE_CATEGORIES_SUBQUERY = `
+  (SELECT GROUP_CONCAT(c.name, '|||')
+   FROM article_categories ac
+   JOIN categories c ON ac.category_id = c.id
+   WHERE ac.article_id = a.id AND c.hidden = 0)
+`;
 
 const insert_article_stmt = db.prepare(
   'INSERT OR IGNORE INTO articles (title, extract, url, description, image_url) VALUES ($title, $extract, $url, $description, $image_url)'
@@ -72,13 +96,6 @@ const get_category_id_stmt = db.prepare('SELECT id FROM categories WHERE name = 
 const insert_article_category_stmt = db.prepare(
   'INSERT OR IGNORE INTO article_categories (article_id, category_id) VALUES ($article_id, $category_id)'
 );
-
-const VISIBLE_CATEGORIES_SUBQUERY = `
-  (SELECT GROUP_CONCAT(c.name, '|||')
-   FROM article_categories ac
-   JOIN categories c ON ac.category_id = c.id
-   WHERE ac.article_id = a.id AND c.hidden = 0)
-`;
 
 const get_next_stmt = db.prepare(`
   SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
@@ -114,7 +131,41 @@ const get_voted_stmt = db.prepare(`
   ORDER BY a.id DESC
 `);
 
+const get_unclassified_stmt = db.prepare(`
+  SELECT a.id, a.title
+  FROM articles a
+  JOIN user_articles ua ON a.id = ua.article_id
+  WHERE a.id NOT IN (SELECT article_id FROM article_topics)
+  LIMIT $limit
+`);
+
+const insert_article_topic_stmt = db.prepare(
+  'INSERT OR IGNORE INTO article_topics (article_id, topic) VALUES ($article_id, $topic)'
+);
+
+const get_topics_stmt = db.prepare(`
+  SELECT
+    CASE WHEN instr(t.topic, '.') > 0
+         THEN substr(t.topic, 1, instr(t.topic, '.') - 1)
+         ELSE t.topic END AS root,
+    t.topic AS topic,
+    COUNT(t.article_id) AS article_count,
+    COUNT(CASE WHEN ua.like =  1 THEN 1 END) AS liked,
+    COUNT(CASE WHEN ua.like = -1 THEN 1 END) AS disliked
+  FROM article_topics t
+  LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+  GROUP BY t.topic
+  ORDER BY root, article_count DESC
+`);
+
 type DbRow = Omit<Article, 'categories'> & { visible_categories: string | null };
+type TopicRow = {
+  root: string;
+  topic: string;
+  article_count: number;
+  liked: number;
+  disliked: number;
+};
 
 function row_to_article(r: DbRow): Article {
   return {
@@ -170,4 +221,41 @@ export function set_like(article_id: number, value: -1 | 0 | 1) {
 export function get_voted_articles(vote: -1 | 1): Article[] {
   const rows = get_voted_stmt.all({ $like: vote }) as unknown as DbRow[];
   return rows.map(row_to_article);
+}
+
+export function get_unclassified_articles(limit: number): UnclassifiedArticle[] {
+  return get_unclassified_stmt.all({ $limit: limit }) as unknown as UnclassifiedArticle[];
+}
+
+export function record_article_topics(article_id: number, topics: string[]) {
+  db.exec('BEGIN');
+  for (const topic of topics) {
+    insert_article_topic_stmt.run({ $article_id: article_id, $topic: topic });
+  }
+  db.exec('COMMIT');
+}
+
+export function get_topic_tree(): TopicTree {
+  const rows = get_topics_stmt.all() as unknown as TopicRow[];
+  const map = new Map<string, TopicStat[]>();
+  for (const r of rows) {
+    let list = map.get(r.root);
+    if (!list) {
+      list = [];
+      map.set(r.root, list);
+    }
+    const label = r.topic.startsWith(`${r.root}.`) ? r.topic.slice(r.root.length + 1) : r.topic;
+    list.push({
+      topic: r.topic,
+      label,
+      article_count: r.article_count,
+      liked: r.liked,
+      disliked: r.disliked,
+    });
+  }
+  return {
+    roots: Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, topics]) => ({ name, topics })),
+  };
 }

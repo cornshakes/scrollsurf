@@ -14,13 +14,22 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Chip from '@mui/material/Chip';
+import Collapse from '@mui/material/Collapse';
 import MenuIcon from '@mui/icons-material/Menu';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import { get_next_wiki_articles, get_voted_wiki_articles, set_article_like } from '@/app/actions';
-import type { Article } from '@/lib/db';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import FolderIcon from '@mui/icons-material/Folder';
+import {
+  get_next_wiki_articles,
+  get_voted_wiki_articles,
+  set_article_like,
+  get_wiki_topic_tree,
+} from '@/app/actions';
+import type { Article, TopicStat, TopicTree } from '@/lib/db';
 
-type View = 'random' | 'liked' | 'disliked';
+type View = 'random' | 'liked' | 'disliked' | 'topics';
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +37,7 @@ const VIEW_LABELS: Record<View, string> = {
   random: 'Random articles',
   liked: 'Liked',
   disliked: 'Disliked',
+  topics: 'Topics',
 };
 
 function ArticleCard({
@@ -188,6 +198,90 @@ function VotedFeed({ vote }: { vote: -1 | 1 }) {
   );
 }
 
+function TopicLeaf({ topic }: { topic: TopicStat }) {
+  return (
+    <ListItem sx={{ pl: 5 }}>
+      <ListItemText primary={topic.label} secondary={`${topic.article_count} articles`} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+        {topic.liked > 0 && (
+          <Chip
+            icon={<ThumbUpIcon />}
+            label={topic.liked}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+        )}
+        {topic.disliked > 0 && (
+          <Chip
+            icon={<ThumbDownIcon />}
+            label={topic.disliked}
+            size="small"
+            color="error"
+            variant="outlined"
+          />
+        )}
+      </Box>
+    </ListItem>
+  );
+}
+
+function TopicNode({ name, topics }: { name: string; topics: TopicStat[] }) {
+  const [open, setOpen] = useState(false);
+  const total = topics.reduce((sum, t) => sum + t.article_count, 0);
+
+  return (
+    <>
+      <ListItemButton onClick={() => setOpen((o) => !o)}>
+        <FolderIcon sx={{ mr: 1.5, color: 'text.secondary' }} />
+        <ListItemText primary={name} secondary={`${topics.length} topics · ${total} articles`} />
+        {open ? <ExpandLess /> : <ExpandMore />}
+      </ListItemButton>
+      <Collapse in={open} unmountOnExit>
+        <List disablePadding>
+          {topics.map((topic) => (
+            <TopicLeaf key={topic.topic} topic={topic} />
+          ))}
+        </List>
+      </Collapse>
+    </>
+  );
+}
+
+function TopicsFeed() {
+  const [tree, setTree] = useState<TopicTree | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    startTransition(async () => setTree(await get_wiki_topic_tree()));
+  }, []);
+
+  if (isPending && !tree)
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+
+  if (!tree) return null;
+
+  return (
+    <Box sx={{ maxWidth: 680, mx: 'auto', px: 2, py: 2 }}>
+      {tree.roots.length === 0 ? (
+        <Typography sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+          No topics yet — browse a few articles and check back.
+        </Typography>
+      ) : (
+        <List>
+          {tree.roots.map((root) => (
+            <TopicNode key={root.name} name={root.name} topics={root.topics} />
+          ))}
+        </List>
+      )}
+    </Box>
+  );
+}
+
 export default function WikiArticles() {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -230,6 +324,7 @@ export default function WikiArticles() {
       {view === 'random' && <RandomFeed />}
       {view === 'liked' && <VotedFeed vote={1} />}
       {view === 'disliked' && <VotedFeed vote={-1} />}
+      {view === 'topics' && <TopicsFeed />}
     </>
   );
 }

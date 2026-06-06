@@ -24,3 +24,26 @@ add a hamburger menu to switch between lists with 1)random articles, 2)all liked
 
 with like 2-3 more prompts for tiny adaptations. It all works.
 I guess my coding days are over. I'm a curator (CJ, like a Code DJ?) now
+
+# Categories
+
+After adding thumbnails and descriptions (I just asked claude what else I can get), I also added categories. There are hidden categories (for wikipedia internal use I think) and visible categories. I'm saving all categories but displaying only visible ones.
+
+Now, I want it to build a category tree (wikipedia categories are organized in a tree) and a new page where I can look at that tree with collapsible nodes and such. It made claude think a little harder. I switched the model to opus 4.8
+
+I read https://en.wikipedia.org/wiki/Wikipedia:FAQ/Categories
+
+Next, I asked if there is a way to determine the type of categories. It requires extra api requests that should be batched too but also looking at extra stuff in some cases, and it just burns through it like nothing.
+
+It adds some sensible extra features here and there that I then tell it to drop (or keep).
+
+Building the category tree was more complex. It started by adding a "BUILD" button to rebuild the category tree. It took long and the result was not impressive. No nice category tree to drill down in, just lots of single isolated stuff.
+Through a meaningful dialog it all turned into something sorted into at least the common top level categories (Geography...). I never had to explain myself and it often inferred technical implications from just my preliminary questions.
+
+It tried walking up the category tree first, then down because of a change request, then realized down wasn't right because it had misunderstood something, so started walking up again. It realized all this by actually running requests and reading data. It followed my requests for incremental building of the tree even though that involved a lot of extra data work.
+The final time it tested the long-running tree build, it became clear that it had been wrong and this was not going to work (way to much tree/DAG to walk). It came up with 3 options, 1 of which I liked (just put categories into their broad root categories) and accepted. That's what I had wanted anyway. Again, for this new approach it ran some tests to figure out some basics first, then started going deeper. It made its own Todo list and started working it off.
+Then I got a warning that I had used more than 90% (reaching 95% without further input) of my session limit (resets in 43m).
+
+With my next request (remove a button), I hit my session limit. It feels dirty having to go manually dig in the code like a cave person, but I guess I'll do what I have to. So the normal subscription seems to be ok for a "light" coding afternoon but not enough for all day heavy lifting.
+
+In the end, I let the haiku model with thinking turned off (whatever that means) refactor it all to snake_case. It did some extra cleanup by itself.
