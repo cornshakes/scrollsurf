@@ -1,5 +1,6 @@
 # Code Style
 Prefer snake case unless its awkward to mix with camelCase.
+Prefer const arrow functions over function()
 
 
 <!-- BEGIN:nextjs-agent-rules -->

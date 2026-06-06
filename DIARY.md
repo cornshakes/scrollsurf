@@ -57,3 +57,5 @@ Geography.Regions.Africa.Southern Africa
 
 I used the Haiku model with thinking turned off to make all that nested (in the UI). Very fast, reacting well to more inputs.
 In the end it got stuck when I asked it to merge groups like Regions.Regions. I switched to sonnet medium and it improved the code and fixed it after one more nudge.
+
+## another chill haiku refactor...

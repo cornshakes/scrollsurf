@@ -28,7 +28,7 @@ type WikiPage = {
   categories?: WikiCategory[];
 };
 
-async function api_fetch(params: URLSearchParams, host = 'en.wikipedia.org'): Promise<Response> {
+const api_fetch = async (params: URLSearchParams, host = 'en.wikipedia.org'): Promise<Response> => {
   while (true) {
     const res = await fetch(`https://${host}/w/api.php?${params}`, {
       headers: { 'User-Agent': 'scrollsurf/1.0' },
@@ -45,9 +45,9 @@ async function api_fetch(params: URLSearchParams, host = 'en.wikipedia.org'): Pr
     }
     return res;
   }
-}
+};
 
-async function fetch_random_titles(count: number): Promise<string[]> {
+const fetch_random_titles = async (count: number): Promise<string[]> => {
   const params = new URLSearchParams({
     action: 'query',
     list: 'random',
@@ -60,9 +60,9 @@ async function fetch_random_titles(count: number): Promise<string[]> {
   if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
   const data = await res.json();
   return (data.query.random as { title: string }[]).map((p) => p.title);
-}
+};
 
-async function fetch_articles_for_titles(titles: string[]): Promise<ArticleInput[]> {
+const fetch_articles_for_titles = async (titles: string[]): Promise<ArticleInput[]> => {
   const params = new URLSearchParams({
     action: 'query',
     titles: titles.join('|'),
@@ -92,17 +92,17 @@ async function fetch_articles_for_titles(titles: string[]): Promise<ArticleInput
         hidden: 'hidden' in c,
       })),
     }));
-}
+};
 
-async function populate_articles() {
+const populate_articles = async () => {
   const titles = await fetch_random_titles(TITLES_PER_RUN);
   for (let i = 0; i < titles.length; i += TITLES_PER_BATCH) {
     const articles = await fetch_articles_for_titles(titles.slice(i, i + TITLES_PER_BATCH));
     insert_articles(articles);
   }
-}
+};
 
-export async function get_next_wiki_articles(count: number): Promise<Article[]> {
+export const get_next_wiki_articles = async (count: number): Promise<Article[]> => {
   const unseen = count_unseen();
   if (unseen === 0) {
     await populate_articles();
@@ -112,17 +112,17 @@ export async function get_next_wiki_articles(count: number): Promise<Article[]> 
   const articles = get_next_articles(count);
   settle_topics().catch(console.error);
   return articles;
-}
+};
 
-export async function set_article_like(article_id: number, value: -1 | 0 | 1) {
+export const set_article_like = async (article_id: number, value: -1 | 0 | 1) => {
   set_like(article_id, value);
-}
+};
 
-export async function get_voted_wiki_articles(vote: -1 | 1): Promise<Article[]> {
+export const get_voted_wiki_articles = async (vote: -1 | 1): Promise<Article[]> => {
   return get_voted_articles(vote);
-}
+};
 
-async function fetch_revids(titles: string[]): Promise<Map<string, number>> {
+const fetch_revids = async (titles: string[]): Promise<Map<string, number>> => {
   const params = new URLSearchParams({
     action: 'query',
     prop: 'revisions',
@@ -144,9 +144,9 @@ async function fetch_revids(titles: string[]): Promise<Map<string, number>> {
     if (revid) result.set(page.title, revid);
   }
   return result;
-}
+};
 
-async function fetch_article_topics(revid: number): Promise<string[]> {
+const fetch_article_topics = async (revid: number): Promise<string[]> => {
   while (true) {
     const res = await fetch(
       'https://api.wikimedia.org/service/lw/inference/v1/models/enwiki-articletopic:predict',
@@ -179,11 +179,11 @@ async function fetch_article_topics(revid: number): Promise<string[]> {
     }
     return best ? [best] : [];
   }
-}
+};
 
 let settling = false;
 
-async function settle_topics() {
+const settle_topics = async () => {
   if (settling) return;
   settling = true;
   try {
@@ -199,8 +199,8 @@ async function settle_topics() {
   } finally {
     settling = false;
   }
-}
+};
 
-export async function get_wiki_topic_tree(): Promise<TopicTree> {
+export const get_wiki_topic_tree = async (): Promise<TopicTree> => {
   return get_topic_tree();
-}
+};

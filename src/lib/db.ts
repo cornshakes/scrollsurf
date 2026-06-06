@@ -167,20 +167,18 @@ type TopicRow = {
   disliked: number;
 };
 
-function row_to_article(r: DbRow): Article {
-  return {
-    id: r.id,
-    title: r.title,
-    extract: r.extract,
-    url: r.url,
-    like: r.like,
-    description: r.description,
-    image_url: r.image_url,
-    categories: r.visible_categories ? r.visible_categories.split('|||') : [],
-  };
-}
+const row_to_article = (r: DbRow): Article => ({
+  id: r.id,
+  title: r.title,
+  extract: r.extract,
+  url: r.url,
+  like: r.like,
+  description: r.description,
+  image_url: r.image_url,
+  categories: r.visible_categories ? r.visible_categories.split('|||') : [],
+});
 
-export function insert_articles(articles: ArticleInput[]) {
+export const insert_articles = (articles: ArticleInput[]) => {
   db.exec('BEGIN');
   for (const a of articles) {
     insert_article_stmt.run({
@@ -198,9 +196,9 @@ export function insert_articles(articles: ArticleInput[]) {
     }
   }
   db.exec('COMMIT');
-}
+};
 
-export function get_next_articles(limit: number): Article[] {
+export const get_next_articles = (limit: number): Article[] => {
   const rows = get_next_stmt.all({ $limit: limit }) as unknown as DbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
@@ -208,34 +206,34 @@ export function get_next_articles(limit: number): Article[] {
   }
   db.exec('COMMIT');
   return rows.map(row_to_article);
-}
+};
 
-export function count_unseen(): number {
+export const count_unseen = (): number => {
   return (count_unseen_stmt.get() as { count: number }).count;
-}
+};
 
-export function set_like(article_id: number, value: -1 | 0 | 1) {
+export const set_like = (article_id: number, value: -1 | 0 | 1) => {
   set_like_stmt.run({ $article_id: article_id, $like: value });
-}
+};
 
-export function get_voted_articles(vote: -1 | 1): Article[] {
+export const get_voted_articles = (vote: -1 | 1): Article[] => {
   const rows = get_voted_stmt.all({ $like: vote }) as unknown as DbRow[];
   return rows.map(row_to_article);
-}
+};
 
-export function get_unclassified_articles(limit: number): UnclassifiedArticle[] {
+export const get_unclassified_articles = (limit: number): UnclassifiedArticle[] => {
   return get_unclassified_stmt.all({ $limit: limit }) as unknown as UnclassifiedArticle[];
-}
+};
 
-export function record_article_topics(article_id: number, topics: string[]) {
+export const record_article_topics = (article_id: number, topics: string[]) => {
   db.exec('BEGIN');
   for (const topic of topics) {
     insert_article_topic_stmt.run({ $article_id: article_id, $topic: topic });
   }
   db.exec('COMMIT');
-}
+};
 
-export function get_topic_tree(): TopicTree {
+export const get_topic_tree = (): TopicTree => {
   const rows = get_topics_stmt.all() as unknown as TopicRow[];
   const map = new Map<string, TopicStat[]>();
   for (const r of rows) {
@@ -258,4 +256,4 @@ export function get_topic_tree(): TopicTree {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, topics]) => ({ name, topics })),
   };
-}
+};

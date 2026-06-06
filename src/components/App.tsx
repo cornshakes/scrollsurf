@@ -1,14 +1,18 @@
 'use client';
 
-import { ThemeProvider } from '@mui/material/styles';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import theme from '@/theme';
 
-export default function App({ children }: { children: React.ReactNode }) {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {children}
-    </ThemeProvider>
-  );
-}
+const theme = createTheme({
+  cssVariables: { colorSchemeSelector: 'media' },
+  colorSchemes: { light: true, dark: true },
+});
+
+const App = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider theme={theme}>
+    <CssBaseline />
+    {children}
+  </ThemeProvider>
+);
+
+export default App;
