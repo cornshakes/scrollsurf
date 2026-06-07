@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
@@ -8,98 +8,8 @@ import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { set_article_like } from '@/app/actions';
 import type { Article } from '@/lib/db';
-
-const TEXT_MAX_LINES = 11;
-const CHIP_MAX_HEIGHT = 56; // ~2 rows of small chips (24px) + gap
-
-const CollapsibleText = ({ text }: { text: string }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  const ref = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    if (ref.current) setOverflows(ref.current.scrollHeight > ref.current.clientHeight + 1);
-  }, []);
-
-  return (
-    <>
-      <Typography
-        ref={ref}
-        variant="body1"
-        sx={
-          expanded
-            ? {}
-            : {
-                display: '-webkit-box',
-                WebkitLineClamp: TEXT_MAX_LINES,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }
-        }
-      >
-        {text}
-      </Typography>
-      {overflows && (
-        <Box
-          onClick={() => setExpanded((e) => !e)}
-          sx={{ cursor: 'pointer', color: 'text.secondary', lineHeight: 0 }}
-        >
-          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-        </Box>
-      )}
-    </>
-  );
-};
-
-const CollapsibleChips = ({ categories }: { categories: string[] }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) setOverflows(ref.current.scrollHeight > ref.current.clientHeight + 1);
-  }, []);
-
-  return (
-    <>
-      <Box
-        ref={ref}
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 0.5,
-          ...(!expanded && { maxHeight: CHIP_MAX_HEIGHT, overflow: 'hidden' }),
-        }}
-      >
-        {categories.map((cat) => (
-          <Chip
-            key={cat}
-            label={cat}
-            size="small"
-            variant="outlined"
-            component="a"
-            href={`https://en.wikipedia.org/wiki/Category:${encodeURIComponent(cat)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            clickable
-          />
-        ))}
-      </Box>
-      {overflows && (
-        <Box
-          onClick={() => setExpanded((e) => !e)}
-          sx={{ cursor: 'pointer', color: 'text.secondary', lineHeight: 0 }}
-        >
-          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-        </Box>
-      )}
-    </>
-  );
-};
 
 export const ArticleCard = ({
   article,
@@ -157,11 +67,27 @@ export const ArticleCard = ({
         </Box>
       </Box>
       {article.extract && (
-        <Box sx={{ mb: article.categories.length ? 2 : 0 }}>
-          <CollapsibleText text={article.extract} />
+        <Typography variant="body1" sx={{ mb: article.categories.length ? 2 : 0 }}>
+          {article.extract}
+        </Typography>
+      )}
+      {article.categories.length > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {article.categories.map((cat) => (
+            <Chip
+              key={cat}
+              label={cat}
+              size="small"
+              variant="outlined"
+              component="a"
+              href={`https://en.wikipedia.org/wiki/Category:${encodeURIComponent(cat)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              clickable
+            />
+          ))}
         </Box>
       )}
-      {article.categories.length > 0 && <CollapsibleChips categories={article.categories} />}
     </Box>
   );
 };
