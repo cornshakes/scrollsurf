@@ -155,13 +155,14 @@ const main = async () => {
   process.stdout.write(`${sections.length} sections (up to and including ${LAST_SECTION}).\n`);
 
   process.stdout.write('Phase 2: Collecting article URLs from each section...\n');
-  // title -> set of "Unusual: <section>" topics (an article may appear in several sections)
+  // title -> set of section-name topics (an article may appear in several sections).
+  // The "Unusual" dataset grouping is applied on import, not stored here.
   const topic_map = new Map<string, Set<string>>();
   for (const section of sections) {
     const titles = await get_article_titles_in_section(section);
     for (const title of titles) {
       if (!topic_map.has(title)) topic_map.set(title, new Set());
-      topic_map.get(title)?.add(`Unusual: ${section}`);
+      topic_map.get(title)?.add(section);
     }
     process.stdout.write(`\r${topic_map.size} article URLs found...`);
   }

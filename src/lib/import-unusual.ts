@@ -25,8 +25,8 @@ export const import_unusual_articles = () => {
       JOIN main.articles a ON a.url = uac.url
       JOIN main.categories c ON c.name = uac.name;
 
-      INSERT OR IGNORE INTO main.article_topics (article_id, topic)
-      SELECT a.id, ut.topic
+      INSERT OR IGNORE INTO main.article_topics (article_id, dataset, topic)
+      SELECT a.id, 'Unusual', ut.topic
       FROM unusual.article_topics ut
       JOIN main.articles a ON a.url = ut.url;
 

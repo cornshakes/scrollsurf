@@ -19,7 +19,15 @@ export interface TopicStat {
   disliked: number;
 }
 
-export type TopicTree = TopicStat[];
+export interface DatasetGroup {
+  dataset: string;
+  article_count: number;
+  liked: number;
+  disliked: number;
+  topics: TopicStat[];
+}
+
+export type TopicTree = DatasetGroup[];
 
 export const db = new DatabaseSync(path.join(process.cwd(), 'scrollsurf.db'));
 
@@ -52,8 +60,9 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS article_topics (
     article_id INTEGER NOT NULL REFERENCES articles(id),
+    dataset    TEXT    NOT NULL,
     topic      TEXT    NOT NULL,
-    PRIMARY KEY (article_id, topic)
+    PRIMARY KEY (article_id, dataset, topic)
   );
 `);
 
@@ -92,16 +101,29 @@ const get_voted_stmt = db.prepare(`
   ORDER BY a.id DESC
 `);
 
+const get_datasets_stmt = db.prepare(`
+  SELECT
+    t.dataset,
+    COUNT(DISTINCT t.article_id) AS article_count,
+    COUNT(DISTINCT CASE WHEN ua.like =  1 THEN t.article_id END) AS liked,
+    COUNT(DISTINCT CASE WHEN ua.like = -1 THEN t.article_id END) AS disliked
+  FROM article_topics t
+  LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+  GROUP BY t.dataset
+  ORDER BY t.dataset
+`);
+
 const get_topics_stmt = db.prepare(`
   SELECT
+    t.dataset,
     t.topic,
     COUNT(t.article_id) AS article_count,
     COUNT(CASE WHEN ua.like =  1 THEN 1 END) AS liked,
     COUNT(CASE WHEN ua.like = -1 THEN 1 END) AS disliked
   FROM article_topics t
   LEFT JOIN user_articles ua ON t.article_id = ua.article_id
-  GROUP BY t.topic
-  ORDER BY t.topic
+  GROUP BY t.dataset, t.topic
+  ORDER BY t.dataset, t.topic
 `);
 
 type DbRow = Omit<Article, 'categories'> & { visible_categories: string | null };
@@ -137,11 +159,20 @@ export const get_voted_articles = (vote: -1 | 1): Article[] => {
 };
 
 export const get_topic_tree = (): TopicTree => {
-  const rows = get_topics_stmt.all() as unknown as TopicStat[];
-  return rows.map((r) => ({
-    topic: r.topic,
-    article_count: r.article_count,
-    liked: r.liked,
-    disliked: r.disliked,
+  const dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
+  const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
+  return dataset_rows.map((d) => ({
+    dataset: d.dataset,
+    article_count: d.article_count,
+    liked: d.liked,
+    disliked: d.disliked,
+    topics: topic_rows
+      .filter((t) => t.dataset === d.dataset)
+      .map((t) => ({
+        topic: t.topic,
+        article_count: t.article_count,
+        liked: t.liked,
+        disliked: t.disliked,
+      })),
   }));
 };

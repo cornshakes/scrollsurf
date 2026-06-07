@@ -38,12 +38,12 @@ All download scripts are resumable: already-downloaded articles are skipped.
 
 ## Topics
 
-`article_topics` (in `scrollsurf.db`) is a flat free-text `(article_id, topic)` table. Editorial topics from the reference DBs are imported into it:
+`article_topics` (in `scrollsurf.db`) is `(article_id, dataset, topic)`. Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
 
-- vital — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`vital_50000.db`'s `article_vital_topics`).
-- unusual — each article's section heading from `Wikipedia:Unusual articles`, prefixed `Unusual: ` (e.g. `Unusual: Military`). The prefix keeps them grouped and avoids colliding with vital topic names like History/Technology.
+- **Vital** — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`vital_50000.db`'s `article_vital_topics`).
+- **Unusual** — each article's section heading from `Wikipedia:Unusual articles`: Military, Science, Folklore, etc. (`unusual.db`'s `article_topics`).
 
-An article may have several topics; the topics page (`get_topic_tree`) groups by topic name.
+The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset.
 
 ## Feature flags (env vars)
 

@@ -25,8 +25,8 @@ export const import_vital_articles = () => {
       JOIN main.articles a ON a.url = vac.url
       JOIN main.categories c ON c.name = vac.name;
 
-      INSERT OR IGNORE INTO main.article_topics (article_id, topic)
-      SELECT a.id, vt.topic
+      INSERT OR IGNORE INTO main.article_topics (article_id, dataset, topic)
+      SELECT a.id, 'Vital', vt.topic
       FROM vital.article_vital_topics vt
       JOIN main.articles a ON a.url = vt.url;
 
