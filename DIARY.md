@@ -90,3 +90,6 @@ I also have to learn how many sequential tasks I can give one claude to make it 
 I refactored the whole thing to add multiple datasets, ie vital-50000 and unusual,
 but more can be added. nice and easy. I would hate to have to do all that manually.
 I used opus to have confidence that it wouldn't require much fumbling, if any.
+
+## realistic use
+The better use paragraph above might not be very relevant right now, as I have already used 7% of my weekly limit. Well, haiku can do a lot too.

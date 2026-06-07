@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -34,8 +35,8 @@ const WikiArticles = () => {
   };
 
   return (
-    <>
-      <AppBar position="sticky">
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <AppBar position="static">
         <Toolbar variant="dense">
           <IconButton
             edge="start"
@@ -63,11 +64,13 @@ const WikiArticles = () => {
         </List>
       </Drawer>
 
-      {view === 'random' && <RandomFeed />}
-      {view === 'liked' && <VotedFeed vote={1} />}
-      {view === 'disliked' && <VotedFeed vote={-1} />}
-      {view === 'topics' && <TopicsFeed />}
-    </>
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        {view === 'random' && <RandomFeed />}
+        {view === 'liked' && <VotedFeed vote={1} />}
+        {view === 'disliked' && <VotedFeed vote={-1} />}
+        {view === 'topics' && <TopicsFeed />}
+      </Box>
+    </Box>
   );
 };
 
