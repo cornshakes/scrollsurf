@@ -74,3 +74,11 @@ The topics ie curated sublists of the vital 50000.
 Categories as taken from LiftWing, Wikipedias machine learning auto categorizing thingy. I have removed most of the code for those now (they are still used as clickable tags on articles) - because there are no more random articles anyway, they all have nice topics.
 
 But the categories were nice too, all resolving to four top level Categories. They will be back in a sec.
+
+## Changed My Mind.
+
+I didn't like the feature with collapsible text/tags. Why fumble when I can just scroll over it?. I told claude to undo it. It asked whether I wanted to rebase (cut that out) or revert (keep the history). I chose revert, it did.
+
+
+## Better use
+On complex tasks, claude can take a long time, basically doing research, running tests, and pondering. If I wanted to go faster (once I get good at judging what it can do), should I run multiple claudes on their own branches? Should I create issues and assign claudes to them or is that not even worth the time? Maybe I'll ask claude.

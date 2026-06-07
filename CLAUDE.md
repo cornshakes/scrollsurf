@@ -8,12 +8,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Architecture
 
-## Two databases
+## Runtime DB + prepared reference DBs
 
-- `scrollsurf.db` — runtime database. Holds articles, user votes, categories, and ML topic classifications. This is the only DB the app reads from.
-- `vital_50000.db` — download-only reference database. Created and updated by `npm run download-vital-50000`. Never touched by the app directly.
+- `scrollsurf.db` — runtime database. Holds articles, user votes, categories, and topic classifications. This is the only DB the app reads from.
+- Reference databases — each is built offline by its own download script and never touched by the app directly. New ones are added by following this same pattern (download script → `<name>.db` → `import-<name>.ts`):
+  - `vital_50000.db` — Wikipedia Level 5 vital articles. Built by `npm run download-vital-50000`.
+  - `unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
 
-On startup, `src/instrumentation.ts` imports new articles from `vital_50000.db` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE`.
+On startup, `src/instrumentation.ts` imports new articles from each reference DB into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-vital.ts`, `src/lib/import-unusual.ts`).
 
 ## SQLite
 
@@ -24,19 +26,24 @@ Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, 
 ## Data pipeline
 
 ```
-npm run download-vital-50000 → vital_50000.db → instrumentation.ts (on startup) → scrollsurf.db → server actions → UI
+npm run download-* → <name>.db → instrumentation.ts (on startup) → scrollsurf.db → server actions → UI
 ```
 
-The download script runs in two phases:
-1. **Download article URLs** — fetches article titles from Wikipedia's category API (FA-Class, GA-Class, etc.)
-2. **Download article content** — fetches extract, description, and image for each new URL
+Each download script ends by fetching article **content** (extract, description, image, categories) in batches, then storing it in its reference DB. They differ only in how they discover article URLs first:
 
-Results are stored in `vital_50000.db`. It is resumable: already-downloaded articles are skipped.
+- **download-vital-50000** — fetches titles from Wikipedia's quality-class category API (FA-Class, GA-Class, etc.).
+- **download-unusual** — reads the section subpages transcluded by `Wikipedia:Unusual articles` (in page order, up to and including Military) and extracts the bold-wrapped `'''[[…]]'''` links listed in each.
 
-## Two topic systems — do not confuse them
+All download scripts are resumable: already-downloaded articles are skipped.
 
-- `article_vital_topics` (in `vital_50000.db`) — editorial sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. Assigned during download.
-- `article_topics` (in `scrollsurf.db`) — ML classifications from Wikimedia's LiftWing API. Assigned lazily after articles are seen, only when `SETTLE_TOPICS=1`.
+## Topics
+
+`article_topics` (in `scrollsurf.db`) is a flat free-text `(article_id, topic)` table. Editorial topics from the reference DBs are imported into it:
+
+- vital — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`vital_50000.db`'s `article_vital_topics`).
+- unusual — each article's section heading from `Wikipedia:Unusual articles`, prefixed `Unusual: ` (e.g. `Unusual: Military`). The prefix keeps them grouped and avoids colliding with vital topic names like History/Technology.
+
+An article may have several topics; the topics page (`get_topic_tree`) groups by topic name.
 
 ## Feature flags (env vars)
 
