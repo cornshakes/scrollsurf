@@ -10,6 +10,8 @@
     "lint-fix": "eslint --fix",
     "download-vital-50000": "tsx scripts/download-vital-50000.ts",
     "download-unusual": "tsx scripts/download-unusual.ts",
+    "download-good-articles": "tsx scripts/download-good-articles.ts",
+    "download-featured-articles": "tsx scripts/download-featured-articles.ts",
     "categorize": "tsx scripts/categorize.ts"
   },
   "dependencies": {

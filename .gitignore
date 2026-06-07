@@ -3,6 +3,8 @@
 scrollsurf.db
 vital_50000.db
 unusual.db
+good_articles.db
+featured_articles.db
 categories.db
 
 # dependencies

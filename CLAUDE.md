@@ -16,6 +16,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Reference databases — each is built offline by its own download script and never touched by the app directly. New ones are added by following this same pattern (download script → `<name>.db` → `import-<name>.ts`):
   - `vital_50000.db` — Wikipedia Level 5 vital articles. Built by `npm run download-vital-50000`.
   - `unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
+  - `good_articles.db` — [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles). Built by `npm run download-good-articles`.
+  - `featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
 
 On startup, `src/instrumentation.ts` imports new articles from each reference DB into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-vital.ts`, `src/lib/import-unusual.ts`).
 
