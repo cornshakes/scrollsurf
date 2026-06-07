@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "lint-fix": "eslint --fix",
-    "seed-vital": "tsx scripts/seed-vital.ts"
+    "download-vital-50000": "tsx scripts/download-vital-50000.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const BATCH_SIZE = 15;
 const REQUEST_DELAY_MS = 500;
-const LIMIT = parseInt(process.env.SEED_LIMIT ?? '') || Infinity;
+const LIMIT = parseInt(process.env.DOWNLOAD_LIMIT ?? '') || Infinity;
 
 const vital_db = new DatabaseSync(path.join(process.cwd(), 'vital_50000.db'));
 
@@ -70,8 +70,11 @@ const api_fetch = async (params: URLSearchParams): Promise<Response> => {
   }
 };
 
-// Returns [title, topic] pairs
-const fetch_topic_titles = async (topic: string, results: [string, string][]): Promise<void> => {
+// Phase 1: download article URLs — returns [title, topic] pairs
+const download_article_urls_for_topic = async (
+  topic: string,
+  results: [string, string][]
+): Promise<void> => {
   let cmcontinue: string | undefined;
   do {
     const params = new URLSearchParams({
@@ -90,7 +93,7 @@ const fetch_topic_titles = async (topic: string, results: [string, string][]): P
 
     for (const member of data.query.categorymembers as { title: string }[]) {
       results.push([member.title.replace(/^Talk:/, ''), topic]);
-      process.stdout.write(`\rFetched ${results.length} titles...`);
+      process.stdout.write(`\r${results.length} article URLs found...`);
       if (results.length >= LIMIT) return;
     }
 
@@ -112,10 +115,10 @@ const VITAL_TOPICS = [
   'Society and social sciences',
 ];
 
-const fetch_all_vital_titles = async (): Promise<[string, string][]> => {
+const download_all_article_urls = async (): Promise<[string, string][]> => {
   const results: [string, string][] = [];
   for (const topic of VITAL_TOPICS) {
-    await fetch_topic_titles(topic, results);
+    await download_article_urls_for_topic(topic, results);
     if (results.length >= LIMIT) break;
   }
   process.stdout.write('\n');
@@ -125,12 +128,13 @@ const fetch_all_vital_titles = async (): Promise<[string, string][]> => {
 const title_to_url = (title: string) =>
   `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
 
-const get_seeded_urls = (): Set<string> => {
+const get_downloaded_urls = (): Set<string> => {
   const rows = vital_db.prepare('SELECT url FROM articles').all() as { url: string }[];
   return new Set(rows.map((r) => r.url));
 };
 
-const fetch_articles_for_titles = async (titles: string[]): Promise<WikiPage[]> => {
+// Phase 2: download article content (extract, description, image) for a batch of titles
+const download_article_content = async (titles: string[]): Promise<WikiPage[]> => {
   const params = new URLSearchParams({
     action: 'query',
     titles: titles.join('|'),
@@ -150,31 +154,32 @@ const fetch_articles_for_titles = async (titles: string[]): Promise<WikiPage[]> 
 };
 
 const main = async () => {
-  process.stdout.write('Fetching Level 5 vital article titles from Wikipedia...\n');
-  const all_pairs = await fetch_all_vital_titles();
+  process.stdout.write('Phase 1: Downloading article URLs from Wikipedia...\n');
+  const all_pairs = await download_all_article_urls();
 
-  const seeded = get_seeded_urls();
-  const new_pairs = all_pairs.filter(([title]) => !seeded.has(title_to_url(title)));
+  const downloaded = get_downloaded_urls();
+  const to_download = all_pairs.filter(([title]) => !downloaded.has(title_to_url(title)));
   process.stdout.write(
-    `${new_pairs.length} new articles to fetch (${all_pairs.length - new_pairs.length} already seeded).\n`
+    `${to_download.length} new articles to download (${all_pairs.length - to_download.length} already downloaded).\n`
   );
-  if (new_pairs.length === 0) {
+  if (to_download.length === 0) {
     process.stdout.write('Done.\n');
     return;
   }
 
   // Deduplicate titles (an article can appear in multiple topics)
   const topic_map = new Map<string, Set<string>>();
-  for (const [title, topic] of new_pairs) {
+  for (const [title, topic] of to_download) {
     if (!topic_map.has(title)) topic_map.set(title, new Set());
     topic_map.get(title)?.add(topic);
   }
   const unique_titles = [...topic_map.keys()];
 
-  let inserted = 0;
+  process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
+  let saved = 0;
   for (let i = 0; i < unique_titles.length; i += BATCH_SIZE) {
     const batch = unique_titles.slice(i, i + BATCH_SIZE);
-    const pages = await fetch_articles_for_titles(batch);
+    const pages = await download_article_content(batch);
 
     vital_db.exec('BEGIN');
     for (const p of pages) {
@@ -196,11 +201,11 @@ const main = async () => {
           $hidden: 'hidden' in cat ? 1 : 0,
         });
       }
-      inserted++;
+      saved++;
     }
     vital_db.exec('COMMIT');
 
-    process.stdout.write(`\r${inserted} / ${unique_titles.length} inserted`);
+    process.stdout.write(`\r${saved} / ${unique_titles.length} downloaded`);
   }
 
   process.stdout.write('\nDone.\n');
