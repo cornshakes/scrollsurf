@@ -28,7 +28,16 @@ export interface DatasetGroup {
   topics: TopicStat[];
 }
 
+export interface CategoryGroup {
+  top_level: string;
+  article_count: number;
+  liked: number;
+  disliked: number;
+  categories: TopicStat[];
+}
+
 export type TopicTree = DatasetGroup[];
+export type CategoryTree = CategoryGroup[];
 
 export const db = new DatabaseSync(path.join(process.cwd(), 'scrollsurf.db'));
 
@@ -75,6 +84,11 @@ db.exec(`
     dataset TEXT NOT NULL PRIMARY KEY,
     enabled INTEGER NOT NULL DEFAULT 1,
     FOREIGN KEY (dataset) REFERENCES datasets(name)
+  );
+
+  CREATE TABLE IF NOT EXISTS category_hierarchy (
+    category_name TEXT NOT NULL PRIMARY KEY,
+    top_level     TEXT NOT NULL
   );
 `);
 
@@ -132,6 +146,37 @@ const get_datasets_stmt = db.prepare(`
   LEFT JOIN datasets d ON d.name = t.dataset
   GROUP BY t.dataset
   ORDER BY t.dataset
+`);
+
+const get_top_levels_stmt = db.prepare(`
+  SELECT
+    ch.top_level,
+    COUNT(DISTINCT a.id) AS article_count,
+    COUNT(DISTINCT CASE WHEN ua.like =  1 THEN a.id END) AS liked,
+    COUNT(DISTINCT CASE WHEN ua.like = -1 THEN a.id END) AS disliked
+  FROM category_hierarchy ch
+  JOIN categories c ON c.name = ch.category_name
+  JOIN article_categories ac ON ac.category_id = c.id
+  JOIN articles a ON a.id = ac.article_id
+  LEFT JOIN user_articles ua ON a.id = ua.article_id
+  GROUP BY ch.top_level
+  ORDER BY ch.top_level
+`);
+
+const get_categories_stmt = db.prepare(`
+  SELECT
+    ch.category_name AS topic,
+    ch.top_level,
+    COUNT(a.id) AS article_count,
+    COUNT(CASE WHEN ua.like =  1 THEN 1 END) AS liked,
+    COUNT(CASE WHEN ua.like = -1 THEN 1 END) AS disliked
+  FROM category_hierarchy ch
+  JOIN categories c ON c.name = ch.category_name
+  JOIN article_categories ac ON ac.category_id = c.id
+  JOIN articles a ON a.id = ac.article_id
+  LEFT JOIN user_articles ua ON a.id = ua.article_id
+  GROUP BY ch.category_name
+  ORDER BY ch.top_level, ch.category_name
 `);
 
 const get_topics_stmt = db.prepare(`
@@ -194,6 +239,25 @@ export const set_dataset_enabled = (dataset: string, enabled: boolean) => {
 export const get_datasets_enabled = (): Record<string, boolean> => {
   const rows = get_datasets_enabled_stmt.all() as unknown as { dataset: string; enabled: number }[];
   return Object.fromEntries(rows.map((r) => [r.dataset, r.enabled === 1]));
+};
+
+export const get_category_tree = (): CategoryTree => {
+  const top_level_rows = get_top_levels_stmt.all() as unknown as CategoryGroup[];
+  const category_rows = get_categories_stmt.all() as unknown as (TopicStat & { top_level: string })[];
+  return top_level_rows.map((tl) => ({
+    top_level: tl.top_level,
+    article_count: tl.article_count,
+    liked: tl.liked,
+    disliked: tl.disliked,
+    categories: category_rows
+      .filter((c) => c.top_level === tl.top_level)
+      .map((c) => ({
+        topic: c.topic,
+        article_count: c.article_count,
+        liked: c.liked,
+        disliked: c.disliked,
+      })),
+  }));
 };
 
 export const get_topic_tree = (): TopicTree => {

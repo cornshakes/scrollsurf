@@ -9,7 +9,8 @@
     "lint": "eslint",
     "lint-fix": "eslint --fix",
     "download-vital-50000": "tsx scripts/download-vital-50000.ts",
-    "download-unusual": "tsx scripts/download-unusual.ts"
+    "download-unusual": "tsx scripts/download-unusual.ts",
+    "categorize": "tsx scripts/categorize.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

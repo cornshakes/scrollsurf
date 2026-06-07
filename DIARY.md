@@ -103,3 +103,6 @@ add checkboxes in the dataset headers so that the user can select which datasets
 ```
 
 as the only necessary prompt for this whole commit.
+omg I should be running an opus running a bunch of haikus.
+
+All of this commit was done with haiku too. It made 2-3 little mistakes that it could fix easily once pointed to.

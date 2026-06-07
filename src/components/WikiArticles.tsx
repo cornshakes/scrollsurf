@@ -15,14 +15,16 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
 import { TopicsFeed } from './TopicsFeed';
+import { CategoryFeed } from './CategoryFeed';
 
-type View = 'random' | 'liked' | 'disliked' | 'topics';
+type View = 'random' | 'liked' | 'disliked' | 'topics' | 'categories';
 
 const VIEW_LABELS: Record<View, string> = {
   random: 'Random articles',
   liked: 'Liked',
   disliked: 'Disliked',
   topics: 'Topics',
+  categories: 'Categories',
 };
 
 const WikiArticles = () => {
@@ -69,6 +71,7 @@ const WikiArticles = () => {
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
         {view === 'topics' && <TopicsFeed />}
+        {view === 'categories' && <CategoryFeed />}
       </Box>
     </Box>
   );

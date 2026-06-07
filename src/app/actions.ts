@@ -5,10 +5,12 @@ import {
   set_like,
   get_voted_articles,
   get_topic_tree,
+  get_category_tree,
   set_dataset_enabled,
   get_datasets_enabled,
   type Article,
   type TopicTree,
+  type CategoryTree,
 } from '@/lib/db';
 
 export const get_next_wiki_articles = async (count: number): Promise<Article[]> => {
@@ -33,4 +35,8 @@ export const set_wiki_dataset_enabled = async (dataset: string, enabled: boolean
 
 export const get_wiki_datasets_enabled = async (): Promise<Record<string, boolean>> => {
   return get_datasets_enabled();
+};
+
+export const get_wiki_category_tree = async (): Promise<CategoryTree> => {
+  return get_category_tree();
 };

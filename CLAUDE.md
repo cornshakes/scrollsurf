@@ -49,6 +49,15 @@ Per-dataset metadata (currently just `source_url`, the Wikipedia page the datase
 
 User preferences for dataset inclusion are stored in `user_settings (dataset, enabled)`. When unchecked in the topics page, a dataset is excluded from `get_next_articles` — the WHERE clause checks if any article_topics row for an article has `enabled = 1`. All datasets default to enabled if no entry exists.
 
+## Categories
+
+Article categories are mapped to 34 Wikipedia top-level categories (Society, Geography, History, Arts, Medicine, etc.) via `category_hierarchy (category_name, top_level)`. Build the mapping offline with `npm run categorize`, which creates `categories.db`:
+
+1. **Bootstrap** — fetches direct children of each top-level from Wikipedia (~2 mins, one-time).
+2. **Categorize** — walks up the Wikipedia category DAG incrementally for unmapped categories, storing the mapping.
+
+On startup, `src/instrumentation.ts` imports the category hierarchy from `categories.db` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-categories.ts`). The script is resumable and respects Wikipedia API etiquette.
+
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |
