@@ -3,6 +3,7 @@
 scrollsurf.db
 vital_50000.db
 unusual.db
+categories.db
 
 # dependencies
 /node_modules
