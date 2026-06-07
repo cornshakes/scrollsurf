@@ -14,16 +14,16 @@ import ListItemText from '@mui/material/ListItemText';
 import MenuIcon from '@mui/icons-material/Menu';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
-import { TopicsFeed } from './TopicsFeed';
+import { TopicsFeed } from './DatasetsTopicsFeed';
 import { CategoryFeed } from './CategoryFeed';
 
-type View = 'random' | 'liked' | 'disliked' | 'topics' | 'categories';
+type View = 'random' | 'liked' | 'disliked' | 'datasets' | 'categories';
 
 const VIEW_LABELS: Record<View, string> = {
   random: 'Random articles',
   liked: 'Liked',
   disliked: 'Disliked',
-  topics: 'Topics',
+  datasets: 'Datasets',
   categories: 'Categories',
 };
 
@@ -70,7 +70,7 @@ const WikiArticles = () => {
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
-        {view === 'topics' && <TopicsFeed />}
+        {view === 'datasets' && <TopicsFeed />}
         {view === 'categories' && <CategoryFeed />}
       </Box>
     </Box>
