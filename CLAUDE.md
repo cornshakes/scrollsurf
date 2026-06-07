@@ -44,6 +44,18 @@ Results are stored in `vital_50000.db`. It is resumable: already-downloaded arti
 |---|---|---|
 | `DOWNLOAD_LIMIT=N` | unlimited | Caps articles downloaded per `npm run download-vital-50000` run |
 
+## Wikipedia API etiquette
+
+Per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and [Wikimedia API Usage Guidelines](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_API_Usage_Guidelines):
+
+- **Serial requests only** — no concurrent connections; batch multiple titles with `|` instead
+- **User-Agent** — must include app name, version, and contact email; never impersonate a browser
+- **`maxlag` parameter** — always set on non-interactive requests to respect server load
+- **Respect rate limits** — back off with exponential delay on `429`/`503`; never mask high usage via multiple user agents
+- **Cache results** — never re-fetch data you already have
+- **GZip** — send `Accept-Encoding: gzip` on all requests
+- **JSON** — use `format=json` for all requests
+
 ## Article selection
 
 `get_next_articles` uses `ORDER BY RANDOM()` — do not add a secondary sort.

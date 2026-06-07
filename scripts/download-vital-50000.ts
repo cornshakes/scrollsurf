@@ -49,24 +49,35 @@ type WikiPage = {
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-const api_fetch = async (params: URLSearchParams): Promise<Response> => {
+const retry_delay = (res: Response, fallback_ms: number): number => {
+  const retryAfter = res.headers.get('Retry-After');
+  if (!retryAfter) return fallback_ms;
+  return isNaN(Number(retryAfter))
+    ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
+    : Number(retryAfter) * 1000;
+};
+
+const api_fetch = async (params: URLSearchParams): Promise<unknown> => {
   params.set('maxlag', '5');
   while (true) {
     const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      headers: { 'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)' },
+      headers: {
+        'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
+        'Accept-Encoding': 'gzip',
+      },
     });
     if (res.status === 429 || res.status === 503) {
-      const retryAfter = res.headers.get('Retry-After');
-      const delay = retryAfter
-        ? isNaN(Number(retryAfter))
-          ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
-          : Number(retryAfter) * 1000
-        : 5000;
-      await sleep(delay);
+      await sleep(retry_delay(res, 5000));
+      continue;
+    }
+    if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
+    const data = await res.json();
+    if (data?.error?.code === 'maxlag') {
+      await sleep(retry_delay(res, 5000));
       continue;
     }
     await sleep(REQUEST_DELAY_MS);
-    return res;
+    return data;
   }
 };
 
@@ -87,11 +98,12 @@ const download_article_urls_for_topic = async (
     });
     if (cmcontinue) params.set('cmcontinue', cmcontinue);
 
-    const res = await api_fetch(params);
-    if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
-    const data = await res.json();
+    const data = (await api_fetch(params)) as {
+      query: { categorymembers: { title: string }[] };
+      continue?: { cmcontinue: string };
+    };
 
-    for (const member of data.query.categorymembers as { title: string }[]) {
+    for (const member of data.query.categorymembers) {
       results.push([member.title.replace(/^Talk:/, ''), topic]);
       process.stdout.write(`\r${results.length} article URLs found...`);
       if (results.length >= LIMIT) return;
@@ -147,10 +159,8 @@ const download_article_content = async (titles: string[]): Promise<WikiPage[]> =
     cllimit: '500',
     format: 'json',
   });
-  const res = await api_fetch(params);
-  if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
-  const data = await res.json();
-  return Object.values(data.query.pages as Record<string, WikiPage>).filter((p) => !!p.extract);
+  const data = (await api_fetch(params)) as { query: { pages: Record<string, WikiPage> } };
+  return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
 const main = async () => {
