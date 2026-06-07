@@ -93,3 +93,13 @@ I used opus to have confidence that it wouldn't require much fumbling, if any.
 
 ## realistic use
 The better use paragraph above might not be very relevant right now, as I have already used 7% of my weekly limit. Well, haiku can do a lot too.
+
+## Haiku can do a lot too
+
+for example,
+
+```
+add checkboxes in the dataset headers so that the user can select which datasets to use for random articles. keep that info in a user_settings table or something like that.
+```
+
+as the only necessary prompt for this whole commit.

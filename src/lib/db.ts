@@ -70,6 +70,12 @@ db.exec(`
     name       TEXT NOT NULL PRIMARY KEY,
     source_url TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS user_settings (
+    dataset TEXT NOT NULL PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (dataset) REFERENCES datasets(name)
+  );
 `);
 
 const VISIBLE_CATEGORIES_SUBQUERY = `
@@ -86,6 +92,13 @@ const get_next_stmt = db.prepare(`
   FROM articles a
   LEFT JOIN user_articles ua ON a.id = ua.article_id
   WHERE ua.article_id IS NULL
+    AND (
+      SELECT COALESCE(MAX(us.enabled), 1)
+      FROM article_topics at
+      LEFT JOIN user_settings us ON us.dataset = at.dataset
+      WHERE at.article_id = a.id
+      LIMIT 1
+    ) = 1
   ORDER BY RANDOM()
   LIMIT $limit
 `);
@@ -164,6 +177,23 @@ export const set_like = (article_id: number, value: -1 | 0 | 1) => {
 export const get_voted_articles = (vote: -1 | 1): Article[] => {
   const rows = get_voted_stmt.all({ $like: vote }) as unknown as DbRow[];
   return rows.map(row_to_article);
+};
+
+const set_dataset_enabled_stmt = db.prepare(
+  'INSERT OR REPLACE INTO user_settings (dataset, enabled) VALUES ($dataset, $enabled)'
+);
+
+const get_datasets_enabled_stmt = db.prepare(
+  'SELECT d.name AS dataset, COALESCE(us.enabled, 1) AS enabled FROM datasets d LEFT JOIN user_settings us ON us.dataset = d.name ORDER BY d.name'
+);
+
+export const set_dataset_enabled = (dataset: string, enabled: boolean) => {
+  set_dataset_enabled_stmt.run({ $dataset: dataset, $enabled: enabled ? 1 : 0 });
+};
+
+export const get_datasets_enabled = (): Record<string, boolean> => {
+  const rows = get_datasets_enabled_stmt.all() as unknown as { dataset: string; enabled: number }[];
+  return Object.fromEntries(rows.map((r) => [r.dataset, r.enabled === 1]));
 };
 
 export const get_topic_tree = (): TopicTree => {

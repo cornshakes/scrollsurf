@@ -5,6 +5,8 @@ import {
   set_like,
   get_voted_articles,
   get_topic_tree,
+  set_dataset_enabled,
+  get_datasets_enabled,
   type Article,
   type TopicTree,
 } from '@/lib/db';
@@ -23,4 +25,12 @@ export const get_voted_wiki_articles = async (vote: -1 | 1): Promise<Article[]> 
 
 export const get_wiki_topic_tree = async (): Promise<TopicTree> => {
   return get_topic_tree();
+};
+
+export const set_wiki_dataset_enabled = async (dataset: string, enabled: boolean) => {
+  set_dataset_enabled(dataset, enabled);
+};
+
+export const get_wiki_datasets_enabled = async (): Promise<Record<string, boolean>> => {
+  return get_datasets_enabled();
 };

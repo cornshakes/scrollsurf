@@ -7,6 +7,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
+import Checkbox from '@mui/material/Checkbox';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -15,16 +16,24 @@ import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { get_wiki_topic_tree } from '@/app/actions';
+import { get_wiki_topic_tree, set_wiki_dataset_enabled, get_wiki_datasets_enabled } from '@/app/actions';
 import type { TopicTree } from '@/lib/db';
 
 export const TopicsFeed = () => {
   const [topics, setTopics] = useState<TopicTree | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    startTransition(async () => setTopics(await get_wiki_topic_tree()));
+    startTransition(async () => {
+      const [tree, dataset_enabled] = await Promise.all([
+        get_wiki_topic_tree(),
+        get_wiki_datasets_enabled(),
+      ]);
+      setTopics(tree);
+      setEnabled(dataset_enabled);
+    });
   }, []);
 
   const toggle_dataset = (dataset: string) =>
@@ -34,6 +43,14 @@ export const TopicsFeed = () => {
       else next.add(dataset);
       return next;
     });
+
+  const toggle_dataset_enabled = (dataset: string) => {
+    const new_enabled = !enabled[dataset];
+    setEnabled((prev) => ({ ...prev, [dataset]: new_enabled }));
+    startTransition(async () => {
+      await set_wiki_dataset_enabled(dataset, new_enabled);
+    });
+  };
 
   if (isPending && !topics)
     return (
@@ -86,6 +103,12 @@ export const TopicsFeed = () => {
                 >
                   {is_open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                 </IconButton>
+                <Checkbox
+                  checked={enabled[d.dataset] ?? true}
+                  onChange={() => toggle_dataset_enabled(d.dataset)}
+                  size="small"
+                  aria-label={`Include ${d.dataset} in random articles`}
+                />
                 <Box sx={{ minWidth: 0, mr: 'auto' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Typography variant="h6" component="h2">

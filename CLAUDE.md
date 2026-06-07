@@ -47,6 +47,8 @@ The dataset grouping is why topic names may safely collide across datasets (both
 
 Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which `get_topic_tree` joins so the UI can show a link button per dataset.
 
+User preferences for dataset inclusion are stored in `user_settings (dataset, enabled)`. When unchecked in the topics page, a dataset is excluded from `get_next_articles` — the WHERE clause checks if any article_topics row for an article has `enabled = 1`. All datasets default to enabled if no entry exists.
+
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |
