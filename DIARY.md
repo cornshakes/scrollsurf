@@ -106,3 +106,8 @@ as the only necessary prompt for this whole commit.
 omg I should be running an opus running a bunch of haikus.
 
 All of this commit was done with haiku too. It made 2-3 little mistakes that it could fix easily once pointed to.
+
+
+## But sometimes Haiku sucks
+
+I was tempted to use Haiku to include 2 more datasets, good and featured articles. It just kept forgetting its own pants and after it said it was done, everything was broken. I had sonnet clean up the mess, it took a while.

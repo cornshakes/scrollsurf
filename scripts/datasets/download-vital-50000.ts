@@ -3,12 +3,13 @@ import path from 'node:path';
 
 const BATCH_SIZE = 15;
 const REQUEST_DELAY_MS = 500;
+const LIMIT = parseInt(process.env.DOWNLOAD_LIMIT ?? '') || Infinity;
 
-const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Good_articles';
+const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5';
 
-const good_db = new DatabaseSync(path.join(process.cwd(), 'good_articles.db'));
+const vital_db = new DatabaseSync(path.join(process.cwd(), 'datasets', 'vital_50000.db'));
 
-good_db.exec(`
+vital_db.exec(`
   CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT NOT NULL PRIMARY KEY,
     value TEXT NOT NULL
@@ -33,17 +34,17 @@ good_db.exec(`
   );
 `);
 
-good_db
+vital_db
   .prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES ($key, $value)')
   .run({ $key: 'source_url', $value: SOURCE_URL });
 
-const insert_article_stmt = good_db.prepare(
+const insert_article_stmt = vital_db.prepare(
   'INSERT OR IGNORE INTO articles (title, url, extract, description, image_url) VALUES ($title, $url, $extract, $description, $image_url)'
 );
-const insert_topic_stmt = good_db.prepare(
+const insert_topic_stmt = vital_db.prepare(
   'INSERT OR IGNORE INTO article_topics (url, topic) VALUES ($url, $topic)'
 );
-const insert_category_stmt = good_db.prepare(
+const insert_category_stmt = vital_db.prepare(
   'INSERT OR IGNORE INTO article_categories (url, name, hidden) VALUES ($url, $name, $hidden)'
 );
 
@@ -90,52 +91,11 @@ const api_fetch = async (params: URLSearchParams): Promise<unknown> => {
   }
 };
 
-const fetch_good_article_wikitext = async (): Promise<string> => {
-  const params = new URLSearchParams({
-    action: 'parse',
-    page: 'Wikipedia:Good articles',
-    prop: 'wikitext',
-    format: 'json',
-    formatversion: '2',
-  });
-  const data = (await api_fetch(params)) as { parse: { wikitext: string } };
-  return data.parse.wikitext;
-};
-
-interface TitleWithTopic {
-  title: string;
-  topic: string;
-}
-
-const get_article_titles_with_topics = async (): Promise<TitleWithTopic[]> => {
-  const wikitext = await fetch_good_article_wikitext();
-  const results: TitleWithTopic[] = [];
-  let current_topic: string | null = null;
-
-  for (const line of wikitext.split('\n')) {
-    const heading_match = line.match(/^==\s*([^=]+)\s*==\s*$/);
-    if (heading_match) {
-      current_topic = heading_match[1].trim();
-      continue;
-    }
-
-    if (!current_topic) continue;
-
-    for (const m of line.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) {
-      const target = m[1].trim();
-      if (!target || target.includes(':')) continue;
-      results.push({ title: target.replace(/_/g, ' '), topic: current_topic });
-    }
-  }
-
-  return results;
-};
-
 const title_to_url = (title: string) =>
   `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
 
 const get_downloaded_urls = (): Set<string> => {
-  const rows = good_db.prepare('SELECT url FROM articles').all() as { url: string }[];
+  const rows = vital_db.prepare('SELECT url FROM articles').all() as { url: string }[];
   return new Set(rows.map((r) => r.url));
 };
 
@@ -156,14 +116,68 @@ const download_article_content = async (titles: string[]): Promise<WikiPage[]> =
   return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
+// Phase 1: download article URLs — returns [title, topic] pairs
+const download_article_urls_for_topic = async (
+  topic: string,
+  results: [string, string][]
+): Promise<void> => {
+  let cmcontinue: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      action: 'query',
+      list: 'categorymembers',
+      cmtitle: `Category:Wikipedia level-5 vital articles in ${topic}`,
+      cmnamespace: '1',
+      cmlimit: '500',
+      format: 'json',
+    });
+    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+
+    const data = (await api_fetch(params)) as {
+      query: { categorymembers: { title: string }[] };
+      continue?: { cmcontinue: string };
+    };
+
+    for (const member of data.query.categorymembers) {
+      results.push([member.title.replace(/^Talk:/, ''), topic]);
+      process.stdout.write(`\r${results.length} article URLs found...`);
+      if (results.length >= LIMIT) return;
+    }
+
+    cmcontinue = data.continue?.cmcontinue;
+  } while (cmcontinue);
+};
+
+const VITAL_TOPICS = [
+  'People',
+  'History',
+  'Geography',
+  'Arts',
+  'Philosophy and religion',
+  'Everyday life',
+  'Biology and health sciences',
+  'Physical sciences',
+  'Mathematics',
+  'Technology',
+  'Society and social sciences',
+];
+
+const download_all_article_urls = async (): Promise<[string, string][]> => {
+  const results: [string, string][] = [];
+  for (const topic of VITAL_TOPICS) {
+    await download_article_urls_for_topic(topic, results);
+    if (results.length >= LIMIT) break;
+  }
+  process.stdout.write('\n');
+  return results;
+};
+
 const main = async () => {
-  process.stdout.write('Phase 1: Collecting article URLs and topics...\n');
-  const all_pairs = await get_article_titles_with_topics();
-  const unique_titles = [...new Set(all_pairs.map((p) => p.title))];
-  process.stdout.write(`Found ${unique_titles.length} unique articles.\n`);
+  process.stdout.write('Phase 1: Downloading article URLs from Wikipedia...\n');
+  const all_pairs = await download_all_article_urls();
 
   const downloaded = get_downloaded_urls();
-  const to_download = all_pairs.filter((p) => !downloaded.has(title_to_url(p.title)));
+  const to_download = all_pairs.filter(([title]) => !downloaded.has(title_to_url(title)));
   process.stdout.write(
     `${to_download.length} new articles to download (${all_pairs.length - to_download.length} already downloaded).\n`
   );
@@ -172,45 +186,51 @@ const main = async () => {
     return;
   }
 
-  // Map title -> set of topics (article may appear in multiple sections)
+  // Deduplicate titles (an article can appear in multiple topics)
   const topic_map = new Map<string, Set<string>>();
-  for (const pair of to_download) {
-    if (!topic_map.has(pair.title)) topic_map.set(pair.title, new Set());
-    topic_map.get(pair.title)?.add(pair.topic);
+  for (const [title, topic] of to_download) {
+    if (!topic_map.has(title)) topic_map.set(title, new Set());
+    topic_map.get(title)?.add(topic);
   }
-  const unique_to_download = [...topic_map.keys()];
+  const unique_titles = [...topic_map.keys()];
 
   process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
   let saved = 0;
-  good_db.exec('BEGIN');
-  for (let i = 0; i < unique_to_download.length; i += BATCH_SIZE) {
-    const batch = unique_to_download.slice(i, i + BATCH_SIZE);
-    const pages = await download_article_content(batch);
+  vital_db.exec('BEGIN');
+  try {
+    for (let i = 0; i < unique_titles.length; i += BATCH_SIZE) {
+      const batch = unique_titles.slice(i, i + BATCH_SIZE);
+      const pages = await download_article_content(batch);
 
-    for (const p of pages) {
-      const url = title_to_url(p.title);
-      insert_article_stmt.run({
-        $title: p.title,
-        $url: url,
-        $extract: p.extract as string,
-        $description: p.description ?? null,
-        $image_url: p.thumbnail?.source ?? null,
-      });
-      for (const topic of topic_map.get(p.title) ?? []) {
-        insert_topic_stmt.run({ $url: url, $topic: topic });
-      }
-      for (const cat of p.categories ?? []) {
-        insert_category_stmt.run({
+      for (const p of pages) {
+        const url = title_to_url(p.title);
+        insert_article_stmt.run({
+          $title: p.title,
           $url: url,
-          $name: cat.title.replace(/^Category:/, ''),
-          $hidden: 'hidden' in cat ? 1 : 0,
+          $extract: p.extract as string,
+          $description: p.description ?? null,
+          $image_url: p.thumbnail?.source ?? null,
         });
+        for (const topic of topic_map.get(p.title) ?? []) {
+          insert_topic_stmt.run({ $url: url, $topic: topic });
+        }
+        for (const cat of p.categories ?? []) {
+          insert_category_stmt.run({
+            $url: url,
+            $name: cat.title.replace(/^Category:/, ''),
+            $hidden: 'hidden' in cat ? 1 : 0,
+          });
+        }
+        saved++;
       }
-      saved++;
+
+      process.stdout.write(`\r${saved} / ${unique_titles.length} downloaded`);
     }
-    process.stdout.write(`\r${saved} / ${unique_to_download.length} downloaded`);
+    vital_db.exec('COMMIT');
+  } catch (err) {
+    vital_db.exec('ROLLBACK');
+    throw err;
   }
-  good_db.exec('COMMIT');
 
   process.stdout.write('\nDone.\n');
 };

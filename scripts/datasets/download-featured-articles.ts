@@ -6,7 +6,7 @@ const REQUEST_DELAY_MS = 500;
 
 const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Featured_articles';
 
-const featured_db = new DatabaseSync(path.join(process.cwd(), 'featured_articles.db'));
+const featured_db = new DatabaseSync(path.join(process.cwd(), 'datasets', 'featured_articles.db'));
 
 featured_db.exec(`
   CREATE TABLE IF NOT EXISTS metadata (
@@ -90,7 +90,12 @@ const api_fetch = async (params: URLSearchParams): Promise<unknown> => {
   }
 };
 
-const fetch_featured_article_wikitext = async (): Promise<string> => {
+interface TitleWithTopic {
+  title: string;
+  topic: string;
+}
+
+const get_article_titles_with_topics = async (): Promise<TitleWithTopic[]> => {
   const params = new URLSearchParams({
     action: 'parse',
     page: 'Wikipedia:Featured articles',
@@ -99,28 +104,16 @@ const fetch_featured_article_wikitext = async (): Promise<string> => {
     formatversion: '2',
   });
   const data = (await api_fetch(params)) as { parse: { wikitext: string } };
-  return data.parse.wikitext;
-};
-
-interface TitleWithTopic {
-  title: string;
-  topic: string;
-}
-
-const get_article_titles_with_topics = async (): Promise<TitleWithTopic[]> => {
-  const wikitext = await fetch_featured_article_wikitext();
   const results: TitleWithTopic[] = [];
   let current_topic: string | null = null;
 
-  for (const line of wikitext.split('\n')) {
-    const heading_match = line.match(/^==\s*([^=]+)\s*==\s*$/);
-    if (heading_match) {
-      current_topic = heading_match[1].trim();
+  for (const line of data.parse.wikitext.split('\n')) {
+    const heading = line.match(/^==\s*([^=]+)\s*==\s*$/);
+    if (heading) {
+      current_topic = heading[1].trim();
       continue;
     }
-
     if (!current_topic) continue;
-
     for (const m of line.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) {
       const target = m[1].trim();
       if (!target || target.includes(':')) continue;
@@ -172,11 +165,10 @@ const main = async () => {
     return;
   }
 
-  // Map title -> set of topics (article may appear in multiple sections)
   const topic_map = new Map<string, Set<string>>();
   for (const pair of to_download) {
     if (!topic_map.has(pair.title)) topic_map.set(pair.title, new Set());
-    topic_map.get(pair.title)?.add(pair.topic);
+    topic_map.get(pair.title)!.add(pair.topic);
   }
   const unique_to_download = [...topic_map.keys()];
 

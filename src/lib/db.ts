@@ -136,16 +136,16 @@ const get_voted_stmt = db.prepare(`
 
 const get_datasets_stmt = db.prepare(`
   SELECT
-    t.dataset,
+    d.name AS dataset,
     d.source_url,
     COUNT(DISTINCT t.article_id) AS article_count,
     COUNT(DISTINCT CASE WHEN ua.like =  1 THEN t.article_id END) AS liked,
     COUNT(DISTINCT CASE WHEN ua.like = -1 THEN t.article_id END) AS disliked
-  FROM article_topics t
+  FROM datasets d
+  LEFT JOIN article_topics t ON t.dataset = d.name
   LEFT JOIN user_articles ua ON t.article_id = ua.article_id
-  LEFT JOIN datasets d ON d.name = t.dataset
-  GROUP BY t.dataset
-  ORDER BY t.dataset
+  GROUP BY d.name
+  ORDER BY d.name
 `);
 
 const get_top_levels_stmt = db.prepare(`

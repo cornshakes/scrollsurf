@@ -10,7 +10,7 @@ const LAST_SECTION = 'Military';
 
 const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles';
 
-const unusual_db = new DatabaseSync(path.join(process.cwd(), 'unusual.db'));
+const unusual_db = new DatabaseSync(path.join(process.cwd(), 'datasets', 'unusual.db'));
 
 unusual_db.exec(`
   CREATE TABLE IF NOT EXISTS metadata (
@@ -94,6 +94,9 @@ const api_fetch = async (params: URLSearchParams): Promise<unknown> => {
   }
 };
 
+const title_to_url = (title: string) =>
+  `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+
 const fetch_wikitext = async (page: string): Promise<string> => {
   const params = new URLSearchParams({
     action: 'parse',
@@ -104,6 +107,28 @@ const fetch_wikitext = async (page: string): Promise<string> => {
   });
   const data = (await api_fetch(params)) as { parse: { wikitext: string } };
   return data.parse.wikitext;
+};
+
+const get_downloaded_urls = (): Set<string> => {
+  const rows = unusual_db.prepare('SELECT url FROM articles').all() as { url: string }[];
+  return new Set(rows.map((r) => r.url));
+};
+
+const download_article_content = async (titles: string[]): Promise<WikiPage[]> => {
+  const params = new URLSearchParams({
+    action: 'query',
+    titles: titles.join('|'),
+    prop: 'extracts|description|pageimages|categories',
+    exintro: '1',
+    explaintext: '1',
+    piprop: 'thumbnail',
+    pithumbsize: '400',
+    clprop: 'hidden',
+    cllimit: '500',
+    format: 'json',
+  });
+  const data = (await api_fetch(params)) as { query: { pages: Record<string, WikiPage> } };
+  return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
 // Phase 1: the section subpages transcluded by the main page, in order, up to
@@ -131,32 +156,6 @@ const get_article_titles_in_section = async (section: string): Promise<string[]>
     titles.push(target.replace(/_/g, ' '));
   }
   return titles;
-};
-
-const title_to_url = (title: string) =>
-  `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
-
-const get_downloaded_urls = (): Set<string> => {
-  const rows = unusual_db.prepare('SELECT url FROM articles').all() as { url: string }[];
-  return new Set(rows.map((r) => r.url));
-};
-
-// Phase 3: download article content (extract, description, image) for a batch of titles
-const download_article_content = async (titles: string[]): Promise<WikiPage[]> => {
-  const params = new URLSearchParams({
-    action: 'query',
-    titles: titles.join('|'),
-    prop: 'extracts|description|pageimages|categories',
-    exintro: '1',
-    explaintext: '1',
-    piprop: 'thumbnail',
-    pithumbsize: '400',
-    clprop: 'hidden',
-    cllimit: '500',
-    format: 'json',
-  });
-  const data = (await api_fetch(params)) as { query: { pages: Record<string, WikiPage> } };
-  return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
 const main = async () => {

@@ -13,13 +13,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## Runtime DB + prepared reference DBs
 
 - `scrollsurf.db` — runtime database. Holds articles, user votes, categories, and topic classifications. This is the only DB the app reads from.
-- Reference databases — each is built offline by its own download script and never touched by the app directly. New ones are added by following this same pattern (download script → `<name>.db` → `import-<name>.ts`):
-  - `vital_50000.db` — Wikipedia Level 5 vital articles. Built by `npm run download-vital-50000`.
-  - `unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
-  - `good_articles.db` — [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles). Built by `npm run download-good-articles`.
-  - `featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
+- Reference databases — stored in `datasets/` and built offline by their own download scripts. New ones are added by following this same pattern (download script → `datasets/<name>.db` → `import-<name>.ts`):
+  - `datasets/vital_50000.db` — Wikipedia Level 5 vital articles. Built by `npm run download-vital-50000`.
+  - `datasets/unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
+  - `datasets/good_articles.db` — [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles). Built by `npm run download-good-articles`.
+  - `datasets/featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
+  - `datasets/categories.db` — Wikipedia category hierarchy mapped to top-level categories. Built by `npm run categorize`.
 
-On startup, `src/instrumentation.ts` imports new articles from each reference DB into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-vital.ts`, `src/lib/import-unusual.ts`).
+On startup, `src/instrumentation.ts` discovers and imports available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE`.
 
 ## SQLite
 
@@ -30,7 +31,7 @@ Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, 
 ## Data pipeline
 
 ```
-npm run download-* → <name>.db → instrumentation.ts (on startup) → scrollsurf.db → server actions → UI
+npm run download-* → datasets/<name>.db → instrumentation.ts (on startup) → scrollsurf.db → server actions → UI
 ```
 
 Each download script ends by fetching article **content** (extract, description, image, categories) in batches, then storing it in its reference DB. They differ only in how they discover article URLs first:
@@ -44,8 +45,10 @@ All download scripts are resumable: already-downloaded articles are skipped.
 
 `article_topics` (in `scrollsurf.db`) is `(article_id, dataset, topic)`. Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
 
-- **Vital** — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`vital_50000.db`'s `article_vital_topics`).
-- **Unusual** — each article's section heading from `Wikipedia:Unusual articles`: Military, Science, Folklore, etc. (`unusual.db`'s `article_topics`).
+- **Vital** — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`datasets/vital_50000.db`'s `article_vital_topics`).
+- **Unusual** — each article's section heading from `Wikipedia:Unusual articles`: Military, Science, Folklore, etc. (`datasets/unusual.db`'s `article_topics`).
+- **Good** — topics from Wikipedia Good articles page sections.
+- **Featured** — topics from Wikipedia Featured articles page sections.
 
 The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset.
 

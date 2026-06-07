@@ -1,13 +1,26 @@
 export const register = async () => {
   if (process.env.NEXT_RUNTIME === 'edge') return;
-  const { import_vital_articles } = await import('./lib/import-vital');
-  const { import_unusual_articles } = await import('./lib/import-unusual');
-  const { import_good_articles } = await import('./lib/import-good-articles');
-  const { import_featured_articles } = await import('./lib/import-featured-articles');
-  const { import_categories } = await import('./lib/import-categories');
-  import_vital_articles();
-  import_unusual_articles();
-  import_good_articles();
-  import_featured_articles();
-  import_categories();
+
+  const imports = [
+    { name: 'vital', module: './lib/datasets/import-vital', fn: 'import_vital_articles' },
+    { name: 'unusual', module: './lib/datasets/import-unusual', fn: 'import_unusual_articles' },
+    { name: 'good', module: './lib/datasets/import-good-articles', fn: 'import_good_articles' },
+    {
+      name: 'featured',
+      module: './lib/datasets/import-featured-articles',
+      fn: 'import_featured_articles',
+    },
+    { name: 'categories', module: './lib/datasets/import-categories', fn: 'import_categories' },
+  ];
+
+  for (const imp of imports) {
+    try {
+      const mod = await import(imp.module);
+      if (mod[imp.fn]) {
+        mod[imp.fn]();
+      }
+    } catch (err) {
+      // Skip missing datasets
+    }
+  }
 };
