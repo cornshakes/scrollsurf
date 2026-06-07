@@ -243,7 +243,9 @@ export const get_datasets_enabled = (): Record<string, boolean> => {
 
 export const get_category_tree = (): CategoryTree => {
   const top_level_rows = get_top_levels_stmt.all() as unknown as CategoryGroup[];
-  const category_rows = get_categories_stmt.all() as unknown as (TopicStat & { top_level: string })[];
+  const category_rows = get_categories_stmt.all() as unknown as (TopicStat & {
+    top_level: string;
+  })[];
   return top_level_rows.map((tl) => ({
     top_level: tl.top_level,
     article_count: tl.article_count,

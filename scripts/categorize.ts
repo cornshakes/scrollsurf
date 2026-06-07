@@ -121,7 +121,8 @@ const walk_up_hierarchy = async (category: string): Promise<string | null> => {
   const queue = [category];
 
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    const current = queue.shift();
+    if (!current) continue;
     if (visited.has(current) || visited.size >= MAX_DEPTH) continue;
     visited.add(current);
 
@@ -143,11 +144,11 @@ const bootstrap = async () => {
     cnt: number;
   };
   if (check.cnt > 0) {
-    console.log('[bootstrap] hierarchy already populated, skipping');
+    console.warn('[bootstrap] hierarchy already populated, skipping');
     return;
   }
 
-  console.log('[bootstrap] fetching Wikipedia category hierarchy...');
+  console.warn('[bootstrap] fetching Wikipedia category hierarchy...');
   const insert_stmt = categories_db.prepare(
     'INSERT OR IGNORE INTO category_hierarchy (category_name, top_level) VALUES (?, ?)'
   );

@@ -4,7 +4,6 @@ import { useState, useEffect, useTransition } from 'react';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
@@ -23,7 +22,11 @@ export const CategoryFeed = () => {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    startTransition(async () => setCategories(await get_wiki_category_tree()));
+    startTransition(async () => {
+      const tree = await get_wiki_category_tree();
+      setCategories(tree);
+      setCollapsed(new Set(tree.map((c) => c.top_level)));
+    });
   }, []);
 
   if (isPending && !categories)
@@ -76,30 +79,43 @@ export const CategoryFeed = () => {
         categories.map((tl) => {
           const is_open = !collapsed.has(tl.top_level);
           return (
-            <Box key={tl.top_level} sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', px: 1, gap: 0.5 }}>
+            <Box key={tl.top_level} sx={{ mb: 1, m: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', px: 1, gap: 0.25 }}>
                 <IconButton
                   onClick={() => toggle_top_level(tl.top_level)}
                   size="small"
                   aria-label={is_open ? `Collapse ${tl.top_level}` : `Expand ${tl.top_level}`}
+                  sx={{ p: 0.5 }}
                 >
                   {is_open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                 </IconButton>
-                <Box sx={{ minWidth: 0, mr: 'auto' }}>
-                  <Typography variant="h6" component="h2">
-                    {tl.top_level}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {tl.article_count} articles · {tl.categories.length} categories
-                  </Typography>
-                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, minWidth: 'fit-content' }}>
+                  {tl.top_level}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'text.secondary', minWidth: 'fit-content' }}
+                >
+                  {tl.article_count} articles · {tl.categories.length} categories
+                </Typography>
                 {vote_chips(tl.liked, tl.disliked)}
               </Box>
-              <Collapse in={is_open} timeout="auto" unmountOnExit>
-                <List dense>
+              <Collapse in={is_open} timeout="auto" unmountOnExit sx={{ mt: -0.5 }}>
+                <List dense sx={{ py: 0 }}>
                   {tl.categories.map((cat) => (
-                    <ListItem key={cat.topic} sx={{ pl: 6 }}>
-                      <ListItemText primary={cat.topic} secondary={`${cat.article_count} articles`} />
+                    <ListItem
+                      key={cat.topic}
+                      sx={{ pl: 6, display: 'flex', alignItems: 'center', gap: 0.25, py: 0.5 }}
+                    >
+                      <Typography variant="body2" sx={{ minWidth: 'fit-content' }}>
+                        {cat.topic}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: 'text.secondary', minWidth: 'fit-content' }}
+                      >
+                        {cat.article_count} articles
+                      </Typography>
                       {vote_chips(cat.liked, cat.disliked)}
                     </ListItem>
                   ))}

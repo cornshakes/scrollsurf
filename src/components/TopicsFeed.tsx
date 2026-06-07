@@ -4,7 +4,6 @@ import { useState, useEffect, useTransition } from 'react';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
 import Checkbox from '@mui/material/Checkbox';
@@ -16,7 +15,11 @@ import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { get_wiki_topic_tree, set_wiki_dataset_enabled, get_wiki_datasets_enabled } from '@/app/actions';
+import {
+  get_wiki_topic_tree,
+  set_wiki_dataset_enabled,
+  get_wiki_datasets_enabled,
+} from '@/app/actions';
 import type { TopicTree } from '@/lib/db';
 
 export const TopicsFeed = () => {
@@ -33,6 +36,7 @@ export const TopicsFeed = () => {
       ]);
       setTopics(tree);
       setEnabled(dataset_enabled);
+      setCollapsed(new Set(tree.map((d) => d.dataset)));
     });
   }, []);
 
@@ -94,12 +98,13 @@ export const TopicsFeed = () => {
         topics.map((d) => {
           const is_open = !collapsed.has(d.dataset);
           return (
-            <Box key={d.dataset} sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', px: 1, gap: 0.5 }}>
+            <Box key={d.dataset} sx={{ mb: 1, m: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', px: 1, gap: 0.25 }}>
                 <IconButton
                   onClick={() => toggle_dataset(d.dataset)}
                   size="small"
                   aria-label={is_open ? `Collapse ${d.dataset}` : `Expand ${d.dataset}`}
+                  sx={{ p: 0.5 }}
                 >
                   {is_open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                 </IconButton>
@@ -108,36 +113,48 @@ export const TopicsFeed = () => {
                   onChange={() => toggle_dataset_enabled(d.dataset)}
                   size="small"
                   aria-label={`Include ${d.dataset} in random articles`}
+                  sx={{ p: 0.5 }}
                 />
-                <Box sx={{ minWidth: 0, mr: 'auto' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="h6" component="h2">
-                      {d.dataset}
-                    </Typography>
-                    {d.source_url && (
-                      <IconButton
-                        component="a"
-                        href={d.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="small"
-                        aria-label={`Open ${d.dataset} source on Wikipedia`}
-                      >
-                        <OpenInNewIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {d.article_count} articles · {d.topics.length} topics
-                  </Typography>
-                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, minWidth: 'fit-content' }}>
+                  {d.dataset}
+                </Typography>
+                {d.source_url && (
+                  <IconButton
+                    component="a"
+                    href={d.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="small"
+                    aria-label={`Open ${d.dataset} source on Wikipedia`}
+                    sx={{ p: 0.5 }}
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </IconButton>
+                )}
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'text.secondary', minWidth: 'fit-content' }}
+                >
+                  {d.article_count} articles · {d.topics.length} topics
+                </Typography>
                 {vote_chips(d.liked, d.disliked)}
               </Box>
-              <Collapse in={is_open} timeout="auto" unmountOnExit>
-                <List dense>
+              <Collapse in={is_open} timeout="auto" unmountOnExit sx={{ mt: -0.5 }}>
+                <List dense sx={{ py: 0 }}>
                   {d.topics.map((t) => (
-                    <ListItem key={t.topic} sx={{ pl: 6 }}>
-                      <ListItemText primary={t.topic} secondary={`${t.article_count} articles`} />
+                    <ListItem
+                      key={t.topic}
+                      sx={{ pl: 6, display: 'flex', alignItems: 'center', gap: 0.25, py: 0.5 }}
+                    >
+                      <Typography variant="body2" sx={{ minWidth: 'fit-content' }}>
+                        {t.topic}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: 'text.secondary', minWidth: 'fit-content' }}
+                      >
+                        {t.article_count} articles
+                      </Typography>
                       {vote_chips(t.liked, t.disliked)}
                     </ListItem>
                   ))}
