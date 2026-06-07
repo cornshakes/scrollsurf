@@ -84,3 +84,9 @@ I didn't like the feature with collapsible text/tags. Why fumble when I can just
 On complex tasks, claude can take a long time, basically doing research, running tests, and pondering. If I wanted to go faster (once I get good at judging what it can do), should I run multiple claudes on their own branches? Should I create issues and assign claudes to them or is that not even worth the time? Maybe I'll ask claude.
 
 I also have to learn how many sequential tasks I can give one claude to make it run longer, giving me more time in between
+
+## added another dataset
+
+I refactored the whole thing to add multiple datasets, ie vital-50000 and unusual,
+but more can be added. nice and easy. I would hate to have to do all that manually.
+I used opus to have confidence that it wouldn't require much fumbling, if any.

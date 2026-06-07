@@ -45,6 +45,8 @@ All download scripts are resumable: already-downloaded articles are skipped.
 
 The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset.
 
+Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which `get_topic_tree` joins so the UI can show a link button per dataset.
+
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |

@@ -30,6 +30,9 @@ export const import_unusual_articles = () => {
       FROM unusual.article_topics ut
       JOIN main.articles a ON a.url = ut.url;
 
+      INSERT OR REPLACE INTO main.datasets (name, source_url)
+      VALUES ('Unusual', (SELECT value FROM unusual.metadata WHERE key = 'source_url'));
+
       COMMIT;
     `);
   } finally {

@@ -8,9 +8,15 @@ const REQUEST_DELAY_MS = 500;
 // including Military. Each is transcluded as a subpage {{/<Section>}}.
 const LAST_SECTION = 'Military';
 
+const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles';
+
 const unusual_db = new DatabaseSync(path.join(process.cwd(), 'unusual.db'));
 
 unusual_db.exec(`
+  CREATE TABLE IF NOT EXISTS metadata (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS articles (
     title       TEXT NOT NULL,
     url         TEXT NOT NULL UNIQUE,
@@ -30,6 +36,10 @@ unusual_db.exec(`
     PRIMARY KEY (url, name)
   );
 `);
+
+unusual_db
+  .prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES ($key, $value)')
+  .run({ $key: 'source_url', $value: SOURCE_URL });
 
 const insert_article_stmt = unusual_db.prepare(
   'INSERT OR IGNORE INTO articles (title, url, extract, description, image_url) VALUES ($title, $url, $extract, $description, $image_url)'

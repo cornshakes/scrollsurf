@@ -4,16 +4,17 @@ import { useState, useEffect, useTransition } from 'react';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { get_wiki_topic_tree } from '@/app/actions';
 import type { TopicTree } from '@/lib/db';
 
@@ -77,19 +78,38 @@ export const TopicsFeed = () => {
           const is_open = !collapsed.has(d.dataset);
           return (
             <Box key={d.dataset} sx={{ mb: 3 }}>
-              <ListItemButton onClick={() => toggle_dataset(d.dataset)} sx={{ borderRadius: 1 }}>
-                {is_open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-                <ListItemText
-                  primary={
+              <Box sx={{ display: 'flex', alignItems: 'center', px: 1, gap: 0.5 }}>
+                <IconButton
+                  onClick={() => toggle_dataset(d.dataset)}
+                  size="small"
+                  aria-label={is_open ? `Collapse ${d.dataset}` : `Expand ${d.dataset}`}
+                >
+                  {is_open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                </IconButton>
+                <Box sx={{ minWidth: 0, mr: 'auto' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Typography variant="h6" component="h2">
                       {d.dataset}
                     </Typography>
-                  }
-                  secondary={`${d.article_count} articles · ${d.topics.length} topics`}
-                  sx={{ ml: 1 }}
-                />
+                    {d.source_url && (
+                      <IconButton
+                        component="a"
+                        href={d.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        aria-label={`Open ${d.dataset} source on Wikipedia`}
+                      >
+                        <OpenInNewIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                    {d.article_count} articles · {d.topics.length} topics
+                  </Typography>
+                </Box>
                 {vote_chips(d.liked, d.disliked)}
-              </ListItemButton>
+              </Box>
               <Collapse in={is_open} timeout="auto" unmountOnExit>
                 <List dense>
                   {d.topics.map((t) => (

@@ -21,6 +21,7 @@ export interface TopicStat {
 
 export interface DatasetGroup {
   dataset: string;
+  source_url: string | null;
   article_count: number;
   liked: number;
   disliked: number;
@@ -64,6 +65,11 @@ db.exec(`
     topic      TEXT    NOT NULL,
     PRIMARY KEY (article_id, dataset, topic)
   );
+
+  CREATE TABLE IF NOT EXISTS datasets (
+    name       TEXT NOT NULL PRIMARY KEY,
+    source_url TEXT
+  );
 `);
 
 const VISIBLE_CATEGORIES_SUBQUERY = `
@@ -104,11 +110,13 @@ const get_voted_stmt = db.prepare(`
 const get_datasets_stmt = db.prepare(`
   SELECT
     t.dataset,
+    d.source_url,
     COUNT(DISTINCT t.article_id) AS article_count,
     COUNT(DISTINCT CASE WHEN ua.like =  1 THEN t.article_id END) AS liked,
     COUNT(DISTINCT CASE WHEN ua.like = -1 THEN t.article_id END) AS disliked
   FROM article_topics t
   LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+  LEFT JOIN datasets d ON d.name = t.dataset
   GROUP BY t.dataset
   ORDER BY t.dataset
 `);
@@ -163,6 +171,7 @@ export const get_topic_tree = (): TopicTree => {
   const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
   return dataset_rows.map((d) => ({
     dataset: d.dataset,
+    source_url: d.source_url,
     article_count: d.article_count,
     liked: d.liked,
     disliked: d.disliked,

@@ -30,6 +30,9 @@ export const import_vital_articles = () => {
       FROM vital.article_vital_topics vt
       JOIN main.articles a ON a.url = vt.url;
 
+      INSERT OR REPLACE INTO main.datasets (name, source_url)
+      VALUES ('Vital', (SELECT value FROM vital.metadata WHERE key = 'source_url'));
+
       COMMIT;
     `);
   } finally {

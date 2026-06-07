@@ -5,9 +5,15 @@ const BATCH_SIZE = 15;
 const REQUEST_DELAY_MS = 500;
 const LIMIT = parseInt(process.env.DOWNLOAD_LIMIT ?? '') || Infinity;
 
+const SOURCE_URL = 'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5';
+
 const vital_db = new DatabaseSync(path.join(process.cwd(), 'vital_50000.db'));
 
 vital_db.exec(`
+  CREATE TABLE IF NOT EXISTS metadata (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS articles (
     title       TEXT NOT NULL,
     url         TEXT NOT NULL UNIQUE,
@@ -27,6 +33,10 @@ vital_db.exec(`
     PRIMARY KEY (url, name)
   );
 `);
+
+vital_db
+  .prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES ($key, $value)')
+  .run({ $key: 'source_url', $value: SOURCE_URL });
 
 const insert_article_stmt = vital_db.prepare(
   'INSERT OR IGNORE INTO articles (title, url, extract, description, image_url) VALUES ($title, $url, $extract, $description, $image_url)'
