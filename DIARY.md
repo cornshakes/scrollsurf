@@ -126,3 +126,34 @@ So good. So smart. Thought about it, asked one tiny decision question, then made
 # Opus again.
 
 All I have to do is ask a leading question or two, and it gets what I mean and what should be done. Now categorization happens in batches of 50 (instead of 1) ie using 50 times fewer api calls + wait time. I also reached 20% of my weekly limit, and it's still Monday.
+
+# Some tips I just read and should try:
+```
+Use /plan first: Planning collapses 20 ambiguous decisions into a reviewed spec where each lands near 100% confidence, because internal testing shows unguided attempts succeed only ~33% of the time
+```
+I also read that it creates artifacts in .claude/plans, so I should check that out
+```
+The opusplan model alias provides an automated hybrid approach: using Opus in plan mode for complex reasoning and architecture decisions, then automatically switching to Sonnet for execution. This is the most underused model alias but gives you Opus-quality planning and Sonnet-speed execution without manually switching.
+```
+
+### Context Management
+```
+Context management: Don't let context exceed 60% of the 200k window since quality degrades at 20-40% full. Auto-compaction at 83.5% is lossy; instead manually dump progress to a file, run /clear, and start fresh
+```
+
+How to?
+1) tell claude to
+```
+Write .claude/session-handoff.md with:
+- Current goal
+- Changed files  
+- Key decisions made
+- Any failing tests
+- Root cause analysis
+- Next steps
+```
+2) /clear
+3) tell claude to
+```
+Read .claude/session-handoff.md and continue from where we left off
+```

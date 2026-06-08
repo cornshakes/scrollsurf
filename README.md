@@ -6,6 +6,10 @@ Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike the
 
 - [The Unusual articles page](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles)
 
+- [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles)
+
+- [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles)
+
 ## Getting Started
 
 ```bash
