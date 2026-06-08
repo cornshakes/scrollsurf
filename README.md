@@ -10,17 +10,40 @@ Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike the
 
 - [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles)
 
+- [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures)
+
+
 ## Getting Started
 
 ```bash
 npm install
 ```
 
+Before you run the app for the first time, you have to download the datasets that you want using the provided package scripts.
+The downloads take a long time, but one dataset is enough to run the app:
+
+```bash
+npm run download-vital-50000
+npm run download-unusual
+npm run download-good-articles
+npm run download-featured-articles
+npm run download-featured-pictures
+```
+
+Then, you can categorize the articles by running
+
+```bash
+npm run categorize
+```
+
+Currently, that's not very useful - it just builds a huge category tree that you can look at.
+After downloading at least one dataset, you can
+
 ```bash
 npm run dev
 ```
 
-[http://localhost:3000](http://localhost:3000)
+and go to [http://localhost:3000](http://localhost:3000)
 
 Check out the [Diary](./DIARY.md)!
 

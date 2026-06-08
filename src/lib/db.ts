@@ -225,6 +225,7 @@ const get_datasets_stmt = db.prepare(`
   FROM datasets d
   LEFT JOIN article_topics t ON t.dataset = d.name
   LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+  WHERE d.name NOT IN (SELECT DISTINCT dataset FROM picture_topics)
   GROUP BY d.name
   ORDER BY d.name
 `);
@@ -239,7 +240,7 @@ const get_picture_dataset_stmt = db.prepare(`
   FROM datasets d
   LEFT JOIN picture_topics pt ON pt.dataset = d.name
   LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id
-  WHERE d.name = 'Pictures'
+  WHERE d.name = ?
   GROUP BY d.name
 `);
 
@@ -451,30 +452,32 @@ export const get_topic_tree = (): TopicTree => {
   const article_dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
   const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
 
-  const article_groups: TopicTree = article_dataset_rows
-    .filter((d) => d.dataset !== 'Pictures')
-    .map((d) => ({
-      dataset: d.dataset,
-      source_url: d.source_url,
-      article_count: d.article_count,
-      liked: d.liked,
-      disliked: d.disliked,
-      topics: topic_rows
-        .filter((t) => t.dataset === d.dataset)
-        .map((t) => ({
-          topic: t.topic,
-          article_count: t.article_count,
-          liked: t.liked,
-          disliked: t.disliked,
-        })),
-    }));
+  const pic_topic_rows = get_picture_topics_stmt.all() as unknown as (TopicStat & {
+    dataset: string;
+  })[];
+  const pic_dataset_name = pic_topic_rows[0]?.dataset;
+
+  const article_groups: TopicTree = article_dataset_rows.map((d) => ({
+    dataset: d.dataset,
+    source_url: d.source_url,
+    article_count: d.article_count,
+    liked: d.liked,
+    disliked: d.disliked,
+    topics: topic_rows
+      .filter((t) => t.dataset === d.dataset)
+      .map((t) => ({
+        topic: t.topic,
+        article_count: t.article_count,
+        liked: t.liked,
+        disliked: t.disliked,
+      })),
+  }));
 
   // Append the Pictures group if the dataset exists
-  const pic_dataset_row = get_picture_dataset_stmt.get() as DatasetGroup | undefined;
+  const pic_dataset_row = pic_dataset_name
+    ? (get_picture_dataset_stmt.get(pic_dataset_name) as DatasetGroup | undefined)
+    : undefined;
   if (pic_dataset_row) {
-    const pic_topic_rows = get_picture_topics_stmt.all() as unknown as (TopicStat & {
-      dataset: string;
-    })[];
     article_groups.push({
       dataset: pic_dataset_row.dataset,
       source_url: pic_dataset_row.source_url,

@@ -5,7 +5,7 @@ import { fetch_wikitext } from '../lib/wiki';
 // ==Section== headings. The section is the article's topic.
 run_download({
   filename: 'featured_articles.db',
-  title: 'Featured',
+  title: 'Featured Articles',
   source_url: 'https://en.wikipedia.org/wiki/Wikipedia:Featured_articles',
   discover: async () => {
     const wikitext = await fetch_wikitext('Wikipedia:Featured articles');

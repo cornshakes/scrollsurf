@@ -36,7 +36,7 @@ const get_article_titles_in_section = (wikitext: string): string[] => {
 
 run_download({
   filename: 'unusual.db',
-  title: 'Unusual',
+  title: 'Unusual Articles',
   source_url: 'https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles',
   discover: async () => {
     const main = await fetch_wikitext('Wikipedia:Unusual articles');

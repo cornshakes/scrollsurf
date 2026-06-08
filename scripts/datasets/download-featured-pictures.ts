@@ -91,7 +91,7 @@ const parse_gallery_wikitext = (
 
 run_download_pictures({
   filename: 'featured_pictures.db',
-  title: 'Pictures',
+  title: 'Featured Pictures',
   source_url: 'https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures',
   discover: async () => {
     const index_wikitext = await fetch_wikitext('Wikipedia:Featured pictures');
