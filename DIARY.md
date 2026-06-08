@@ -157,3 +157,8 @@ Write .claude/session-handoff.md with:
 ```
 Read .claude/session-handoff.md and continue from where we left off
 ```
+
+# Adding Pictures
+
+I'm now using opus with Plan mode to add downloading, storing, and displaying images. What's really nice is that (in VS Code) it displays the md file with the plan and I can select some text and add a comment. When I'm done adding comments, it updates the plan accordingly. Like, story work.
+After I was happy with the plan, I switched to sonnet and let it rip. It worked!

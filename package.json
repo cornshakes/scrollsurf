@@ -12,6 +12,7 @@
     "download-unusual": "tsx scripts/datasets/download-unusual.ts",
     "download-good-articles": "tsx scripts/datasets/download-good-articles.ts",
     "download-featured-articles": "tsx scripts/datasets/download-featured-articles.ts",
+    "download-featured-pictures": "tsx scripts/datasets/download-featured-pictures.ts",
     "categorize": "tsx scripts/categorize.ts"
   },
   "dependencies": {

@@ -172,6 +172,47 @@ export const fetch_category_parents_batch = async (
   return result;
 };
 
+export interface ImageInfo {
+  title: string; // File:Name.jpg
+  thumburl: string; // 1000px thumbnail
+  descriptionurl: string; // File description page
+}
+
+// Fetches image info (1000px thumbnail + description page) for a batch of File: titles.
+// Returns only files that have a usable thumburl.
+export const fetch_image_content = async (file_titles: string[]): Promise<ImageInfo[]> => {
+  const params = new URLSearchParams({
+    action: 'query',
+    titles: file_titles.join('|'),
+    prop: 'imageinfo',
+    iiprop: 'url',
+    iiurlwidth: '1000',
+    format: 'json',
+    formatversion: '2',
+  });
+  const data = (await wiki_api(params)) as {
+    query: {
+      pages: {
+        title: string;
+        imageinfo?: { thumburl?: string; descriptionurl?: string }[];
+      }[];
+    };
+  };
+
+  const results: ImageInfo[] = [];
+  for (const page of data.query.pages) {
+    const info = page.imageinfo?.[0];
+    if (info?.thumburl && info?.descriptionurl) {
+      results.push({
+        title: page.title,
+        thumburl: info.thumburl,
+        descriptionurl: info.descriptionurl,
+      });
+    }
+  }
+  return results;
+};
+
 export type WikiCategory = { title: string; hidden?: string };
 export type WikiPage = {
   title: string;

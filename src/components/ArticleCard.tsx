@@ -16,15 +16,15 @@ export const ArticleCard = ({
   onVoteChange,
 }: {
   article: Article;
-  onVoteChange?: (id: number, value: -1 | 0 | 1) => void;
+  onVoteChange?: (type: 'article', id: number, value: -1 | 0 | 1) => void;
 }) => {
   const [like, setLike] = useState<-1 | 0 | 1>(article.like);
 
   const vote = (value: -1 | 1) => {
     const next = like === value ? 0 : value;
     setLike(next);
-    set_article_like(article.id, next);
-    onVoteChange?.(article.id, next);
+    set_article_like('article', article.id, next);
+    onVoteChange?.('article', article.id, next);
   };
 
   return (

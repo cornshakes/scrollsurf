@@ -5,19 +5,20 @@ import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import { get_next_wiki_articles } from '@/app/actions';
 import { ArticleCard } from './ArticleCard';
-import type { Article } from '@/lib/db';
+import { PictureCard } from './PictureCard';
+import type { FeedItem } from '@/lib/db';
 
 const PAGE_SIZE = 10;
 
 export const RandomFeed = () => {
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [items, setItems] = useState<FeedItem[]>([]);
   const [isPending, startTransition] = useTransition();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const fetchNext = () => {
     startTransition(async () => {
       const batch = await get_next_wiki_articles(PAGE_SIZE);
-      setArticles((prev) => [...prev, ...batch]);
+      setItems((prev) => [...prev, ...batch]);
     });
   };
 
@@ -44,9 +45,13 @@ export const RandomFeed = () => {
 
   return (
     <Box>
-      {articles.map((article) => (
-        <ArticleCard key={article.id} article={article} />
-      ))}
+      {items.map((item) =>
+        item.type === 'picture' ? (
+          <PictureCard key={`picture-${item.id}`} picture={item} />
+        ) : (
+          <ArticleCard key={`article-${item.id}`} article={item} />
+        )
+      )}
       <Box ref={sentinelRef} sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         {isPending && <CircularProgress />}
       </Box>

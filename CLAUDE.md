@@ -19,6 +19,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - `datasets/unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
   - `datasets/good_articles.db` — [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles). Built by `npm run download-good-articles`.
   - `datasets/featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
+  - `datasets/featured_pictures.db` — [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures). Built by `npm run download-featured-pictures`. **Uses a separate schema** (`pictures`/`picture_topics`) — not the article schema. Import is handled by `import_pictures_dataset`, not `import_articles_dataset`.
   - `datasets/categories.db` — Wikipedia category hierarchy mapped to top-level categories. Built by `npm run categorize`.
 
 On startup, `src/instrumentation.ts` discovers and imports available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE`.
@@ -50,8 +51,9 @@ All download scripts are resumable: already-downloaded articles are skipped.
 - **Unusual** — each article's section heading from `Wikipedia:Unusual articles`: Military, Science, Folklore, etc. (`datasets/unusual.db`'s `article_topics`).
 - **Good** — topics from Wikipedia Good articles page sections.
 - **Featured** — topics from Wikipedia Featured articles page sections.
+- **Pictures** — gallery section headings from `Wikipedia:Featured pictures` subpages: Animals, Artwork, Space, etc. (`datasets/featured_pictures.db`'s `picture_topics`). Stored in the runtime `picture_topics` table, not `article_topics`.
 
-The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset.
+The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset. Pictures are appended as a separate group from `picture_topics`.
 
 Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which `get_topic_tree` joins so the UI can show a link button per dataset.
 
@@ -68,11 +70,28 @@ Article categories are mapped to 34 Wikipedia top-level categories (Society, Geo
 
 On startup, `src/instrumentation.ts` imports the category hierarchy from `categories.db` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-categories.ts`). The script is resumable and respects Wikipedia API etiquette.
 
+## Pictures vs articles
+
+Pictures and articles use **fully separate schemas** end-to-end:
+
+| Concern | Articles | Pictures |
+|---|---|---|
+| Reference DB schema | `articles`, `article_topics`, `article_categories` | `pictures`, `picture_topics` |
+| Runtime tables | `articles`, `user_articles`, `article_topics` | `pictures`, `user_pictures`, `picture_topics` |
+| Importer | `import_articles_dataset` | `import_pictures_dataset` |
+| Download pipeline | `scripts/lib/dataset.ts` / `DiscoveredArticle` | `scripts/lib/pictures-dataset.ts` / `DiscoveredPicture` |
+| TS type | `Article` (`type: 'article'`) | `Picture` (`type: 'picture'`) |
+
+The feed returns `FeedItem = Article | Picture`. Always switch on `.type` when handling feed items.
+
+Pictures are interleaved in the feed at a configurable ratio (see `FEED_PICTURE_RATIO` below). Each type has its own `ORDER BY RANDOM()` query; there is no SQL UNION.
+
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |
 |---|---|---|
 | `DOWNLOAD_LIMIT=N` | unlimited | Caps articles downloaded per `npm run download-vital-50000` run |
+| `FEED_PICTURE_RATIO=N` | `0.2` | Fraction of each feed page that is pictures (0–1) |
 
 ## Wikipedia API etiquette
 
@@ -86,6 +105,6 @@ Per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and [Wikimedia
 - **GZip** — send `Accept-Encoding: gzip` on all requests
 - **JSON** — use `format=json` for all requests
 
-## Article selection
+## Feed selection
 
-`get_next_articles` uses `ORDER BY RANDOM()` — do not add a secondary sort.
+`get_next_articles` and `get_next_pictures` each use `ORDER BY RANDOM()` — do not add a secondary sort. `get_next_feed` interleaves them at `FEED_PICTURE_RATIO`.

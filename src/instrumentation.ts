@@ -3,7 +3,8 @@ export const register = async () => {
     return;
   }
 
-  const { import_articles_dataset, import_categories } = await import('./lib/import-datasets');
+  const { import_articles_dataset, import_pictures_dataset, import_categories } =
+    await import('./lib/import-datasets');
 
   const datasets = ['vital_50000.db', 'unusual.db', 'good_articles.db', 'featured_articles.db'];
 
@@ -13,6 +14,12 @@ export const register = async () => {
     } catch (err) {
       console.warn(`[instrumentation] failed to import ${filename}:`, err);
     }
+  }
+
+  try {
+    import_pictures_dataset('featured_pictures.db');
+  } catch (err) {
+    console.warn('[instrumentation] failed to import featured_pictures.db:', err);
   }
 
   try {

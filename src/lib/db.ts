@@ -1,16 +1,30 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 
-export interface Article {
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface BaseFeedItem {
   id: number;
   title: string;
-  extract: string;
   url: string;
   like: -1 | 0 | 1;
+}
+
+export interface Article extends BaseFeedItem {
+  type: 'article';
+  extract: string;
   description: string | null;
   image_url: string | null;
   categories: string[];
 }
+
+export interface Picture extends BaseFeedItem {
+  type: 'picture';
+  image_url: string;
+  credit: string | null;
+}
+
+export type FeedItem = Article | Picture;
 
 export interface TopicStat {
   topic: string;
@@ -38,6 +52,8 @@ export interface CategoryGroup {
 
 export type TopicTree = DatasetGroup[];
 export type CategoryTree = CategoryGroup[];
+
+// ── Database ────────────────────────────────────────────────────────────────
 
 export const db = new DatabaseSync(path.join(process.cwd(), 'scrollsurf.db'));
 
@@ -90,7 +106,29 @@ db.exec(`
     category_name TEXT NOT NULL PRIMARY KEY,
     top_level     TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS pictures (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    title     TEXT    NOT NULL,
+    url       TEXT    NOT NULL UNIQUE,
+    image_url TEXT    NOT NULL,
+    credit    TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS user_pictures (
+    picture_id INTEGER PRIMARY KEY REFERENCES pictures(id),
+    like       INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS picture_topics (
+    picture_id INTEGER NOT NULL REFERENCES pictures(id),
+    dataset    TEXT    NOT NULL,
+    topic      TEXT    NOT NULL,
+    PRIMARY KEY (picture_id, dataset, topic)
+  );
 `);
+
+// ── Article queries ─────────────────────────────────────────────────────────
 
 const VISIBLE_CATEGORIES_SUBQUERY = `
   (SELECT GROUP_CONCAT(c.name, '|||')
@@ -99,7 +137,7 @@ const VISIBLE_CATEGORIES_SUBQUERY = `
    WHERE ac.article_id = a.id AND c.hidden = 0)
 `;
 
-const get_next_stmt = db.prepare(`
+const get_next_articles_stmt = db.prepare(`
   SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
          COALESCE(ua.like, 0) AS like,
          ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories
@@ -117,15 +155,15 @@ const get_next_stmt = db.prepare(`
   LIMIT $limit
 `);
 
-const mark_seen_stmt = db.prepare(
+const mark_article_seen_stmt = db.prepare(
   'INSERT OR IGNORE INTO user_articles (article_id) VALUES ($article_id)'
 );
 
-const set_like_stmt = db.prepare(
+const set_article_like_stmt = db.prepare(
   'UPDATE user_articles SET like = $like WHERE article_id = $article_id'
 );
 
-const get_voted_stmt = db.prepare(`
+const get_voted_articles_stmt = db.prepare(`
   SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url, ua.like,
          ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories
   FROM articles a
@@ -133,6 +171,43 @@ const get_voted_stmt = db.prepare(`
   WHERE ua.like = $like
   ORDER BY a.id DESC
 `);
+
+// ── Picture queries ─────────────────────────────────────────────────────────
+
+const get_next_pictures_stmt = db.prepare(`
+  SELECT p.id, p.title, p.url, p.image_url, p.credit,
+         COALESCE(up.like, 0) AS like
+  FROM pictures p
+  LEFT JOIN user_pictures up ON p.id = up.picture_id
+  WHERE up.picture_id IS NULL
+    AND (
+      SELECT COALESCE(MAX(us.enabled), 1)
+      FROM picture_topics pt
+      LEFT JOIN user_settings us ON us.dataset = pt.dataset
+      WHERE pt.picture_id = p.id
+      LIMIT 1
+    ) = 1
+  ORDER BY RANDOM()
+  LIMIT $limit
+`);
+
+const mark_picture_seen_stmt = db.prepare(
+  'INSERT OR IGNORE INTO user_pictures (picture_id) VALUES ($picture_id)'
+);
+
+const set_picture_like_stmt = db.prepare(
+  'UPDATE user_pictures SET like = $like WHERE picture_id = $picture_id'
+);
+
+const get_voted_pictures_stmt = db.prepare(`
+  SELECT p.id, p.title, p.url, p.image_url, p.credit, up.like
+  FROM pictures p
+  JOIN user_pictures up ON p.id = up.picture_id
+  WHERE up.like = $like
+  ORDER BY p.id DESC
+`);
+
+// ── Topic / dataset queries ─────────────────────────────────────────────────
 
 const get_datasets_stmt = db.prepare(`
   SELECT
@@ -146,6 +221,33 @@ const get_datasets_stmt = db.prepare(`
   LEFT JOIN user_articles ua ON t.article_id = ua.article_id
   GROUP BY d.name
   ORDER BY d.name
+`);
+
+const get_picture_dataset_stmt = db.prepare(`
+  SELECT
+    d.name AS dataset,
+    d.source_url,
+    COUNT(DISTINCT pt.picture_id) AS article_count,
+    COUNT(DISTINCT CASE WHEN up.like =  1 THEN pt.picture_id END) AS liked,
+    COUNT(DISTINCT CASE WHEN up.like = -1 THEN pt.picture_id END) AS disliked
+  FROM datasets d
+  LEFT JOIN picture_topics pt ON pt.dataset = d.name
+  LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id
+  WHERE d.name = 'Pictures'
+  GROUP BY d.name
+`);
+
+const get_picture_topics_stmt = db.prepare(`
+  SELECT
+    pt.dataset,
+    pt.topic,
+    COUNT(pt.picture_id) AS article_count,
+    COUNT(CASE WHEN up.like =  1 THEN 1 END) AS liked,
+    COUNT(CASE WHEN up.like = -1 THEN 1 END) AS disliked
+  FROM picture_topics pt
+  LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id
+  GROUP BY pt.dataset, pt.topic
+  ORDER BY pt.dataset, pt.topic
 `);
 
 const get_top_levels_stmt = db.prepare(`
@@ -192,9 +294,13 @@ const get_topics_stmt = db.prepare(`
   ORDER BY t.dataset, t.topic
 `);
 
-type DbRow = Omit<Article, 'categories'> & { visible_categories: string | null };
+// ── Row mappers ─────────────────────────────────────────────────────────────
 
-const row_to_article = (r: DbRow): Article => ({
+type ArticleDbRow = Omit<Article, 'type' | 'categories'> & { visible_categories: string | null };
+type PictureDbRow = Omit<Picture, 'type'>;
+
+const row_to_article = (r: ArticleDbRow): Article => ({
+  type: 'article',
   id: r.id,
   title: r.title,
   extract: r.extract,
@@ -205,23 +311,95 @@ const row_to_article = (r: DbRow): Article => ({
   categories: r.visible_categories ? r.visible_categories.split('|||') : [],
 });
 
-export const get_next_articles = (limit: number): Article[] => {
-  const rows = get_next_stmt.all({ $limit: limit }) as unknown as DbRow[];
+const row_to_picture = (r: PictureDbRow): Picture => ({
+  type: 'picture',
+  id: r.id,
+  title: r.title,
+  url: r.url,
+  like: r.like,
+  image_url: r.image_url,
+  credit: r.credit,
+});
+
+// ── Feed interleaver ────────────────────────────────────────────────────────
+
+const PICTURE_RATIO =
+  process.env.FEED_PICTURE_RATIO !== undefined ? parseFloat(process.env.FEED_PICTURE_RATIO) : 0.2;
+
+const get_next_articles_internal = (limit: number): Article[] => {
+  const rows = get_next_articles_stmt.all({ $limit: limit }) as unknown as ArticleDbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
-    mark_seen_stmt.run({ $article_id: row.id });
+    mark_article_seen_stmt.run({ $article_id: row.id });
   }
   db.exec('COMMIT');
   return rows.map(row_to_article);
 };
 
-export const set_like = (article_id: number, value: -1 | 0 | 1) => {
-  set_like_stmt.run({ $article_id: article_id, $like: value });
+const get_next_pictures_internal = (limit: number): Picture[] => {
+  const rows = get_next_pictures_stmt.all({ $limit: limit }) as unknown as PictureDbRow[];
+  db.exec('BEGIN');
+  for (const row of rows) {
+    mark_picture_seen_stmt.run({ $picture_id: row.id });
+  }
+  db.exec('COMMIT');
+  return rows.map(row_to_picture);
+};
+
+// Merges articles and pictures into one list at the requested ratio. Evenly
+// spaces pictures throughout the batch. Backfills with the other type when one
+// source runs dry.
+export const get_next_feed = (count: number): FeedItem[] => {
+  const pics_wanted = Math.round(count * PICTURE_RATIO);
+  const arts_wanted = count - pics_wanted;
+
+  const pictures = get_next_pictures_internal(pics_wanted);
+  const articles = get_next_articles_internal(
+    arts_wanted + Math.max(0, pics_wanted - pictures.length)
+  );
+
+  // Even spacing: insert one picture every `step` articles
+  const result: FeedItem[] = [];
+  const step =
+    pictures.length > 0 ? Math.floor(articles.length / (pictures.length + 1)) + 1 : Infinity;
+  let pic_idx = 0;
+  let art_idx = 0;
+  let next_pic_at = step;
+
+  while (result.length < count && (art_idx < articles.length || pic_idx < pictures.length)) {
+    if (pic_idx < pictures.length && result.length >= next_pic_at) {
+      result.push(pictures[pic_idx++]);
+      next_pic_at += step;
+    } else if (art_idx < articles.length) {
+      result.push(articles[art_idx++]);
+    } else {
+      result.push(pictures[pic_idx++]);
+    }
+  }
+
+  return result;
+};
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
+export const get_next_articles = (limit: number): Article[] => get_next_articles_internal(limit);
+
+export const set_like = (type: 'article' | 'picture', id: number, value: -1 | 0 | 1) => {
+  if (type === 'article') {
+    set_article_like_stmt.run({ $article_id: id, $like: value });
+  } else {
+    set_picture_like_stmt.run({ $picture_id: id, $like: value });
+  }
 };
 
 export const get_voted_articles = (vote: -1 | 1): Article[] => {
-  const rows = get_voted_stmt.all({ $like: vote }) as unknown as DbRow[];
+  const rows = get_voted_articles_stmt.all({ $like: vote }) as unknown as ArticleDbRow[];
   return rows.map(row_to_article);
+};
+
+export const get_voted_pictures = (vote: -1 | 1): Picture[] => {
+  const rows = get_voted_pictures_stmt.all({ $like: vote }) as unknown as PictureDbRow[];
+  return rows.map(row_to_picture);
 };
 
 const set_dataset_enabled_stmt = db.prepare(
@@ -263,21 +441,47 @@ export const get_category_tree = (): CategoryTree => {
 };
 
 export const get_topic_tree = (): TopicTree => {
-  const dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
+  const article_dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
   const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
-  return dataset_rows.map((d) => ({
-    dataset: d.dataset,
-    source_url: d.source_url,
-    article_count: d.article_count,
-    liked: d.liked,
-    disliked: d.disliked,
-    topics: topic_rows
-      .filter((t) => t.dataset === d.dataset)
-      .map((t) => ({
+
+  const article_groups: TopicTree = article_dataset_rows
+    .filter((d) => d.dataset !== 'Pictures')
+    .map((d) => ({
+      dataset: d.dataset,
+      source_url: d.source_url,
+      article_count: d.article_count,
+      liked: d.liked,
+      disliked: d.disliked,
+      topics: topic_rows
+        .filter((t) => t.dataset === d.dataset)
+        .map((t) => ({
+          topic: t.topic,
+          article_count: t.article_count,
+          liked: t.liked,
+          disliked: t.disliked,
+        })),
+    }));
+
+  // Append the Pictures group if the dataset exists
+  const pic_dataset_row = get_picture_dataset_stmt.get() as DatasetGroup | undefined;
+  if (pic_dataset_row) {
+    const pic_topic_rows = get_picture_topics_stmt.all() as unknown as (TopicStat & {
+      dataset: string;
+    })[];
+    article_groups.push({
+      dataset: pic_dataset_row.dataset,
+      source_url: pic_dataset_row.source_url,
+      article_count: pic_dataset_row.article_count,
+      liked: pic_dataset_row.liked,
+      disliked: pic_dataset_row.disliked,
+      topics: pic_topic_rows.map((t) => ({
         topic: t.topic,
         article_count: t.article_count,
         liked: t.liked,
         disliked: t.disliked,
       })),
-  }));
+    });
+  }
+
+  return article_groups;
 };
