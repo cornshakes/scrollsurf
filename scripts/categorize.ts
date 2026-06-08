@@ -3,6 +3,14 @@ import path from 'node:path';
 import { readdirSync } from 'node:fs';
 import { fetch_category_members, fetch_category_parents_batch } from './lib/wiki';
 
+/*
+ * The general idea of categorization: Walk 2 levels down from the top 34 categories, fanning out to ~23000 categories.
+ * Then walk up from the existing article categories and try to find a parent category in few steps - usually it takes just 1 or 2.
+ *
+ * see 34 top level categories in https://en.wikipedia.org/wiki/Category:Main_topic_classifications
+ *
+ */
+
 const TOP_LEVELS = [
   'Society',
   'Geography',
@@ -52,8 +60,9 @@ categories_db.exec(`
 const fetch_category_children = (category: string): Promise<string[]> =>
   fetch_category_members(category, { type: 'subcat' });
 
-const MAX_DEPTH = 50;
-const WALK_BATCH_SIZE = 50; // Wikipedia API title limit per request
+const MAX_ROUNDS = 50; // max levels walked up before giving up on a category
+const API_TITLE_LIMIT = 50; // Wikipedia API title limit per request
+const CHUNK_SIZE = 50; // starting categories walked together per walk_up_batch call
 
 const lookup_stmt = categories_db.prepare(
   'SELECT top_level FROM category_hierarchy WHERE category_name = ?'
@@ -62,59 +71,115 @@ const insert_hierarchy_stmt = categories_db.prepare(
   'INSERT OR IGNORE INTO category_hierarchy (category_name, top_level) VALUES (?, ?)'
 );
 
-const walk_up_hierarchy = async (category: string): Promise<string | null> => {
-  const visited = new Set<string>();
-  const queue: string[] = [category];
+const lookup = (category: string): string | undefined =>
+  (lookup_stmt.get(category) as { top_level: string } | undefined)?.top_level;
 
-  const resolve = (top_level: string) => {
-    for (const node of visited) insert_hierarchy_stmt.run(node, top_level);
-    return top_level;
+interface Walk {
+  start: string;
+  visited: Set<string>;
+  frontier: string[];
+  result: string | null | undefined; // undefined = still walking, null = dead-ended
+}
+
+// Walks several categories up the hierarchy together, pooling every active walk's
+// BFS frontier into shared parent-fetch calls. Because most categories resolve in
+// a single hop, round 0 carries ~CHUNK_SIZE titles in one API call instead of one
+// title per call. On success a walk's visited ancestors are all cached, same as
+// the old single-category walk did. Returns each start category's top-level (or null).
+const walk_up_batch = async (categories: string[]): Promise<Map<string, string | null>> => {
+  const walks: Walk[] = categories.map((start) => ({
+    start,
+    visited: new Set(),
+    frontier: [start],
+    result: undefined,
+  }));
+
+  const resolve = (walk: Walk, top_level: string) => {
+    for (const node of walk.visited) {
+      insert_hierarchy_stmt.run(node, top_level);
+    }
+    walk.result = top_level;
   };
 
-  while (queue.length > 0 && visited.size < MAX_DEPTH) {
-    // Drain up to WALK_BATCH_SIZE unvisited items, resolving cached ones for free
-    const batch: string[] = [];
-    while (queue.length > 0 && batch.length < WALK_BATCH_SIZE) {
-      const current = queue.shift();
-      if (!current) {
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    // Drain each active walk's frontier into a pooled set of nodes to fetch.
+    // A node may be wanted by several walks, so map node -> walks waiting on it.
+    const waiting = new Map<string, Walk[]>();
+    for (const walk of walks) {
+      if (walk.result !== undefined) {
         continue;
       }
-      if (visited.has(current)) {
-        continue;
+      const frontier = walk.frontier;
+      walk.frontier = [];
+      for (const node of frontier) {
+        if (walk.visited.has(node)) {
+          continue;
+        }
+        const cached = lookup(node);
+        if (cached) {
+          resolve(walk, cached);
+          break; // walk done; ignore the rest of its frontier
+        }
+        walk.visited.add(node);
+        const list = waiting.get(node);
+        if (list) {
+          list.push(walk);
+        } else {
+          waiting.set(node, [walk]);
+        }
       }
-      const cached = lookup_stmt.get(current) as { top_level: string } | undefined;
-      if (cached) {
-        return resolve(cached.top_level);
-      }
-      visited.add(current);
-      batch.push(current);
-    }
-    if (batch.length === 0) {
-      continue;
     }
 
-    // One API call for the whole batch
-    const parents_map = await fetch_category_parents_batch(batch);
-    for (const parents of parents_map.values()) {
-      for (const parent of parents) {
-        const check = lookup_stmt.get(parent) as { top_level: string } | undefined;
-        if (check) {
-          return resolve(check.top_level);
+    const nodes = [...waiting.keys()];
+    if (nodes.length === 0) {
+      break; // every walk has resolved or dead-ended
+    }
+
+    // Fetch parents for all pooled nodes, in API-sized chunks.
+    const parents_of = new Map<string, string[]>();
+    for (let i = 0; i < nodes.length; i += API_TITLE_LIMIT) {
+      const slice = nodes.slice(i, i + API_TITLE_LIMIT);
+      for (const [name, parents] of await fetch_category_parents_batch(slice)) {
+        parents_of.set(name, parents);
+      }
+    }
+
+    // Hand each node's parents back to the walks that were waiting on it.
+    for (const [node, walks_here] of waiting) {
+      const parents = parents_of.get(node) ?? [];
+      for (const walk of walks_here) {
+        if (walk.result !== undefined) {
+          continue;
         }
-        if (!visited.has(parent)) {
-          queue.push(parent);
+        for (const parent of parents) {
+          const cached = lookup(parent);
+          if (cached) {
+            resolve(walk, cached);
+            break;
+          }
+          if (!walk.visited.has(parent)) {
+            walk.frontier.push(parent);
+          }
         }
       }
     }
   }
 
-  return null;
+  const out = new Map<string, string | null>();
+  for (const walk of walks) {
+    out.set(walk.start, walk.result ?? null);
+  }
+  return out;
 };
 
 const bootstrap = async () => {
   categories_db.exec(`
     CREATE TABLE IF NOT EXISTS bootstrap_done (
       category_name TEXT NOT NULL PRIMARY KEY
+    );
+    CREATE TABLE IF NOT EXISTS bootstrap_depth1 (
+      category_name TEXT NOT NULL PRIMARY KEY,
+      top_level     TEXT NOT NULL
     );
   `);
 
@@ -124,26 +189,47 @@ const bootstrap = async () => {
   const mark_done_stmt = categories_db.prepare(
     'INSERT OR IGNORE INTO bootstrap_done (category_name) VALUES (?)'
   );
+  const insert_depth1_stmt = categories_db.prepare(
+    'INSERT OR IGNORE INTO bootstrap_depth1 (category_name, top_level) VALUES (?, ?)'
+  );
 
   // Seed top-levels (idempotent)
   categories_db.exec('BEGIN');
-  for (const tl of TOP_LEVELS) insert_hierarchy_stmt.run(tl, tl);
+  for (const tl of TOP_LEVELS) {
+    insert_hierarchy_stmt.run(tl, tl);
+  }
   categories_db.exec('COMMIT');
 
-  // Depth 1: always re-run (only 34 API calls)
-  const depth1: { cat: string; top_level: string }[] = [];
+  // Depth 1: fetch each top-level's children once. The children are persisted to
+  // bootstrap_depth1 and each top-level is marked done, so re-runs skip the fetch.
+  let depth1_new = 0;
+  let depth1_skipped = 0;
   for (let i = 0; i < TOP_LEVELS.length; i++) {
     const tl = TOP_LEVELS[i];
-    process.stdout.write(`\r[bootstrap] depth 1: ${i + 1}/${TOP_LEVELS.length}...`);
+    process.stdout.write(
+      `\r[bootstrap] depth 1: ${i + 1}/${TOP_LEVELS.length} (${depth1_new} new, ${depth1_skipped} cached)...`
+    );
+    if (is_done_stmt.get(tl)) {
+      depth1_skipped++;
+      continue;
+    }
     const children = await fetch_category_children(tl);
     categories_db.exec('BEGIN');
     for (const child of children) {
       insert_hierarchy_stmt.run(child, tl);
-      depth1.push({ cat: child, top_level: tl });
+      insert_depth1_stmt.run(child, tl);
+      depth1_new++;
     }
+    mark_done_stmt.run(tl);
     categories_db.exec('COMMIT');
   }
-  process.stdout.write(`\n[bootstrap] depth 1 complete: ${depth1.length} entries\n`);
+
+  const depth1 = categories_db
+    .prepare('SELECT category_name AS cat, top_level FROM bootstrap_depth1')
+    .all() as { cat: string; top_level: string }[];
+  process.stdout.write(
+    `\n[bootstrap] depth 1 complete: ${depth1.length} entries (${depth1_new} new, ${depth1_skipped} top-levels cached)\n`
+  );
 
   // Depth 2: skip categories whose children were already fetched
   let depth2_new = 0;
@@ -216,24 +302,26 @@ const categorize = async () => {
 
   let mapped = 0;
   let failed = 0;
-  categories_db.exec('BEGIN');
-  for (let i = 0; i < unmapped.length; i++) {
+  for (let i = 0; i < unmapped.length; i += CHUNK_SIZE) {
+    const chunk = unmapped.slice(i, i + CHUNK_SIZE);
+    const results = await walk_up_batch(chunk);
+
+    categories_db.exec('BEGIN');
+    for (const cat of chunk) {
+      const top_level = results.get(cat) ?? null;
+      if (top_level) {
+        insert_stmt.run(cat, top_level);
+        mapped++;
+      } else {
+        failed++;
+      }
+    }
+    categories_db.exec('COMMIT');
+
     process.stdout.write(
-      `\r[${i + 1}/${unmapped.length}] mapped ${mapped} failed ${failed} — ${unmapped[i].slice(0, 40)}...`
+      `\r[${Math.min(i + CHUNK_SIZE, unmapped.length)}/${unmapped.length}] mapped ${mapped} failed ${failed}`
     );
-    const top_level = await walk_up_hierarchy(unmapped[i]);
-    if (top_level) {
-      insert_stmt.run(unmapped[i], top_level);
-      mapped++;
-    } else {
-      failed++;
-    }
-    if ((i + 1) % 100 === 0) {
-      categories_db.exec('COMMIT');
-      categories_db.exec('BEGIN');
-    }
   }
-  categories_db.exec('COMMIT');
 
   const total = categories_db.prepare('SELECT COUNT(*) AS n FROM category_hierarchy').get() as {
     n: number;

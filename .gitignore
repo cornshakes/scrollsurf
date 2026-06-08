@@ -2,6 +2,7 @@
 
 scrollsurf.db
 /datasets/*.db
+/datasets/*.db-journal
 
 # dependencies
 /node_modules

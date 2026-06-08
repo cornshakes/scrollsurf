@@ -122,3 +122,7 @@ The problem is, I still got a Status GOAWAY before I reached 8000/220000 and the
 # Opus OMG
 
 So good. So smart. Thought about it, asked one tiny decision question, then made a big detailed plan including everything down to current db migration and presented it to me in its own md file. I accepted, it turned it into a task list and started working them off. This hints at what I've been thinking about - using Opus to create complicated issues that might be assigned to cheaper models. It's not perfect, but pretty close. There's like a review & adjust / bug fix phase in the end.
+
+# Opus again.
+
+All I have to do is ask a leading question or two, and it gets what I mean and what should be done. Now categorization happens in batches of 50 (instead of 1) ie using 50 times fewer api calls + wait time. I also reached 20% of my weekly limit, and it's still Monday.
