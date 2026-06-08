@@ -1,42 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { readdirSync } from 'node:fs';
-
-const REQUEST_DELAY_MS = 500;
-
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
-const retry_delay = (res: Response, fallback_ms: number): number => {
-  const retryAfter = res.headers.get('Retry-After');
-  if (!retryAfter) return fallback_ms;
-  return isNaN(Number(retryAfter))
-    ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
-    : Number(retryAfter) * 1000;
-};
-
-const api_fetch = async (params: URLSearchParams): Promise<unknown> => {
-  params.set('maxlag', '5');
-  while (true) {
-    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      headers: {
-        'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
-        'Accept-Encoding': 'gzip',
-      },
-    });
-    if (res.status === 429 || res.status === 503) {
-      await sleep(retry_delay(res, 5000));
-      continue;
-    }
-    if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
-    const data = await res.json();
-    if (data?.error?.code === 'maxlag') {
-      await sleep(retry_delay(res, 5000));
-      continue;
-    }
-    await sleep(REQUEST_DELAY_MS);
-    return data;
-  }
-};
+import { fetch_category_members, fetch_category_parents } from './lib/wiki';
 
 const TOP_LEVELS = [
   'Society',
@@ -84,36 +49,8 @@ categories_db.exec(`
   );
 `);
 
-const fetch_category_children = async (category: string): Promise<string[]> => {
-  const params = new URLSearchParams({
-    action: 'query',
-    list: 'categorymembers',
-    cmtitle: `Category:${category}`,
-    cmtype: 'subcat',
-    cmlimit: '500',
-    format: 'json',
-  });
-  const data = (await api_fetch(params)) as {
-    query: { categorymembers: { title: string }[] };
-  };
-  return data.query.categorymembers.map((m) => m.title.replace(/^Category:/, ''));
-};
-
-const fetch_category_parents = async (category: string): Promise<string[]> => {
-  const params = new URLSearchParams({
-    action: 'query',
-    titles: `Category:${category}`,
-    prop: 'categories',
-    cllimit: '500',
-    format: 'json',
-  });
-  const data = (await api_fetch(params)) as {
-    query: { pages: Record<string, { categories?: { title: string }[] }> };
-  };
-  const page = Object.values(data.query.pages)[0];
-  if (!page?.categories) return [];
-  return page.categories.map((c) => c.title.replace(/^Category:/, ''));
-};
+const fetch_category_children = (category: string): Promise<string[]> =>
+  fetch_category_members(category, { type: 'subcat' });
 
 const MAX_DEPTH = 50;
 

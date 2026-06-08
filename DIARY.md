@@ -117,5 +117,8 @@ I was tempted to use Haiku to include 2 more datasets, good and featured article
 With sonnet, I developed a combination of top-down (from the root categories) and bottom-up (from the article categories) search/mapping. It was able to profit from already-walked paths, making the first 2 mappings fail and all others pass, going faster and faster until reaching about 1 mapping/second soon, then 2 after about 300 mappings. Beautiful.
 It did make some mistakes where at first nothing worked, but fixed them quickly. It was always a bit overconfident, already going ahead with half-baked ideas; I had to stop it and guide it sometimes.
 
-The problem is, I still got a Status GOAWAY before I reached 8000/220000 and there are other little bugs too. Ok brace, I will no try opus to refactor.
-(It needs a refactor -> it is duplicating functions and then fixing some of them)
+The problem is, I still got a Status GOAWAY before I reached 8000/220000 and there are other little bugs too. Ok brace, I will now try opus to refactor. (It needs a refactor -> claude is duplicating functions and then fixing some of them, like a real developer)
+
+# Opus OMG
+
+So good. So smart. Thought about it, asked one tiny decision question, then made a big detailed plan including everything down to current db migration and presented it to me in its own md file. I accepted, it turned it into a task list and started working them off. This hints at what I've been thinking about - using Opus to create complicated issues that might be assigned to cheaper models. It's not perfect, but pretty close. There's like a review & adjust / bug fix phase in the end.
