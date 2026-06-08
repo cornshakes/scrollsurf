@@ -106,8 +106,12 @@ export const download_dataset = async (options: DownloadDatasetOptions): Promise
   // title -> set of topics (an article may appear under several topics)
   const topic_map = new Map<string, Set<string>>();
   for (const { title, topic } of discovered) {
-    if (!topic_map.has(title)) topic_map.set(title, new Set());
-    if (topic) topic_map.get(title)?.add(topic);
+    if (!topic_map.has(title)) {
+      topic_map.set(title, new Set());
+    }
+    if (topic) {
+      topic_map.get(title)?.add(topic);
+    }
   }
 
   // Seed the done flag from already-saved articles (covers DBs downloaded before

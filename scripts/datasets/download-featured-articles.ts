@@ -18,10 +18,14 @@ run_download({
         current_topic = heading[1].trim();
         continue;
       }
-      if (!current_topic) continue;
+      if (!current_topic) {
+        continue;
+      }
       for (const m of line.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) {
         const target = m[1].trim();
-        if (!target || target.includes(':')) continue;
+        if (!target || target.includes(':')) {
+          continue;
+        }
         results.push({ title: target.replace(/_/g, ' '), topic: current_topic });
       }
     }

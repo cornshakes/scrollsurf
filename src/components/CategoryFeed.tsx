@@ -29,20 +29,26 @@ export const CategoryFeed = () => {
     });
   }, []);
 
-  if (isPending && !categories)
+  if (isPending && !categories) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
       </Box>
     );
+  }
 
-  if (!categories) return null;
+  if (!categories) {
+    return null;
+  }
 
   const toggle_top_level = (top_level: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(top_level)) next.delete(top_level);
-      else next.add(top_level);
+      if (next.has(top_level)) {
+        next.delete(top_level);
+      } else {
+        next.add(top_level);
+      }
       return next;
     });
 

@@ -10,14 +10,18 @@ const dataset_path = (filename: string) => path.join(process.cwd(), 'datasets', 
 // All four article datasets share this shape.
 export const import_articles_dataset = (filename: string) => {
   const ref_path = dataset_path(filename);
-  if (!existsSync(ref_path)) return;
+  if (!existsSync(ref_path)) {
+    return;
+  }
 
   db.exec(`ATTACH '${ref_path}' AS ref`);
   try {
     const row = db.prepare("SELECT value FROM ref.metadata WHERE key = 'title'").get() as
       | { value: string }
       | undefined;
-    if (!row) throw new Error(`${filename}: no 'title' key in metadata`);
+    if (!row) {
+      throw new Error(`${filename}: no 'title' key in metadata`);
+    }
     const dataset = row.value.replace(/'/g, "''"); // escape for SQL interpolation below
 
     db.exec(
@@ -52,7 +56,9 @@ export const import_articles_dataset = (filename: string) => {
 
 export const import_categories = () => {
   const ref_path = dataset_path('categories.db');
-  if (!existsSync(ref_path)) return;
+  if (!existsSync(ref_path)) {
+    return;
+  }
 
   db.exec(`ATTACH '${ref_path}' AS ref`);
   try {

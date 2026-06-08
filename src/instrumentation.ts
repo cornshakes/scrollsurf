@@ -1,5 +1,7 @@
 export const register = async () => {
-  if (process.env.NEXT_RUNTIME === 'edge') return;
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    return;
+  }
 
   const { import_articles_dataset, import_categories } = await import('./lib/import-datasets');
 

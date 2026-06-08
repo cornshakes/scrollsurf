@@ -22,18 +22,20 @@ export const VotedFeed = ({ vote }: { vote: -1 | 1 }) => {
     setArticles((prev) => prev.filter((a) => (a.id === id ? newLike === vote : true)));
   };
 
-  if (isPending)
+  if (isPending) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
       </Box>
     );
-  if (articles.length === 0)
+  }
+  if (articles.length === 0) {
     return (
       <Typography sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
         Nothing here yet.
       </Typography>
     );
+  }
 
   return (
     <Box>

@@ -1,6 +1,7 @@
 # Code Style
 Prefer snake_case unless it's awkward to mix with camelCase.
 Prefer const arrow functions over `function`.
+Always use curly braces for if/else/loop blocks, even if they are single line
 
 After type-check passes, always run `npm run lint-fix` to format and fix code automatically.
 

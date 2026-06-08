@@ -12,7 +12,9 @@ const get_section_names = (wikitext: string): string[] => {
   for (const m of wikitext.matchAll(/\{\{\/([^}]+)\}\}/g)) {
     const name = m[1].trim();
     sections.push(name);
-    if (name === LAST_SECTION) return sections;
+    if (name === LAST_SECTION) {
+      return sections;
+    }
   }
   throw new Error(`Section "${LAST_SECTION}" not found in Wikipedia:Unusual articles`);
 };
@@ -24,7 +26,9 @@ const get_article_titles_in_section = (wikitext: string): string[] => {
   const titles: string[] = [];
   for (const m of wikitext.matchAll(/'''\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]'''/g)) {
     const target = m[1].trim();
-    if (!target || target.includes(':')) continue; // skip File:/Category:/etc.
+    if (!target || target.includes(':')) {
+      continue; // skip File:/Category:/etc.
+    }
     titles.push(target.replace(/_/g, ' '));
   }
   return titles;

@@ -76,22 +76,34 @@ const walk_up_hierarchy = async (category: string): Promise<string | null> => {
     const batch: string[] = [];
     while (queue.length > 0 && batch.length < WALK_BATCH_SIZE) {
       const current = queue.shift();
-      if (!current) continue;
-      if (visited.has(current)) continue;
+      if (!current) {
+        continue;
+      }
+      if (visited.has(current)) {
+        continue;
+      }
       const cached = lookup_stmt.get(current) as { top_level: string } | undefined;
-      if (cached) return resolve(cached.top_level);
+      if (cached) {
+        return resolve(cached.top_level);
+      }
       visited.add(current);
       batch.push(current);
     }
-    if (batch.length === 0) continue;
+    if (batch.length === 0) {
+      continue;
+    }
 
     // One API call for the whole batch
     const parents_map = await fetch_category_parents_batch(batch);
     for (const parents of parents_map.values()) {
       for (const parent of parents) {
         const check = lookup_stmt.get(parent) as { top_level: string } | undefined;
-        if (check) return resolve(check.top_level);
-        if (!visited.has(parent)) queue.push(parent);
+        if (check) {
+          return resolve(check.top_level);
+        }
+        if (!visited.has(parent)) {
+          queue.push(parent);
+        }
       }
     }
   }
@@ -198,7 +210,9 @@ const categorize = async () => {
   process.stdout.write(
     `[categorize] ${already_mapped} already mapped, ${unmapped.length} to map\n`
   );
-  if (unmapped.length === 0) return;
+  if (unmapped.length === 0) {
+    return;
+  }
 
   let mapped = 0;
   let failed = 0;

@@ -27,10 +27,14 @@ export const RandomFeed = () => {
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!sentinel) {
+      return;
+    }
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !isPending) fetchNext();
+        if (entry.isIntersecting && !isPending) {
+          fetchNext();
+        }
       },
       { rootMargin: '200px' }
     );

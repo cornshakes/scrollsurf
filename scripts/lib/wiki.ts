@@ -7,7 +7,9 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 const retry_delay = (res: Response, fallback_ms: number): number => {
   const retryAfter = res.headers.get('Retry-After');
-  if (!retryAfter) return fallback_ms;
+  if (!retryAfter) {
+    return fallback_ms;
+  }
   return isNaN(Number(retryAfter))
     ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
     : Number(retryAfter) * 1000;
@@ -32,16 +34,22 @@ export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
     });
 
     if (res.status === 429 || res.status === 503) {
-      if (last) throw new Error(`Wikipedia API error: ${res.status} (after retry)`);
+      if (last) {
+        throw new Error(`Wikipedia API error: ${res.status} (after retry)`);
+      }
       console.warn(`[wiki_api] ${res.status}, retrying...`);
       await sleep(retry_delay(res, 5000));
       continue;
     }
-    if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`Wikipedia API error: ${res.status}`);
+    }
 
     const data = await res.json();
     if (data?.error?.code === 'maxlag') {
-      if (last) throw new Error('Wikipedia API maxlag (after retry)');
+      if (last) {
+        throw new Error('Wikipedia API maxlag (after retry)');
+      }
       console.warn('[wiki_api] maxlag, retrying...');
       await sleep(retry_delay(res, 5000));
       continue;
@@ -92,9 +100,15 @@ export const fetch_category_members = async (
       cmlimit: '500',
       format: 'json',
     });
-    if (options.namespace !== undefined) params.set('cmnamespace', String(options.namespace));
-    if (options.type) params.set('cmtype', options.type);
-    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+    if (options.namespace !== undefined) {
+      params.set('cmnamespace', String(options.namespace));
+    }
+    if (options.type) {
+      params.set('cmtype', options.type);
+    }
+    if (cmcontinue) {
+      params.set('cmcontinue', cmcontinue);
+    }
 
     const data = (await wiki_api(params)) as {
       query: { categorymembers: { title: string }[] };

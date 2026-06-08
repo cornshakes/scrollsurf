@@ -43,8 +43,11 @@ export const TopicsFeed = () => {
   const toggle_dataset = (dataset: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(dataset)) next.delete(dataset);
-      else next.add(dataset);
+      if (next.has(dataset)) {
+        next.delete(dataset);
+      } else {
+        next.add(dataset);
+      }
       return next;
     });
 
@@ -56,14 +59,17 @@ export const TopicsFeed = () => {
     });
   };
 
-  if (isPending && !topics)
+  if (isPending && !topics) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
       </Box>
     );
+  }
 
-  if (!topics) return null;
+  if (!topics) {
+    return null;
+  }
 
   const vote_chips = (liked: number, disliked: number) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
