@@ -15,7 +15,6 @@ const retry_delay = (res: Response, fallback_ms: number): number => {
 
 export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
   params.set('maxlag', '5');
-  const url = `https://en.wikipedia.org/w/api.php?${params}`;
   const headers = {
     'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
     'Accept-Encoding': 'gzip',
@@ -24,7 +23,13 @@ export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
   // One initial request, plus a single retry on rate-limit (429/503) or maxlag.
   for (let attempt = 1; attempt <= 2; attempt++) {
     const last = attempt === 2;
-    const res = await fetch(url, { headers });
+    // POST keeps headers small — GET URLs with 50 batched titles can trigger
+    // HTTP/2 GOAWAY (ENHANCE_YOUR_CALM / HEADER_LIST_SIZE_EXCEEDED).
+    const res = await fetch('https://en.wikipedia.org/w/api.php', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
 
     if (res.status === 429 || res.status === 503) {
       if (last) throw new Error(`Wikipedia API error: ${res.status} (after retry)`);
