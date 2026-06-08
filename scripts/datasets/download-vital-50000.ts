@@ -32,6 +32,11 @@ vital_db.exec(`
     hidden INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (url, name)
   );
+  CREATE TABLE IF NOT EXISTS discovered_articles (
+    title TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    PRIMARY KEY (title, topic)
+  );
 `);
 
 vital_db
@@ -172,9 +177,31 @@ const download_all_article_urls = async (): Promise<[string, string][]> => {
   return results;
 };
 
+const urls_fetched_stmt = vital_db.prepare("SELECT 1 FROM metadata WHERE key = 'urls_fetched'");
+const set_urls_fetched_stmt = vital_db.prepare(
+  "INSERT OR REPLACE INTO metadata (key, value) VALUES ('urls_fetched', '1')"
+);
+const insert_discovered_stmt = vital_db.prepare(
+  'INSERT OR IGNORE INTO discovered_articles (title, topic) VALUES (?, ?)'
+);
+
 const main = async () => {
-  process.stdout.write('Phase 1: Downloading article URLs from Wikipedia...\n');
-  const all_pairs = await download_all_article_urls();
+  let all_pairs: [string, string][];
+  if (urls_fetched_stmt.get()) {
+    const rows = vital_db.prepare('SELECT title, topic FROM discovered_articles').all() as {
+      title: string;
+      topic: string;
+    }[];
+    all_pairs = rows.map((r) => [r.title, r.topic]);
+    process.stdout.write(`Phase 1: Skipped (${all_pairs.length} article URLs already fetched).\n`);
+  } else {
+    process.stdout.write('Phase 1: Downloading article URLs from Wikipedia...\n');
+    all_pairs = await download_all_article_urls();
+    vital_db.exec('BEGIN');
+    for (const [title, topic] of all_pairs) insert_discovered_stmt.run(title, topic);
+    set_urls_fetched_stmt.run();
+    vital_db.exec('COMMIT');
+  }
 
   const downloaded = get_downloaded_urls();
   const to_download = all_pairs.filter(([title]) => !downloaded.has(title_to_url(title)));
@@ -196,40 +223,34 @@ const main = async () => {
 
   process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
   let saved = 0;
-  vital_db.exec('BEGIN');
-  try {
-    for (let i = 0; i < unique_titles.length; i += BATCH_SIZE) {
-      const batch = unique_titles.slice(i, i + BATCH_SIZE);
-      const pages = await download_article_content(batch);
+  for (let i = 0; i < unique_titles.length; i += BATCH_SIZE) {
+    const batch = unique_titles.slice(i, i + BATCH_SIZE);
+    const pages = await download_article_content(batch);
 
-      for (const p of pages) {
-        const url = title_to_url(p.title);
-        insert_article_stmt.run({
-          $title: p.title,
-          $url: url,
-          $extract: p.extract as string,
-          $description: p.description ?? null,
-          $image_url: p.thumbnail?.source ?? null,
-        });
-        for (const topic of topic_map.get(p.title) ?? []) {
-          insert_topic_stmt.run({ $url: url, $topic: topic });
-        }
-        for (const cat of p.categories ?? []) {
-          insert_category_stmt.run({
-            $url: url,
-            $name: cat.title.replace(/^Category:/, ''),
-            $hidden: 'hidden' in cat ? 1 : 0,
-          });
-        }
-        saved++;
+    vital_db.exec('BEGIN');
+    for (const p of pages) {
+      const url = title_to_url(p.title);
+      insert_article_stmt.run({
+        $title: p.title,
+        $url: url,
+        $extract: p.extract as string,
+        $description: p.description ?? null,
+        $image_url: p.thumbnail?.source ?? null,
+      });
+      for (const topic of topic_map.get(p.title) ?? []) {
+        insert_topic_stmt.run({ $url: url, $topic: topic });
       }
-
-      process.stdout.write(`\r${saved} / ${unique_titles.length} downloaded`);
+      for (const cat of p.categories ?? []) {
+        insert_category_stmt.run({
+          $url: url,
+          $name: cat.title.replace(/^Category:/, ''),
+          $hidden: 'hidden' in cat ? 1 : 0,
+        });
+      }
+      saved++;
     }
     vital_db.exec('COMMIT');
-  } catch (err) {
-    vital_db.exec('ROLLBACK');
-    throw err;
+    process.stdout.write(`\r${saved} / ${unique_titles.length} downloaded`);
   }
 
   process.stdout.write('\nDone.\n');

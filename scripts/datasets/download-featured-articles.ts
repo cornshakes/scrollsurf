@@ -31,6 +31,11 @@ featured_db.exec(`
     hidden INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (url, name)
   );
+  CREATE TABLE IF NOT EXISTS discovered_articles (
+    title TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    PRIMARY KEY (title, topic)
+  );
 `);
 
 featured_db
@@ -149,11 +154,33 @@ const download_article_content = async (titles: string[]): Promise<WikiPage[]> =
   return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
+const urls_fetched_stmt = featured_db.prepare("SELECT 1 FROM metadata WHERE key = 'urls_fetched'");
+const set_urls_fetched_stmt = featured_db.prepare(
+  "INSERT OR REPLACE INTO metadata (key, value) VALUES ('urls_fetched', '1')"
+);
+const insert_discovered_stmt = featured_db.prepare(
+  'INSERT OR IGNORE INTO discovered_articles (title, topic) VALUES (?, ?)'
+);
+
 const main = async () => {
-  process.stdout.write('Phase 1: Collecting article URLs and topics...\n');
-  const all_pairs = await get_article_titles_with_topics();
-  const unique_titles = [...new Set(all_pairs.map((p) => p.title))];
-  process.stdout.write(`Found ${unique_titles.length} unique articles.\n`);
+  let all_pairs: TitleWithTopic[];
+  if (urls_fetched_stmt.get()) {
+    const rows = featured_db
+      .prepare('SELECT title, topic FROM discovered_articles')
+      .all() as TitleWithTopic[];
+    all_pairs = rows;
+    const unique_count = new Set(rows.map((r) => r.title)).size;
+    process.stdout.write(`Phase 1: Skipped (${unique_count} unique articles already fetched).\n`);
+  } else {
+    process.stdout.write('Phase 1: Collecting article URLs and topics...\n');
+    all_pairs = await get_article_titles_with_topics();
+    const unique_count = new Set(all_pairs.map((p) => p.title)).size;
+    process.stdout.write(`Found ${unique_count} unique articles.\n`);
+    featured_db.exec('BEGIN');
+    for (const { title, topic } of all_pairs) insert_discovered_stmt.run(title, topic);
+    set_urls_fetched_stmt.run();
+    featured_db.exec('COMMIT');
+  }
 
   const downloaded = get_downloaded_urls();
   const to_download = all_pairs.filter((p) => !downloaded.has(title_to_url(p.title)));
@@ -168,17 +195,17 @@ const main = async () => {
   const topic_map = new Map<string, Set<string>>();
   for (const pair of to_download) {
     if (!topic_map.has(pair.title)) topic_map.set(pair.title, new Set());
-    topic_map.get(pair.title)!.add(pair.topic);
+    (topic_map.get(pair.title) ?? new Set()).add(pair.topic);
   }
   const unique_to_download = [...topic_map.keys()];
 
   process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
   let saved = 0;
-  featured_db.exec('BEGIN');
   for (let i = 0; i < unique_to_download.length; i += BATCH_SIZE) {
     const batch = unique_to_download.slice(i, i + BATCH_SIZE);
     const pages = await download_article_content(batch);
 
+    featured_db.exec('BEGIN');
     for (const p of pages) {
       const url = title_to_url(p.title);
       insert_article_stmt.run({
@@ -200,9 +227,9 @@ const main = async () => {
       }
       saved++;
     }
+    featured_db.exec('COMMIT');
     process.stdout.write(`\r${saved} / ${unique_to_download.length} downloaded`);
   }
-  featured_db.exec('COMMIT');
 
   process.stdout.write('\nDone.\n');
 };

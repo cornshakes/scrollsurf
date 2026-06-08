@@ -19,7 +19,7 @@ export const register = async () => {
       if (mod[imp.fn]) {
         mod[imp.fn]();
       }
-    } catch (err) {
+    } catch {
       // Skip missing datasets
     }
   }

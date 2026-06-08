@@ -63,6 +63,8 @@ Article categories are mapped to 34 Wikipedia top-level categories (Society, Geo
 1. **Bootstrap** — fetches direct children of each top-level from Wikipedia (~2 mins, one-time).
 2. **Categorize** — walks up the Wikipedia category DAG incrementally for unmapped categories, storing the mapping.
 
+**Do not attempt top-down BFS from top-level categories** — the Wikipedia category graph fans out exponentially (depth 3 ≈ 900K nodes, depth 4 ≈ 27M) making it completely impractical. The walk-up approach is the only viable API-based option, though slow (~30–90 hours for all dataset categories).
+
 On startup, `src/instrumentation.ts` imports the category hierarchy from `categories.db` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-categories.ts`). The script is resumable and respects Wikipedia API etiquette.
 
 ## Feature flags (env vars)

@@ -111,3 +111,11 @@ All of this commit was done with haiku too. It made 2-3 little mistakes that it 
 ## But sometimes Haiku sucks
 
 I was tempted to use Haiku to include 2 more datasets, good and featured articles. It just kept forgetting its own pants and after it said it was done, everything was broken. I had sonnet clean up the mess, it took a while.
+
+# So finally, the categories
+
+With sonnet, I developed a combination of top-down (from the root categories) and bottom-up (from the article categories) search/mapping. It was able to profit from already-walked paths, making the first 2 mappings fail and all others pass, going faster and faster until reaching about 1 mapping/second soon, then 2 after about 300 mappings. Beautiful.
+It did make some mistakes where at first nothing worked, but fixed them quickly. It was always a bit overconfident, already going ahead with half-baked ideas; I had to stop it and guide it sometimes.
+
+The problem is, I still got a Status GOAWAY before I reached 8000/220000 and there are other little bugs too. Ok brace, I will no try opus to refactor.
+(It needs a refactor -> it is duplicating functions and then fixing some of them)

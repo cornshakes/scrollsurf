@@ -31,6 +31,9 @@ good_db.exec(`
     hidden INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (url, name)
   );
+  CREATE TABLE IF NOT EXISTS discovered_articles (
+    title TEXT NOT NULL PRIMARY KEY
+  );
 `);
 
 good_db
@@ -39,9 +42,6 @@ good_db
 
 const insert_article_stmt = good_db.prepare(
   'INSERT OR IGNORE INTO articles (title, url, extract, description, image_url) VALUES ($title, $url, $extract, $description, $image_url)'
-);
-const insert_topic_stmt = good_db.prepare(
-  'INSERT OR IGNORE INTO article_topics (url, topic) VALUES ($url, $topic)'
 );
 const insert_category_stmt = good_db.prepare(
   'INSERT OR IGNORE INTO article_categories (url, name, hidden) VALUES ($url, $name, $hidden)'
@@ -147,10 +147,31 @@ const download_article_content = async (titles: string[]): Promise<WikiPage[]> =
   return Object.values(data.query.pages).filter((p) => !!p.extract);
 };
 
+const urls_fetched_stmt = good_db.prepare("SELECT 1 FROM metadata WHERE key = 'urls_fetched'");
+const set_urls_fetched_stmt = good_db.prepare(
+  "INSERT OR REPLACE INTO metadata (key, value) VALUES ('urls_fetched', '1')"
+);
+const insert_discovered_stmt = good_db.prepare(
+  'INSERT OR IGNORE INTO discovered_articles (title) VALUES (?)'
+);
+
 const main = async () => {
-  process.stdout.write('Phase 1: Collecting article URLs...\n');
-  const all_titles = await get_good_article_titles();
-  process.stdout.write(`Found ${all_titles.length} articles.\n`);
+  let all_titles: string[];
+  if (urls_fetched_stmt.get()) {
+    const rows = good_db.prepare('SELECT title FROM discovered_articles').all() as {
+      title: string;
+    }[];
+    all_titles = rows.map((r) => r.title);
+    process.stdout.write(`Phase 1: Skipped (${all_titles.length} URLs already fetched).\n`);
+  } else {
+    process.stdout.write('Phase 1: Collecting article URLs...\n');
+    all_titles = await get_good_article_titles();
+    process.stdout.write(`Found ${all_titles.length} articles.\n`);
+    good_db.exec('BEGIN');
+    for (const t of all_titles) insert_discovered_stmt.run(t);
+    set_urls_fetched_stmt.run();
+    good_db.exec('COMMIT');
+  }
 
   const downloaded = get_downloaded_urls();
   const to_download = all_titles.filter((t) => !downloaded.has(title_to_url(t)));
@@ -166,11 +187,11 @@ const main = async () => {
 
   process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
   let saved = 0;
-  good_db.exec('BEGIN');
   for (let i = 0; i < unique_to_download.length; i += BATCH_SIZE) {
     const batch = unique_to_download.slice(i, i + BATCH_SIZE);
     const pages = await download_article_content(batch);
 
+    good_db.exec('BEGIN');
     for (const p of pages) {
       const url = title_to_url(p.title);
       insert_article_stmt.run({
@@ -189,9 +210,9 @@ const main = async () => {
       }
       saved++;
     }
+    good_db.exec('COMMIT');
     process.stdout.write(`\r${saved} / ${unique_to_download.length} downloaded`);
   }
-  good_db.exec('COMMIT');
 
   process.stdout.write('\nDone.\n');
 };
