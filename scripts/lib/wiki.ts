@@ -20,18 +20,30 @@ export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
   const headers = {
     'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
     'Accept-Encoding': 'gzip',
+    'Content-Type': 'application/x-www-form-urlencoded',
   };
 
-  // One initial request, plus a single retry on rate-limit (429/503) or maxlag.
+  // One initial request, plus a single retry on rate-limit (429/503), maxlag,
+  // or a thrown connection error (e.g. HTTP/2 GOAWAY). On a GOAWAY, undici evicts
+  // the dead socket from its pool, so the retry establishes a fresh connection.
   for (let attempt = 1; attempt <= 2; attempt++) {
     const last = attempt === 2;
-    // POST keeps headers small — GET URLs with 50 batched titles can trigger
-    // HTTP/2 GOAWAY (ENHANCE_YOUR_CALM / HEADER_LIST_SIZE_EXCEEDED).
-    const res = await fetch('https://en.wikipedia.org/w/api.php', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
+
+    let res: Response;
+    try {
+      res = await fetch('https://en.wikipedia.org/w/api.php', {
+        method: 'POST',
+        headers,
+        body: params.toString(),
+      });
+    } catch (err) {
+      if (last) {
+        throw err;
+      }
+      console.warn(`[wiki_api] connection error (${(err as Error).message}), retrying...`);
+      await sleep(1000);
+      continue;
+    }
 
     if (res.status === 429 || res.status === 503) {
       if (last) {
