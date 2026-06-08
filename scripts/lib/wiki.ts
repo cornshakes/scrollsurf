@@ -15,26 +15,38 @@ const retry_delay = (res: Response, fallback_ms: number): number => {
 
 export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
   params.set('maxlag', '5');
-  while (true) {
-    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      headers: {
-        'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
-        'Accept-Encoding': 'gzip',
-      },
-    });
+  const url = `https://en.wikipedia.org/w/api.php?${params}`;
+  const headers = {
+    'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
+    'Accept-Encoding': 'gzip',
+  };
+
+  // One initial request, plus a single retry on rate-limit (429/503) or maxlag.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const last = attempt === 2;
+    const res = await fetch(url, { headers });
+
     if (res.status === 429 || res.status === 503) {
+      if (last) throw new Error(`Wikipedia API error: ${res.status} (after retry)`);
+      console.warn(`[wiki_api] ${res.status}, retrying...`);
       await sleep(retry_delay(res, 5000));
       continue;
     }
     if (!res.ok) throw new Error(`Wikipedia API error: ${res.status}`);
+
     const data = await res.json();
     if (data?.error?.code === 'maxlag') {
+      if (last) throw new Error('Wikipedia API maxlag (after retry)');
+      console.warn('[wiki_api] maxlag, retrying...');
       await sleep(retry_delay(res, 5000));
       continue;
     }
+
     await sleep(REQUEST_DELAY_MS);
     return data;
   }
+
+  throw new Error('Wikipedia API: unreachable'); // loop always returns or throws
 };
 
 export const title_to_url = (title: string) =>
@@ -93,20 +105,40 @@ export const fetch_category_members = async (
   return titles;
 };
 
-export const fetch_category_parents = async (category: string): Promise<string[]> => {
+// Fetches parent categories for up to 50 categories in one API call.
+// Returns a map from (possibly normalized) category name to its parents.
+export const fetch_category_parents_batch = async (
+  categories: string[]
+): Promise<Map<string, string[]>> => {
   const params = new URLSearchParams({
     action: 'query',
-    titles: `Category:${category}`,
+    titles: categories.map((c) => `Category:${c}`).join('|'),
     prop: 'categories',
     cllimit: '500',
     format: 'json',
   });
   const data = (await wiki_api(params)) as {
-    query: { pages: Record<string, { categories?: { title: string }[] }> };
+    query: {
+      normalized?: { from: string; to: string }[];
+      pages: Record<string, { title: string; categories?: { title: string }[] }>;
+    };
   };
-  const page = Object.values(data.query.pages)[0];
-  if (!page?.categories) return [];
-  return page.categories.map((c) => c.title.replace(/^Category:/, ''));
+
+  // Map normalized titles back to the original requested name
+  const denorm = new Map(
+    (data.query.normalized ?? []).map((n) => [n.to, n.from.replace(/^Category:/, '')])
+  );
+
+  const result = new Map<string, string[]>();
+  for (const page of Object.values(data.query.pages)) {
+    const normalized_name = page.title.replace(/^Category:/, '');
+    const name = denorm.get(page.title) ?? normalized_name;
+    result.set(
+      name,
+      (page.categories ?? []).map((c) => c.title.replace(/^Category:/, ''))
+    );
+  }
+  return result;
 };
 
 export type WikiCategory = { title: string; hidden?: string };

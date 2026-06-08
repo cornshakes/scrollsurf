@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { readdirSync } from 'node:fs';
-import { fetch_category_members, fetch_category_parents } from './lib/wiki';
+import { fetch_category_members, fetch_category_parents_batch } from './lib/wiki';
 
 const TOP_LEVELS = [
   'Society',
@@ -53,6 +53,7 @@ const fetch_category_children = (category: string): Promise<string[]> =>
   fetch_category_members(category, { type: 'subcat' });
 
 const MAX_DEPTH = 50;
+const WALK_BATCH_SIZE = 50; // Wikipedia API title limit per request
 
 const lookup_stmt = categories_db.prepare(
   'SELECT top_level FROM category_hierarchy WHERE category_name = ?'
@@ -63,7 +64,7 @@ const insert_hierarchy_stmt = categories_db.prepare(
 
 const walk_up_hierarchy = async (category: string): Promise<string | null> => {
   const visited = new Set<string>();
-  const queue = [category];
+  const queue: string[] = [category];
 
   const resolve = (top_level: string) => {
     for (const node of visited) insert_hierarchy_stmt.run(node, top_level);
@@ -71,20 +72,27 @@ const walk_up_hierarchy = async (category: string): Promise<string | null> => {
   };
 
   while (queue.length > 0 && visited.size < MAX_DEPTH) {
-    const current = queue.shift();
-    if (!current || visited.has(current)) continue;
+    // Drain up to WALK_BATCH_SIZE unvisited items, resolving cached ones for free
+    const batch: string[] = [];
+    while (queue.length > 0 && batch.length < WALK_BATCH_SIZE) {
+      const current = queue.shift();
+      if (!current) continue;
+      if (visited.has(current)) continue;
+      const cached = lookup_stmt.get(current) as { top_level: string } | undefined;
+      if (cached) return resolve(cached.top_level);
+      visited.add(current);
+      batch.push(current);
+    }
+    if (batch.length === 0) continue;
 
-    // Hit an already-mapped node — no API call needed
-    const cached = lookup_stmt.get(current) as { top_level: string } | undefined;
-    if (cached) return resolve(cached.top_level);
-
-    visited.add(current);
-    const parents = await fetch_category_parents(current);
-
-    for (const parent of parents) {
-      const check = lookup_stmt.get(parent) as { top_level: string } | undefined;
-      if (check) return resolve(check.top_level);
-      if (!visited.has(parent)) queue.push(parent);
+    // One API call for the whole batch
+    const parents_map = await fetch_category_parents_batch(batch);
+    for (const parents of parents_map.values()) {
+      for (const parent of parents) {
+        const check = lookup_stmt.get(parent) as { top_level: string } | undefined;
+        if (check) return resolve(check.top_level);
+        if (!visited.has(parent)) queue.push(parent);
+      }
     }
   }
 
