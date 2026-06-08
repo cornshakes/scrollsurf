@@ -21,6 +21,7 @@ export interface Article extends BaseFeedItem {
 export interface Picture extends BaseFeedItem {
   type: 'picture';
   image_url: string;
+  caption: string;
   credit: string | null;
 }
 
@@ -112,6 +113,7 @@ db.exec(`
     title     TEXT    NOT NULL,
     url       TEXT    NOT NULL UNIQUE,
     image_url TEXT    NOT NULL,
+    caption   TEXT    NOT NULL DEFAULT '',
     credit    TEXT
   );
 
@@ -127,6 +129,10 @@ db.exec(`
     PRIMARY KEY (picture_id, dataset, topic)
   );
 `);
+
+try {
+  db.exec("ALTER TABLE pictures ADD COLUMN caption TEXT NOT NULL DEFAULT ''");
+} catch {}
 
 // ── Article queries ─────────────────────────────────────────────────────────
 
@@ -144,13 +150,13 @@ const get_next_articles_stmt = db.prepare(`
   FROM articles a
   LEFT JOIN user_articles ua ON a.id = ua.article_id
   WHERE ua.article_id IS NULL
-    AND (
-      SELECT COALESCE(MAX(us.enabled), 1)
+    AND EXISTS (
+      SELECT 1
       FROM article_topics at
       LEFT JOIN user_settings us ON us.dataset = at.dataset
       WHERE at.article_id = a.id
-      LIMIT 1
-    ) = 1
+      AND COALESCE(us.enabled, 1) = 1
+    )
   ORDER BY RANDOM()
   LIMIT $limit
 `);
@@ -175,18 +181,18 @@ const get_voted_articles_stmt = db.prepare(`
 // ── Picture queries ─────────────────────────────────────────────────────────
 
 const get_next_pictures_stmt = db.prepare(`
-  SELECT p.id, p.title, p.url, p.image_url, p.credit,
+  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit,
          COALESCE(up.like, 0) AS like
   FROM pictures p
   LEFT JOIN user_pictures up ON p.id = up.picture_id
   WHERE up.picture_id IS NULL
-    AND (
-      SELECT COALESCE(MAX(us.enabled), 1)
+    AND EXISTS (
+      SELECT 1
       FROM picture_topics pt
       LEFT JOIN user_settings us ON us.dataset = pt.dataset
       WHERE pt.picture_id = p.id
-      LIMIT 1
-    ) = 1
+      AND COALESCE(us.enabled, 1) = 1
+    )
   ORDER BY RANDOM()
   LIMIT $limit
 `);
@@ -200,7 +206,7 @@ const set_picture_like_stmt = db.prepare(
 );
 
 const get_voted_pictures_stmt = db.prepare(`
-  SELECT p.id, p.title, p.url, p.image_url, p.credit, up.like
+  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like
   FROM pictures p
   JOIN user_pictures up ON p.id = up.picture_id
   WHERE up.like = $like
@@ -318,6 +324,7 @@ const row_to_picture = (r: PictureDbRow): Picture => ({
   url: r.url,
   like: r.like,
   image_url: r.image_url,
+  caption: r.caption,
   credit: r.credit,
 });
 

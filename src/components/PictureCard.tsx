@@ -28,29 +28,40 @@ export const PictureCard = ({
 
   return (
     <Box sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}>
-      <Box
-        component="img"
-        src={picture.image_url}
-        loading="lazy"
-        sx={{
-          display: 'block',
-          width: '100%',
-          maxHeight: 480,
-          objectFit: 'contain',
-          borderRadius: 1,
-          mb: 2,
-        }}
-      />
+      <Link href={picture.url} target="_blank" rel="noopener noreferrer">
+        <Box
+          component="img"
+          src={picture.image_url}
+          loading="lazy"
+          sx={{
+            display: 'block',
+            width: '100%',
+            maxHeight: 480,
+            objectFit: 'contain',
+            borderRadius: 1,
+            mb: 2,
+          }}
+        />
+      </Link>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h5" component="h2">
-            <Link href={picture.url} target="_blank" rel="noopener noreferrer" underline="hover">
-              {picture.title}
-            </Link>
-          </Typography>
+          {picture.caption && (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              {picture.caption}
+            </Typography>
+          )}
           {picture.credit && (
             <Typography variant="body2" color="text.secondary">
-              by {picture.credit}
+              by{' '}
+              <Link
+                href={`https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="hover"
+                color="inherit"
+              >
+                {picture.credit}
+              </Link>
             </Typography>
           )}
         </Box>

@@ -71,8 +71,12 @@ export const import_pictures_dataset = (filename: string) => {
     const dataset = row.value.replace(/'/g, "''");
 
     db.exec(
-      `INSERT OR IGNORE INTO main.pictures (title, url, image_url, credit)
-       SELECT file_title, url, image_url, credit FROM ref.pictures`
+      `INSERT INTO main.pictures (title, url, image_url, caption, credit)
+       SELECT p.file_title, p.url, p.image_url, COALESCE(d.caption, ''), p.credit
+       FROM ref.pictures p
+       LEFT JOIN ref.discovered_pictures d ON d.file_title = p.file_title
+       ON CONFLICT(url) DO UPDATE SET caption = excluded.caption
+       WHERE main.pictures.caption = ''`
     );
     db.exec(
       `INSERT OR IGNORE INTO main.picture_topics (picture_id, dataset, topic)

@@ -162,3 +162,6 @@ Read .claude/session-handoff.md and continue from where we left off
 
 I'm now using opus with Plan mode to add downloading, storing, and displaying images. What's really nice is that (in VS Code) it displays the md file with the plan and I can select some text and add a comment. When I'm done adding comments, it updates the plan accordingly. Like, story work.
 After I was happy with the plan, I switched to sonnet and let it rip. It worked!
+
+# Improve pictures
+to improve some details and fix some bugs, this time I let sonnet make a plan and then execute it. It seems to be at least a bit smarter this way, even without extra input. It takes a lot longer though.

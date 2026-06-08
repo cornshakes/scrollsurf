@@ -32,6 +32,7 @@ const open_pictures_db = (filename: string, title: string, source_url: string) =
       file_title  TEXT NOT NULL,
       url         TEXT NOT NULL UNIQUE,
       image_url   TEXT NOT NULL,
+      caption     TEXT NOT NULL DEFAULT '',
       credit      TEXT
     );
     CREATE TABLE IF NOT EXISTS picture_topics (
@@ -129,7 +130,7 @@ export const download_pictures_dataset = async (
   }
 
   const insert_picture = db.prepare(
-    'INSERT OR IGNORE INTO pictures (file_title, url, image_url, credit) VALUES ($file_title, $url, $image_url, $credit)'
+    'INSERT OR IGNORE INTO pictures (file_title, url, image_url, caption, credit) VALUES ($file_title, $url, $image_url, $caption, $credit)'
   );
   const insert_topic = db.prepare(
     'INSERT OR IGNORE INTO picture_topics (url, topic) VALUES ($url, $topic)'
@@ -154,6 +155,7 @@ export const download_pictures_dataset = async (
           $file_title: file_title,
           $url: img.descriptionurl,
           $image_url: img.thumburl,
+          $caption: meta?.caption ?? '',
           $credit: meta?.credit ?? null,
         });
         for (const topic of meta?.topics ?? []) {
