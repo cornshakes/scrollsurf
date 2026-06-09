@@ -49,6 +49,16 @@ if (command === 'up') {
         'Run the download-* scripts first if the app should have content.'
     );
   }
+  if (target === 'prod') {
+    // Push the Funnel serve config to an absolute path on the Pi. A relative
+    // bind mount in the compose file resolves against the local (Mac) path and
+    // is fabricated as an empty dir on the remote daemon, so copy it explicitly.
+    const serve_config = path.resolve('tailscale/serve.json');
+    if (!existsSync(serve_config)) {
+      throw new Error(`${serve_config} not found — required for prod Funnel`);
+    }
+    run(`rsync -av ${serve_config} ${pi_ssh}:${data_dir_host}/serve.json`);
+  }
   run(`${dc} up -d --build`);
   if (target === 'prod') {
     console.warn('\nChecking Tailscale Funnel status...');

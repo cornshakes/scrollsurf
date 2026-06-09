@@ -184,3 +184,9 @@ I will create worktrees/branches for each of them and keep adding to the diary h
 
 On both branches, I used opus extra high for planning, then sonnet high for implementation.
 For the Users, I did the review myself, For Deployment, I switched back to opus for review & fix. That was quite expensive.
+
+merging the workspaces back in vs code didn't do anything / failed, so I just rebased manually.
+
+Both branches made conflicting changes to db.ts that couldn't just simply be picked from one branch or the other. Not wanting to get my hands dirty, I told opus to `rebase`. It was a new session, so it figured out what had happened by itself and then did the right thing.
+
+After that there was still a weird bug in prod caused by docker remote business. I told claude to read the logs and fix it. It was no easy fix and it would have taken me forever to find that problem.

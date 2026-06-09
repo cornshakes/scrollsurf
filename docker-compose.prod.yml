@@ -11,7 +11,7 @@ services:
       TS_USERSPACE: "false"
     volumes:
       - ts-state:/var/lib/tailscale
-      - ./tailscale/serve.json:/config/serve.json:ro
+      - ${DATA_DIR_HOST}/serve.json:/config/serve.json:ro
     cap_add:
       - net_admin
     devices:
