@@ -368,6 +368,7 @@ const PICTURE_RATIO =
   process.env.FEED_PICTURE_RATIO !== undefined ? parseFloat(process.env.FEED_PICTURE_RATIO) : 0.2;
 
 const get_next_articles_internal = (limit: number): Article[] => {
+  init_db();
   const rows = get_next_articles_stmt.all({ $limit: limit }) as unknown as ArticleDbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
@@ -378,6 +379,7 @@ const get_next_articles_internal = (limit: number): Article[] => {
 };
 
 const get_next_pictures_internal = (limit: number): Picture[] => {
+  init_db();
   const rows = get_next_pictures_stmt.all({ $limit: limit }) as unknown as PictureDbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
@@ -426,6 +428,7 @@ export const get_next_feed = (count: number): FeedItem[] => {
 export const get_next_articles = (limit: number): Article[] => get_next_articles_internal(limit);
 
 export const set_like = (type: 'article' | 'picture', id: number, value: -1 | 0 | 1) => {
+  init_db();
   if (type === 'article') {
     set_article_like_stmt.run({ $article_id: id, $like: value });
   } else {
@@ -434,25 +437,30 @@ export const set_like = (type: 'article' | 'picture', id: number, value: -1 | 0 
 };
 
 export const get_voted_articles = (vote: -1 | 1): Article[] => {
+  init_db();
   const rows = get_voted_articles_stmt.all({ $like: vote }) as unknown as ArticleDbRow[];
   return rows.map(row_to_article);
 };
 
 export const get_voted_pictures = (vote: -1 | 1): Picture[] => {
+  init_db();
   const rows = get_voted_pictures_stmt.all({ $like: vote }) as unknown as PictureDbRow[];
   return rows.map(row_to_picture);
 };
 
 export const set_dataset_enabled = (dataset: string, enabled: boolean) => {
+  init_db();
   set_dataset_enabled_stmt.run({ $dataset: dataset, $enabled: enabled ? 1 : 0 });
 };
 
 export const get_datasets_enabled = (): Record<string, boolean> => {
+  init_db();
   const rows = get_datasets_enabled_stmt.all() as unknown as { dataset: string; enabled: number }[];
   return Object.fromEntries(rows.map((r) => [r.dataset, r.enabled === 1]));
 };
 
 export const get_category_tree = (): CategoryTree => {
+  init_db();
   const top_level_rows = get_top_levels_stmt.all() as unknown as CategoryGroup[];
   const category_rows = get_categories_stmt.all() as unknown as (TopicStat & {
     top_level: string;
@@ -474,6 +482,7 @@ export const get_category_tree = (): CategoryTree => {
 };
 
 export const get_topic_tree = (): TopicTree => {
+  init_db();
   const article_dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
   const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
 
