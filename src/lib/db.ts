@@ -1,5 +1,6 @@
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { db_path } from './paths';
+import { INACTIVITY_DAYS } from './cookie';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ let get_categories_stmt: StatementSync;
 let get_topics_stmt: StatementSync;
 let set_dataset_enabled_stmt: StatementSync;
 let get_datasets_enabled_stmt: StatementSync;
+let insert_user_stmt: StatementSync;
+let touch_user_stmt: StatementSync;
 
 export const init_db = () => {
   if (db) {
@@ -81,6 +84,8 @@ export const init_db = () => {
   }
 
   db = new DatabaseSync(db_path());
+
+  db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS articles (
@@ -90,11 +95,6 @@ export const init_db = () => {
       url         TEXT    NOT NULL UNIQUE,
       description TEXT,
       image_url   TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS user_articles (
-      article_id INTEGER PRIMARY KEY REFERENCES articles(id),
-      like       INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS categories (
@@ -121,12 +121,6 @@ export const init_db = () => {
       source_url TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS user_settings (
-      dataset TEXT NOT NULL PRIMARY KEY,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      FOREIGN KEY (dataset) REFERENCES datasets(name)
-    );
-
     CREATE TABLE IF NOT EXISTS category_hierarchy (
       category_name TEXT NOT NULL PRIMARY KEY,
       top_level     TEXT NOT NULL
@@ -141,22 +135,55 @@ export const init_db = () => {
       credit    TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS user_pictures (
-      picture_id INTEGER PRIMARY KEY REFERENCES pictures(id),
-      like       INTEGER NOT NULL DEFAULT 0
-    );
-
     CREATE TABLE IF NOT EXISTS picture_topics (
       picture_id INTEGER NOT NULL REFERENCES pictures(id),
       dataset    TEXT    NOT NULL,
       topic      TEXT    NOT NULL,
       PRIMARY KEY (picture_id, dataset, topic)
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      cookie_token   TEXT UNIQUE,
+      created_at     INTEGER NOT NULL,
+      last_active_at INTEGER NOT NULL
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at);
+
+    CREATE TABLE IF NOT EXISTS user_articles (
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      article_id INTEGER NOT NULL REFERENCES articles(id),
+      like       INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, article_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS user_pictures (
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      picture_id INTEGER NOT NULL REFERENCES pictures(id),
+      like       INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, picture_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      dataset TEXT    NOT NULL REFERENCES datasets(name),
+      enabled INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (user_id, dataset)
+    ) STRICT;
   `);
 
   try {
     db.exec("ALTER TABLE pictures ADD COLUMN caption TEXT NOT NULL DEFAULT ''");
   } catch {}
+
+  // ── User statements ───────────────────────────────────────────────────────
+
+  insert_user_stmt = db.prepare(
+    'INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)'
+  );
+
+  touch_user_stmt = db.prepare('UPDATE users SET last_active_at = ? WHERE id = ?');
 
   // ── Article queries ──────────────────────────────────────────────────────
 
@@ -172,12 +199,12 @@ export const init_db = () => {
            COALESCE(ua.like, 0) AS like,
            ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories
     FROM articles a
-    LEFT JOIN user_articles ua ON a.id = ua.article_id
+    LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
     WHERE ua.article_id IS NULL
       AND EXISTS (
         SELECT 1
         FROM article_topics at
-        LEFT JOIN user_settings us ON us.dataset = at.dataset
+        LEFT JOIN user_settings us ON us.dataset = at.dataset AND us.user_id = $user_id
         WHERE at.article_id = a.id
         AND COALESCE(us.enabled, 1) = 1
       )
@@ -186,11 +213,12 @@ export const init_db = () => {
   `);
 
   mark_article_seen_stmt = db.prepare(
-    'INSERT OR IGNORE INTO user_articles (article_id) VALUES ($article_id)'
+    'INSERT OR IGNORE INTO user_articles (user_id, article_id) VALUES ($user_id, $article_id)'
   );
 
   set_article_like_stmt = db.prepare(
-    'UPDATE user_articles SET like = $like WHERE article_id = $article_id'
+    `INSERT INTO user_articles (user_id, article_id, like) VALUES ($user_id, $article_id, $like)
+     ON CONFLICT(user_id, article_id) DO UPDATE SET like = excluded.like`
   );
 
   get_voted_articles_stmt = db.prepare(`
@@ -198,7 +226,7 @@ export const init_db = () => {
            ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories
     FROM articles a
     JOIN user_articles ua ON a.id = ua.article_id
-    WHERE ua.like = $like
+    WHERE ua.like = $like AND ua.user_id = $user_id
     ORDER BY a.id DESC
   `);
 
@@ -208,12 +236,12 @@ export const init_db = () => {
     SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit,
            COALESCE(up.like, 0) AS like
     FROM pictures p
-    LEFT JOIN user_pictures up ON p.id = up.picture_id
+    LEFT JOIN user_pictures up ON p.id = up.picture_id AND up.user_id = $user_id
     WHERE up.picture_id IS NULL
       AND EXISTS (
         SELECT 1
         FROM picture_topics pt
-        LEFT JOIN user_settings us ON us.dataset = pt.dataset
+        LEFT JOIN user_settings us ON us.dataset = pt.dataset AND us.user_id = $user_id
         WHERE pt.picture_id = p.id
         AND COALESCE(us.enabled, 1) = 1
       )
@@ -222,18 +250,19 @@ export const init_db = () => {
   `);
 
   mark_picture_seen_stmt = db.prepare(
-    'INSERT OR IGNORE INTO user_pictures (picture_id) VALUES ($picture_id)'
+    'INSERT OR IGNORE INTO user_pictures (user_id, picture_id) VALUES ($user_id, $picture_id)'
   );
 
   set_picture_like_stmt = db.prepare(
-    'UPDATE user_pictures SET like = $like WHERE picture_id = $picture_id'
+    `INSERT INTO user_pictures (user_id, picture_id, like) VALUES ($user_id, $picture_id, $like)
+     ON CONFLICT(user_id, picture_id) DO UPDATE SET like = excluded.like`
   );
 
   get_voted_pictures_stmt = db.prepare(`
     SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like
     FROM pictures p
     JOIN user_pictures up ON p.id = up.picture_id
-    WHERE up.like = $like
+    WHERE up.like = $like AND up.user_id = $user_id
     ORDER BY p.id DESC
   `);
 
@@ -248,7 +277,7 @@ export const init_db = () => {
       COUNT(DISTINCT CASE WHEN ua.like = -1 THEN t.article_id END) AS disliked
     FROM datasets d
     LEFT JOIN article_topics t ON t.dataset = d.name
-    LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+    LEFT JOIN user_articles ua ON t.article_id = ua.article_id AND ua.user_id = $user_id
     WHERE d.name NOT IN (SELECT DISTINCT dataset FROM picture_topics)
     GROUP BY d.name
     ORDER BY d.name
@@ -263,8 +292,8 @@ export const init_db = () => {
       COUNT(DISTINCT CASE WHEN up.like = -1 THEN pt.picture_id END) AS disliked
     FROM datasets d
     LEFT JOIN picture_topics pt ON pt.dataset = d.name
-    LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id
-    WHERE d.name = ?
+    LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id AND up.user_id = $user_id
+    WHERE d.name = $dataset
     GROUP BY d.name
   `);
 
@@ -276,7 +305,7 @@ export const init_db = () => {
       COUNT(CASE WHEN up.like =  1 THEN 1 END) AS liked,
       COUNT(CASE WHEN up.like = -1 THEN 1 END) AS disliked
     FROM picture_topics pt
-    LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id
+    LEFT JOIN user_pictures up ON pt.picture_id = up.picture_id AND up.user_id = $user_id
     GROUP BY pt.dataset, pt.topic
     ORDER BY pt.dataset, pt.topic
   `);
@@ -291,7 +320,7 @@ export const init_db = () => {
     JOIN categories c ON c.name = ch.category_name
     JOIN article_categories ac ON ac.category_id = c.id
     JOIN articles a ON a.id = ac.article_id
-    LEFT JOIN user_articles ua ON a.id = ua.article_id
+    LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
     GROUP BY ch.top_level
     ORDER BY ch.top_level
   `);
@@ -307,7 +336,7 @@ export const init_db = () => {
     JOIN categories c ON c.name = ch.category_name
     JOIN article_categories ac ON ac.category_id = c.id
     JOIN articles a ON a.id = ac.article_id
-    LEFT JOIN user_articles ua ON a.id = ua.article_id
+    LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
     GROUP BY ch.category_name
     ORDER BY ch.top_level, ch.category_name
   `);
@@ -320,18 +349,56 @@ export const init_db = () => {
       COUNT(CASE WHEN ua.like =  1 THEN 1 END) AS liked,
       COUNT(CASE WHEN ua.like = -1 THEN 1 END) AS disliked
     FROM article_topics t
-    LEFT JOIN user_articles ua ON t.article_id = ua.article_id
+    LEFT JOIN user_articles ua ON t.article_id = ua.article_id AND ua.user_id = $user_id
     GROUP BY t.dataset, t.topic
     ORDER BY t.dataset, t.topic
   `);
 
   set_dataset_enabled_stmt = db.prepare(
-    'INSERT OR REPLACE INTO user_settings (dataset, enabled) VALUES ($dataset, $enabled)'
+    'INSERT OR REPLACE INTO user_settings (user_id, dataset, enabled) VALUES ($user_id, $dataset, $enabled)'
   );
 
   get_datasets_enabled_stmt = db.prepare(
-    'SELECT d.name AS dataset, COALESCE(us.enabled, 1) AS enabled FROM datasets d LEFT JOIN user_settings us ON us.dataset = d.name ORDER BY d.name'
+    `SELECT d.name AS dataset, COALESCE(us.enabled, 1) AS enabled
+     FROM datasets d
+     LEFT JOIN user_settings us ON us.dataset = d.name AND us.user_id = $user_id
+     ORDER BY d.name`
   );
+};
+
+// ── User management ─────────────────────────────────────────────────────────
+
+let last_cleanup = 0;
+
+export const cleanup_inactive_users = () => {
+  init_db();
+  const cutoff = Math.floor(Date.now() / 1000) - INACTIVITY_DAYS * 86400;
+  db.prepare(
+    'UPDATE users SET cookie_token = NULL WHERE last_active_at < ? AND cookie_token IS NOT NULL'
+  ).run(cutoff);
+};
+
+export const get_or_create_user = (token: string): number => {
+  init_db();
+  const now = Math.floor(Date.now() / 1000);
+
+  // Throttled cleanup: at most once per hour, opportunistically
+  if (now - last_cleanup > 3600) {
+    last_cleanup = now;
+    cleanup_inactive_users();
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE cookie_token = ?').get(token) as
+    | { id: number }
+    | undefined;
+
+  if (existing) {
+    touch_user_stmt.run(now, existing.id);
+    return existing.id;
+  }
+
+  const result = insert_user_stmt.run(token, now, now);
+  return Number(result.lastInsertRowid);
 };
 
 // ── Row mappers ─────────────────────────────────────────────────────────────
@@ -367,23 +434,29 @@ const row_to_picture = (r: PictureDbRow): Picture => ({
 const PICTURE_RATIO =
   process.env.FEED_PICTURE_RATIO !== undefined ? parseFloat(process.env.FEED_PICTURE_RATIO) : 0.2;
 
-const get_next_articles_internal = (limit: number): Article[] => {
+const get_next_articles_internal = (limit: number, user_id: number): Article[] => {
   init_db();
-  const rows = get_next_articles_stmt.all({ $limit: limit }) as unknown as ArticleDbRow[];
+  const rows = get_next_articles_stmt.all({
+    $limit: limit,
+    $user_id: user_id,
+  }) as unknown as ArticleDbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
-    mark_article_seen_stmt.run({ $article_id: row.id });
+    mark_article_seen_stmt.run({ $user_id: user_id, $article_id: row.id });
   }
   db.exec('COMMIT');
   return rows.map(row_to_article);
 };
 
-const get_next_pictures_internal = (limit: number): Picture[] => {
+const get_next_pictures_internal = (limit: number, user_id: number): Picture[] => {
   init_db();
-  const rows = get_next_pictures_stmt.all({ $limit: limit }) as unknown as PictureDbRow[];
+  const rows = get_next_pictures_stmt.all({
+    $limit: limit,
+    $user_id: user_id,
+  }) as unknown as PictureDbRow[];
   db.exec('BEGIN');
   for (const row of rows) {
-    mark_picture_seen_stmt.run({ $picture_id: row.id });
+    mark_picture_seen_stmt.run({ $user_id: user_id, $picture_id: row.id });
   }
   db.exec('COMMIT');
   return rows.map(row_to_picture);
@@ -392,13 +465,14 @@ const get_next_pictures_internal = (limit: number): Picture[] => {
 // Merges articles and pictures into one list at the requested ratio. Evenly
 // spaces pictures throughout the batch. Backfills with the other type when one
 // source runs dry.
-export const get_next_feed = (count: number): FeedItem[] => {
+export const get_next_feed = (count: number, user_id: number): FeedItem[] => {
   const pics_wanted = Math.round(count * PICTURE_RATIO);
   const arts_wanted = count - pics_wanted;
 
-  const pictures = get_next_pictures_internal(pics_wanted);
+  const pictures = get_next_pictures_internal(pics_wanted, user_id);
   const articles = get_next_articles_internal(
-    arts_wanted + Math.max(0, pics_wanted - pictures.length)
+    arts_wanted + Math.max(0, pics_wanted - pictures.length),
+    user_id
   );
 
   // Even spacing: insert one picture every `step` articles
@@ -425,44 +499,61 @@ export const get_next_feed = (count: number): FeedItem[] => {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export const get_next_articles = (limit: number): Article[] => get_next_articles_internal(limit);
+export const get_next_articles = (limit: number, user_id: number): Article[] =>
+  get_next_articles_internal(limit, user_id);
 
-export const set_like = (type: 'article' | 'picture', id: number, value: -1 | 0 | 1) => {
+export const set_like = (
+  type: 'article' | 'picture',
+  id: number,
+  value: -1 | 0 | 1,
+  user_id: number
+) => {
   init_db();
   if (type === 'article') {
-    set_article_like_stmt.run({ $article_id: id, $like: value });
+    set_article_like_stmt.run({ $user_id: user_id, $article_id: id, $like: value });
   } else {
-    set_picture_like_stmt.run({ $picture_id: id, $like: value });
+    set_picture_like_stmt.run({ $user_id: user_id, $picture_id: id, $like: value });
   }
 };
 
-export const get_voted_articles = (vote: -1 | 1): Article[] => {
+export const get_voted_articles = (vote: -1 | 1, user_id: number): Article[] => {
   init_db();
-  const rows = get_voted_articles_stmt.all({ $like: vote }) as unknown as ArticleDbRow[];
+  const rows = get_voted_articles_stmt.all({
+    $like: vote,
+    $user_id: user_id,
+  }) as unknown as ArticleDbRow[];
   return rows.map(row_to_article);
 };
 
-export const get_voted_pictures = (vote: -1 | 1): Picture[] => {
+export const get_voted_pictures = (vote: -1 | 1, user_id: number): Picture[] => {
   init_db();
-  const rows = get_voted_pictures_stmt.all({ $like: vote }) as unknown as PictureDbRow[];
+  const rows = get_voted_pictures_stmt.all({
+    $like: vote,
+    $user_id: user_id,
+  }) as unknown as PictureDbRow[];
   return rows.map(row_to_picture);
 };
 
-export const set_dataset_enabled = (dataset: string, enabled: boolean) => {
+export const set_dataset_enabled = (dataset: string, enabled: boolean, user_id: number) => {
   init_db();
-  set_dataset_enabled_stmt.run({ $dataset: dataset, $enabled: enabled ? 1 : 0 });
+  set_dataset_enabled_stmt.run({ $user_id: user_id, $dataset: dataset, $enabled: enabled ? 1 : 0 });
 };
 
-export const get_datasets_enabled = (): Record<string, boolean> => {
+export const get_datasets_enabled = (user_id: number): Record<string, boolean> => {
   init_db();
-  const rows = get_datasets_enabled_stmt.all() as unknown as { dataset: string; enabled: number }[];
+  const rows = get_datasets_enabled_stmt.all({ $user_id: user_id }) as unknown as {
+    dataset: string;
+    enabled: number;
+  }[];
   return Object.fromEntries(rows.map((r) => [r.dataset, r.enabled === 1]));
 };
 
-export const get_category_tree = (): CategoryTree => {
+export const get_category_tree = (user_id: number): CategoryTree => {
   init_db();
-  const top_level_rows = get_top_levels_stmt.all() as unknown as CategoryGroup[];
-  const category_rows = get_categories_stmt.all() as unknown as (TopicStat & {
+  const top_level_rows = get_top_levels_stmt.all({
+    $user_id: user_id,
+  }) as unknown as CategoryGroup[];
+  const category_rows = get_categories_stmt.all({ $user_id: user_id }) as unknown as (TopicStat & {
     top_level: string;
   })[];
   return top_level_rows.map((tl) => ({
@@ -481,12 +572,18 @@ export const get_category_tree = (): CategoryTree => {
   }));
 };
 
-export const get_topic_tree = (): TopicTree => {
+export const get_topic_tree = (user_id: number): TopicTree => {
   init_db();
-  const article_dataset_rows = get_datasets_stmt.all() as unknown as DatasetGroup[];
-  const topic_rows = get_topics_stmt.all() as unknown as (TopicStat & { dataset: string })[];
+  const article_dataset_rows = get_datasets_stmt.all({
+    $user_id: user_id,
+  }) as unknown as DatasetGroup[];
+  const topic_rows = get_topics_stmt.all({ $user_id: user_id }) as unknown as (TopicStat & {
+    dataset: string;
+  })[];
 
-  const pic_topic_rows = get_picture_topics_stmt.all() as unknown as (TopicStat & {
+  const pic_topic_rows = get_picture_topics_stmt.all({
+    $user_id: user_id,
+  }) as unknown as (TopicStat & {
     dataset: string;
   })[];
   const pic_datasets = [...new Set(pic_topic_rows.map((r) => r.dataset))];
@@ -508,7 +605,9 @@ export const get_topic_tree = (): TopicTree => {
   }));
 
   for (const name of pic_datasets) {
-    const row = get_picture_dataset_stmt.get(name) as DatasetGroup | undefined;
+    const row = get_picture_dataset_stmt.get({ $user_id: user_id, $dataset: name }) as
+      | DatasetGroup
+      | undefined;
     if (row) {
       article_groups.push({
         dataset: row.dataset,
