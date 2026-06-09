@@ -12,6 +12,7 @@ Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike the
 
 - [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures)
 
+- [Wikimedia Featured pictures](https://commons.wikimedia.org/wiki/Commons:Featured_pictures)
 
 ## Getting Started
 
@@ -28,6 +29,7 @@ npm run download-unusual
 npm run download-good-articles
 npm run download-featured-articles
 npm run download-featured-pictures
+npm run download-commons-featured-pictures
 ```
 
 Then, you can categorize the articles by running

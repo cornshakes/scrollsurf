@@ -176,6 +176,7 @@ export interface ImageInfo {
   title: string; // File:Name.jpg
   thumburl: string; // 1000px thumbnail
   descriptionurl: string; // File description page
+  credit?: string | null; // optional photographer credit
 }
 
 // Fetches image info (1000px thumbnail + description page) for a batch of File: titles.

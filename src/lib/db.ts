@@ -455,7 +455,7 @@ export const get_topic_tree = (): TopicTree => {
   const pic_topic_rows = get_picture_topics_stmt.all() as unknown as (TopicStat & {
     dataset: string;
   })[];
-  const pic_dataset_name = pic_topic_rows[0]?.dataset;
+  const pic_datasets = [...new Set(pic_topic_rows.map((r) => r.dataset))];
 
   const article_groups: TopicTree = article_dataset_rows.map((d) => ({
     dataset: d.dataset,
@@ -473,24 +473,25 @@ export const get_topic_tree = (): TopicTree => {
       })),
   }));
 
-  // Append the Pictures group if the dataset exists
-  const pic_dataset_row = pic_dataset_name
-    ? (get_picture_dataset_stmt.get(pic_dataset_name) as DatasetGroup | undefined)
-    : undefined;
-  if (pic_dataset_row) {
-    article_groups.push({
-      dataset: pic_dataset_row.dataset,
-      source_url: pic_dataset_row.source_url,
-      article_count: pic_dataset_row.article_count,
-      liked: pic_dataset_row.liked,
-      disliked: pic_dataset_row.disliked,
-      topics: pic_topic_rows.map((t) => ({
-        topic: t.topic,
-        article_count: t.article_count,
-        liked: t.liked,
-        disliked: t.disliked,
-      })),
-    });
+  for (const name of pic_datasets) {
+    const row = get_picture_dataset_stmt.get(name) as DatasetGroup | undefined;
+    if (row) {
+      article_groups.push({
+        dataset: row.dataset,
+        source_url: row.source_url,
+        article_count: row.article_count,
+        liked: row.liked,
+        disliked: row.disliked,
+        topics: pic_topic_rows
+          .filter((t) => t.dataset === name)
+          .map((t) => ({
+            topic: t.topic,
+            article_count: t.article_count,
+            liked: t.liked,
+            disliked: t.disliked,
+          })),
+      });
+    }
   }
 
   return article_groups;

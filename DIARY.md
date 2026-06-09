@@ -165,3 +165,6 @@ After I was happy with the plan, I switched to sonnet and let it rip. It worked!
 
 # Improve pictures
 to improve some details and fix some bugs, this time I let sonnet make a plan and then execute it. It seems to be at least a bit smarter this way, even without extra input. It takes a lot longer though.
+
+# btw
+the context management/session-handoff thingy failed to improve my quality of life.

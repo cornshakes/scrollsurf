@@ -3,7 +3,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import { fetch_image_content } from './wiki';
+import { fetch_image_content, type ImageInfo } from './wiki';
 
 const BATCH_SIZE = 50;
 
@@ -18,6 +18,7 @@ export interface DownloadPicturesOptions {
   filename: string; // e.g. 'featured_pictures.db'
   title: string; // grouping label, e.g. 'Pictures'
   source_url: string;
+  fetch_image_info?: (titles: string[]) => Promise<ImageInfo[]>;
   discover: () => Promise<DiscoveredPicture[]>;
 }
 
@@ -143,7 +144,7 @@ export const download_pictures_dataset = async (
   let processed = 0;
   for (let i = 0; i < to_download.length; i += BATCH_SIZE) {
     const batch = to_download.slice(i, i + BATCH_SIZE);
-    const images = await fetch_image_content(batch);
+    const images = await (options.fetch_image_info ?? fetch_image_content)(batch);
     const by_title = new Map(images.map((img) => [img.title, img]));
 
     db.exec('BEGIN');
@@ -156,7 +157,7 @@ export const download_pictures_dataset = async (
           $url: img.descriptionurl,
           $image_url: img.thumburl,
           $caption: meta?.caption ?? '',
-          $credit: meta?.credit ?? null,
+          $credit: img.credit ?? meta?.credit ?? null,
         });
         for (const topic of meta?.topics ?? []) {
           insert_topic.run({ $url: img.descriptionurl, $topic: topic });

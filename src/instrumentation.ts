@@ -16,10 +16,12 @@ export const register = async () => {
     }
   }
 
-  try {
-    import_pictures_dataset('featured_pictures.db');
-  } catch (err) {
-    console.warn('[instrumentation] failed to import featured_pictures.db:', err);
+  for (const filename of ['featured_pictures.db', 'commons_featured_pictures.db']) {
+    try {
+      import_pictures_dataset(filename);
+    } catch (err) {
+      console.warn(`[instrumentation] failed to import ${filename}:`, err);
+    }
   }
 
   try {
