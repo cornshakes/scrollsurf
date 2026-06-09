@@ -189,4 +189,12 @@ merging the workspaces back in vs code didn't do anything / failed, so I just re
 
 Both branches made conflicting changes to db.ts that couldn't just simply be picked from one branch or the other. Not wanting to get my hands dirty, I told opus to `rebase`. It was a new session, so it figured out what had happened by itself and then did the right thing.
 
-After that there was still a weird bug in prod caused by docker remote business. I told claude to read the logs and fix it. It was no easy fix and it would have taken me forever to find that problem.
+After that there were still a weird bug in prod caused by docker remote business. I told claude to read the logs and fix it. It was no easy fix and it would have taken me forever to find that problem.
+
+Next, it was all done but still nothing working.
+Opus ran so many commands checking absolutely everything. It would have taken me idk how long.
+
+Now the page is up. I have a change that I want to deploy, if that works without issue, I'll be done for today.
+
+These 2 features - user cookies and deploy cost me only 10% of my weekly budget. Almost half of it was spent on "last small problems" which is no surprise for deploy stuff.
+

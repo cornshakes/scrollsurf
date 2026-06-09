@@ -22,7 +22,7 @@ touch prod data.
 
 ### 1. Tailscale admin console
 
-Visit https://login.tailscale.com/admin and complete these three steps.
+Visit https://login.tailscale.com/admin and complete these four steps.
 
 **Enable DNS features** (Settings → DNS):
 - Turn on **MagicDNS**
@@ -37,6 +37,17 @@ Visit https://login.tailscale.com/admin and complete these three steps.
   { "target": ["tag:scrollsurf"], "attr": ["funnel"] }
 ]
 ```
+
+**Acknowledge Funnel (one-time)** — the ACL `attr` only grants the capability;
+Tailscale also requires a one-time confirmation before it will publish the
+public DNS record and serve traffic. Until you do this, everything looks correct
+locally (`tailscale funnel status` says "Funnel on", the cert issues) but the
+public URL fails to resolve ("server not found"). Trigger it once:
+```sh
+npm run pi:funnel   # or: docker exec <ts-container> tailscale funnel 3000
+```
+and open the `https://login.tailscale.com/f/funnel?node=…` link it prints to
+confirm.
 
 **Create an auth key** (Settings → Keys → Generate auth key):
 - Reusable: ✓
