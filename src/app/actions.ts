@@ -54,6 +54,10 @@ export const get_wiki_datasets_enabled = async (): Promise<Record<string, boolea
 };
 
 export const get_wiki_category_tree = async (): Promise<CategoryTree> => {
+  // Categories are a local-dev-only tool; never expose the tree in deploys.
+  if (process.env.NODE_ENV !== 'development') {
+    return [];
+  }
   const uid = await current_user_id();
   return get_category_tree(uid);
 };

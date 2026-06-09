@@ -27,6 +27,15 @@ const VIEW_LABELS: Record<View, string> = {
   categories: 'Categories',
 };
 
+// The categories view is a local-dev-only tool (the category hierarchy is still
+// being built out). Hide it in the test/prod Docker builds, which run with
+// NODE_ENV=production.
+const CATEGORIES_ENABLED = process.env.NODE_ENV === 'development';
+
+const VIEWS = (Object.keys(VIEW_LABELS) as View[]).filter(
+  (v) => v !== 'categories' || CATEGORIES_ENABLED
+);
+
 const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -56,7 +65,7 @@ const WikiArticles = () => {
 
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <List sx={{ width: 220 }}>
-          {(Object.keys(VIEW_LABELS) as View[]).map((v) => (
+          {VIEWS.map((v) => (
             <ListItem key={v} disablePadding>
               <ListItemButton selected={view === v} onClick={() => switchView(v)}>
                 <ListItemText primary={VIEW_LABELS[v]} />
@@ -71,7 +80,7 @@ const WikiArticles = () => {
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
         {view === 'datasets' && <TopicsFeed />}
-        {view === 'categories' && <CategoryFeed />}
+        {view === 'categories' && CATEGORIES_ENABLED && <CategoryFeed />}
       </Box>
     </Box>
   );
