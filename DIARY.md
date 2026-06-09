@@ -168,3 +168,19 @@ to improve some details and fix some bugs, this time I let sonnet make a plan an
 
 # btw
 the context management/session-handoff thingy failed to improve my quality of life.
+
+
+# Parallel stuff
+
+Today I want to try [git worktrees](https://code.visualstudio.com/docs/sourcecontrol/branches-worktrees#_working-with-git-worktrees) for parallel development, mostly because getting started is one step. No other workflow stuff, just 2 branches that I'll merge back later.
+I want to develop 2 features:
+
+- Users: First only cookie-based, later maybe with some kind of login
+- Deployment: Find a cheap/easy/safe way to host this for public access on my raspberry
+
+I will create worktrees/branches for each of them and keep adding to the diary here on the main branch.
+
+## a bit later
+
+On both branches, I used opus extra high for planning, then sonnet high for implementation.
+For the Users, I did the review myself, For Deployment, I switched back to opus for review & fix. That was quite expensive.
