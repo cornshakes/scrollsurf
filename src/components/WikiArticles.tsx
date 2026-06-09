@@ -77,23 +77,9 @@ const WikiArticles = () => {
             >
               <MenuIcon />
             </IconButton>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-              <Typography variant="h6" component="div">
-                {VIEW_LABELS[view]}
-              </Typography>
-              {view === 'random' && (
-                <Typography variant="body2" sx={{ opacity: 0.55 }}>
-                  Discover Wikipedia articles, pictures, topics and categories from curated
-                  datasets.
-                </Typography>
-              )}
-              {view === 'datasets' && (
-                <Typography variant="body2" sx={{ opacity: 0.55 }}>
-                  Choose which datasets to include in your feed. Uncheck a dataset to stop seeing
-                  content from it.
-                </Typography>
-              )}
-            </Box>
+            <Typography variant="h6" component="div">
+              {VIEW_LABELS[view]}
+            </Typography>
           </Toolbar>
         </AppBar>
       </Box>

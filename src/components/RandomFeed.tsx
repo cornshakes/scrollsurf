@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from 'react';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
+import Typography from '@mui/material/Typography';
 import { get_next_wiki_articles } from '@/app/actions';
 import { ArticleCard } from './ArticleCard';
 import { PictureCard } from './PictureCard';
@@ -45,6 +46,13 @@ export const RandomFeed = () => {
 
   return (
     <Box>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ maxWidth: 680, mx: 'auto', px: { xs: 2, sm: 4 }, pt: 3, pb: 1 }}
+      >
+        Discover Wikipedia articles, pictures, topics and categories from curated datasets.
+      </Typography>
       {items.map((item) =>
         item.type === 'picture' ? (
           <PictureCard key={`picture-${item.id}`} picture={item} />

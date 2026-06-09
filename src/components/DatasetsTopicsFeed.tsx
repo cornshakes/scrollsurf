@@ -102,6 +102,10 @@ export const TopicsFeed = () => {
 
   return (
     <Box sx={{ width: '100%', maxWidth: 680, mx: 'auto', px: 2, py: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Choose which datasets to include in your feed. Uncheck a dataset to stop seeing content from
+        it.
+      </Typography>
       {topics.length === 0 ? (
         <Typography sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
           No topics yet — browse a few articles and check back.
