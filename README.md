@@ -1,5 +1,8 @@
 # Scrollsurf
 
+[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net)
+
+
 Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike them, and visit the full articles on wikipedia itself. The articles that it shows you are randomly selected from these datasets:
 
 - [The 50000 most vital articles](https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5)
