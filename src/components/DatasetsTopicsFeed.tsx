@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
+import { useConsent } from './CookieConsent';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -27,6 +28,7 @@ export const TopicsFeed = () => {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
+  const { consent, openConsent } = useConsent();
 
   useEffect(() => {
     startTransition(async () => {
@@ -52,6 +54,10 @@ export const TopicsFeed = () => {
     });
 
   const toggle_dataset_enabled = (dataset: string) => {
+    if (consent !== 'granted') {
+      openConsent();
+      return;
+    }
     const new_enabled = !enabled[dataset];
     setEnabled((prev) => ({ ...prev, [dataset]: new_enabled }));
     startTransition(async () => {

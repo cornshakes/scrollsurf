@@ -434,38 +434,42 @@ const row_to_picture = (r: PictureDbRow): Picture => ({
 const PICTURE_RATIO =
   process.env.FEED_PICTURE_RATIO !== undefined ? parseFloat(process.env.FEED_PICTURE_RATIO) : 0.2;
 
-const get_next_articles_internal = (limit: number, user_id: number): Article[] => {
+const get_next_articles_internal = (limit: number, user_id: number | null): Article[] => {
   init_db();
   const rows = get_next_articles_stmt.all({
     $limit: limit,
     $user_id: user_id,
   }) as unknown as ArticleDbRow[];
-  db.exec('BEGIN');
-  for (const row of rows) {
-    mark_article_seen_stmt.run({ $user_id: user_id, $article_id: row.id });
+  if (user_id !== null) {
+    db.exec('BEGIN');
+    for (const row of rows) {
+      mark_article_seen_stmt.run({ $user_id: user_id, $article_id: row.id });
+    }
+    db.exec('COMMIT');
   }
-  db.exec('COMMIT');
   return rows.map(row_to_article);
 };
 
-const get_next_pictures_internal = (limit: number, user_id: number): Picture[] => {
+const get_next_pictures_internal = (limit: number, user_id: number | null): Picture[] => {
   init_db();
   const rows = get_next_pictures_stmt.all({
     $limit: limit,
     $user_id: user_id,
   }) as unknown as PictureDbRow[];
-  db.exec('BEGIN');
-  for (const row of rows) {
-    mark_picture_seen_stmt.run({ $user_id: user_id, $picture_id: row.id });
+  if (user_id !== null) {
+    db.exec('BEGIN');
+    for (const row of rows) {
+      mark_picture_seen_stmt.run({ $user_id: user_id, $picture_id: row.id });
+    }
+    db.exec('COMMIT');
   }
-  db.exec('COMMIT');
   return rows.map(row_to_picture);
 };
 
 // Merges articles and pictures into one list at the requested ratio. Evenly
 // spaces pictures throughout the batch. Backfills with the other type when one
 // source runs dry.
-export const get_next_feed = (count: number, user_id: number): FeedItem[] => {
+export const get_next_feed = (count: number, user_id: number | null): FeedItem[] => {
   const pics_wanted = Math.round(count * PICTURE_RATIO);
   const arts_wanted = count - pics_wanted;
 
@@ -499,7 +503,7 @@ export const get_next_feed = (count: number, user_id: number): FeedItem[] => {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export const get_next_articles = (limit: number, user_id: number): Article[] =>
+export const get_next_articles = (limit: number, user_id: number | null): Article[] =>
   get_next_articles_internal(limit, user_id);
 
 export const set_like = (
@@ -516,7 +520,7 @@ export const set_like = (
   }
 };
 
-export const get_voted_articles = (vote: -1 | 1, user_id: number): Article[] => {
+export const get_voted_articles = (vote: -1 | 1, user_id: number | null): Article[] => {
   init_db();
   const rows = get_voted_articles_stmt.all({
     $like: vote,
@@ -525,7 +529,7 @@ export const get_voted_articles = (vote: -1 | 1, user_id: number): Article[] => 
   return rows.map(row_to_article);
 };
 
-export const get_voted_pictures = (vote: -1 | 1, user_id: number): Picture[] => {
+export const get_voted_pictures = (vote: -1 | 1, user_id: number | null): Picture[] => {
   init_db();
   const rows = get_voted_pictures_stmt.all({
     $like: vote,
@@ -539,7 +543,7 @@ export const set_dataset_enabled = (dataset: string, enabled: boolean, user_id: 
   set_dataset_enabled_stmt.run({ $user_id: user_id, $dataset: dataset, $enabled: enabled ? 1 : 0 });
 };
 
-export const get_datasets_enabled = (user_id: number): Record<string, boolean> => {
+export const get_datasets_enabled = (user_id: number | null): Record<string, boolean> => {
   init_db();
   const rows = get_datasets_enabled_stmt.all({ $user_id: user_id }) as unknown as {
     dataset: string;
@@ -548,7 +552,7 @@ export const get_datasets_enabled = (user_id: number): Record<string, boolean> =
   return Object.fromEntries(rows.map((r) => [r.dataset, r.enabled === 1]));
 };
 
-export const get_category_tree = (user_id: number): CategoryTree => {
+export const get_category_tree = (user_id: number | null): CategoryTree => {
   init_db();
   const top_level_rows = get_top_levels_stmt.all({
     $user_id: user_id,
@@ -572,7 +576,7 @@ export const get_category_tree = (user_id: number): CategoryTree => {
   }));
 };
 
-export const get_topic_tree = (user_id: number): TopicTree => {
+export const get_topic_tree = (user_id: number | null): TopicTree => {
   init_db();
   const article_dataset_rows = get_datasets_stmt.all({
     $user_id: user_id,

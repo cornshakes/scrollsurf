@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -11,6 +12,7 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
 import MenuIcon from '@mui/icons-material/Menu';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
@@ -72,6 +74,19 @@ const WikiArticles = () => {
               </ListItemButton>
             </ListItem>
           ))}
+          <Divider />
+          <ListItem disablePadding>
+            <ListItemButton
+              component={NextLink}
+              href="/privacy"
+              onClick={() => setDrawerOpen(false)}
+            >
+              <ListItemText
+                primary="Privacy"
+                slotProps={{ primary: { variant: 'body2', color: 'text.secondary' } }}
+              />
+            </ListItemButton>
+          </ListItem>
         </List>
       </Drawer>
 

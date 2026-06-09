@@ -2,6 +2,7 @@
 
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { ConsentProvider } from './CookieConsent';
 
 const theme = createTheme({
   cssVariables: { colorSchemeSelector: 'media' },
@@ -11,7 +12,7 @@ const theme = createTheme({
 const App = ({ children }: { children: React.ReactNode }) => (
   <ThemeProvider theme={theme}>
     <CssBaseline />
-    {children}
+    <ConsentProvider>{children}</ConsentProvider>
   </ThemeProvider>
 );
 

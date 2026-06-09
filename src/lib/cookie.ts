@@ -12,3 +12,15 @@ export const cookie_options = () => ({
   path: '/',
   maxAge: COOKIE_MAX_AGE, // no `secure` yet
 });
+
+// Consent cookie — records the user's choice. Not httpOnly so the client can
+// read it to decide whether to show the consent icon/prompt.
+export const CONSENT_COOKIE = 'ss_consent';
+export const CONSENT_MAX_AGE = 180 * 24 * 60 * 60; // 180 days
+
+export const consent_cookie_options = () => ({
+  httpOnly: false,
+  sameSite: 'lax' as const,
+  path: '/',
+  maxAge: CONSENT_MAX_AGE,
+});

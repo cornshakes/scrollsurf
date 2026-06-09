@@ -10,6 +10,7 @@ import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { set_article_like } from '@/app/actions';
 import type { Article } from '@/lib/db';
+import { useConsent } from './CookieConsent';
 
 export const ArticleCard = ({
   article,
@@ -19,8 +20,13 @@ export const ArticleCard = ({
   onVoteChange?: (type: 'article', id: number, value: -1 | 0 | 1) => void;
 }) => {
   const [like, setLike] = useState<-1 | 0 | 1>(article.like);
+  const { consent, openConsent } = useConsent();
 
   const vote = (value: -1 | 1) => {
+    if (consent !== 'granted') {
+      openConsent();
+      return;
+    }
     const next = like === value ? 0 : value;
     setLike(next);
     set_article_like('article', article.id, next);

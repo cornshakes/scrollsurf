@@ -1,5 +1,6 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import {
   get_next_feed,
   set_like,
@@ -9,6 +10,7 @@ import {
   get_category_tree,
   set_dataset_enabled,
   get_datasets_enabled,
+  get_or_create_user,
   type FeedItem,
   type Article,
   type Picture,
@@ -16,6 +18,7 @@ import {
   type CategoryTree,
 } from '@/lib/db';
 import { current_user_id } from '@/lib/user';
+import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
 
 export const get_next_wiki_articles = async (count: number): Promise<FeedItem[]> => {
   const uid = await current_user_id();
@@ -28,11 +31,17 @@ export const set_article_like = async (
   value: -1 | 0 | 1
 ) => {
   const uid = await current_user_id();
+  if (uid === null) {
+    return;
+  }
   set_like(type, id, value, uid);
 };
 
 export const get_voted_wiki_articles = async (vote: -1 | 1): Promise<FeedItem[]> => {
   const uid = await current_user_id();
+  if (uid === null) {
+    return [];
+  }
   const articles: Article[] = get_voted_articles(vote, uid);
   const pictures: Picture[] = get_voted_pictures(vote, uid);
   return [...articles, ...pictures].sort((a, b) => b.id - a.id);
@@ -45,6 +54,9 @@ export const get_wiki_topic_tree = async (): Promise<TopicTree> => {
 
 export const set_wiki_dataset_enabled = async (dataset: string, enabled: boolean) => {
   const uid = await current_user_id();
+  if (uid === null) {
+    return;
+  }
   set_dataset_enabled(dataset, enabled, uid);
 };
 
@@ -60,4 +72,18 @@ export const get_wiki_category_tree = async (): Promise<CategoryTree> => {
   }
   const uid = await current_user_id();
   return get_category_tree(uid);
+};
+
+export const grant_consent = async () => {
+  const store = await cookies();
+  store.set(CONSENT_COOKIE, 'granted', consent_cookie_options());
+  const token = crypto.randomUUID();
+  store.set(COOKIE_NAME, token, cookie_options());
+  get_or_create_user(token);
+};
+
+export const revoke_consent = async () => {
+  const store = await cookies();
+  store.set(CONSENT_COOKIE, 'denied', consent_cookie_options());
+  store.delete(COOKIE_NAME);
 };
