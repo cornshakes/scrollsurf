@@ -198,3 +198,8 @@ Now the page is up. I have a change that I want to deploy, if that works without
 
 These 2 features - user cookies and deploy cost me only 10% of my weekly budget. Almost half of it was spent on "last small problems" which is no surprise for deploy stuff.
 
+
+# 2 more parallel jobs
+- job 1, make cookies gdpr compliant: opus for planning, sonnet for impl, worked
+- job 2, ui overhaul from a list of details, sonnet throughout, first with a plan, then even more detailed with auto edit.
+It's amazing to be able to align text using words instead of violence.

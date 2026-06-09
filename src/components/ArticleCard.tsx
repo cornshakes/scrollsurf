@@ -33,9 +33,31 @@ export const ArticleCard = ({
     onVoteChange?.('article', article.id, next);
   };
 
+  const vote_buttons = (
+    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+      <IconButton onClick={() => vote(1)} color={like === 1 ? 'primary' : 'default'} size="small">
+        <ThumbUpIcon fontSize="small" />
+      </IconButton>
+      <IconButton onClick={() => vote(-1)} color={like === -1 ? 'error' : 'default'} size="small">
+        <ThumbDownIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  );
+
+  const has_tags = article.categories.length > 0 || article.topics.length > 0;
+
   return (
-    <Box sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', gap: 2, mb: article.extract ? 2 : 0 }}>
+    <Box
+      sx={{
+        maxWidth: 680,
+        mx: 'auto',
+        px: { xs: 2, sm: 4 },
+        py: 4,
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
+    >
+      <Box sx={{ display: 'flex', gap: 2, mb: article.extract ? 2 : 0, alignItems: 'flex-start' }}>
         {article.image_url && (
           <Box
             component="img"
@@ -44,41 +66,84 @@ export const ArticleCard = ({
           />
         )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h5" component="h2">
-            <Link href={article.url} target="_blank" rel="noopener noreferrer" underline="hover">
-              {article.title}
-            </Link>
-          </Typography>
-          {article.description && (
-            <Typography variant="body2" color="text.secondary">
-              {article.description}
-            </Typography>
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <IconButton
-            onClick={() => vote(1)}
-            color={like === 1 ? 'primary' : 'default'}
-            size="small"
-          >
-            <ThumbUpIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            onClick={() => vote(-1)}
-            color={like === -1 ? 'error' : 'default'}
-            size="small"
-          >
-            <ThumbDownIcon fontSize="small" />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h5" component="h2">
+                <Link
+                  href={article.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                >
+                  {article.title}
+                </Link>
+              </Typography>
+              {article.description && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {article.description}
+                </Typography>
+              )}
+            </Box>
+            {/* Vote buttons — desktop only (sm+) */}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5, flexShrink: 0 }}>
+              {vote_buttons}
+            </Box>
+          </Box>
+          {/* Vote buttons — mobile only (xs) */}
+          <Box sx={{ display: { xs: 'flex', sm: 'none' }, mt: 0.5 }}>{vote_buttons}</Box>
         </Box>
       </Box>
       {article.extract && (
-        <Typography variant="body1" sx={{ mb: article.categories.length ? 2 : 0 }}>
+        <Typography
+          variant="body1"
+          sx={{
+            mb: has_tags ? 2 : 0,
+            display: '-webkit-box',
+            WebkitLineClamp: 5,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
           {article.extract}
         </Typography>
       )}
-      {article.categories.length > 0 && (
+      {has_tags && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {article.topics.map(({ dataset, topic, dataset_url }) => {
+            const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
+            return (
+              <Box key={`${dataset}::${topic}`} sx={{ display: 'flex', gap: 0.5 }}>
+                <Chip
+                  label={dataset}
+                  size="small"
+                  color="default"
+                  component={dataset_url ? 'a' : 'div'}
+                  href={dataset_url ?? undefined}
+                  target={dataset_url ? '_blank' : undefined}
+                  rel={dataset_url ? 'noopener noreferrer' : undefined}
+                  clickable={!!dataset_url}
+                />
+                <Chip
+                  label={topic}
+                  size="small"
+                  component={topic_url ? 'a' : 'div'}
+                  href={topic_url ?? undefined}
+                  target={topic_url ? '_blank' : undefined}
+                  rel={topic_url ? 'noopener noreferrer' : undefined}
+                  clickable={!!topic_url}
+                />
+              </Box>
+            );
+          })}
           {article.categories.map((cat) => (
             <Chip
               key={cat}

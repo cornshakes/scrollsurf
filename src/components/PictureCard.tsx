@@ -50,14 +50,24 @@ export const PictureCard = ({
         />
       </Link>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {picture.caption && (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                fontStyle: 'italic',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
               {picture.caption}
             </Typography>
           )}
           {picture.credit && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" noWrap>
               by{' '}
               <Link
                 href={`https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`}

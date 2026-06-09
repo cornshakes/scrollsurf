@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
@@ -22,7 +22,7 @@ import { CategoryFeed } from './CategoryFeed';
 type View = 'random' | 'liked' | 'disliked' | 'datasets' | 'categories';
 
 const VIEW_LABELS: Record<View, string> = {
-  random: 'Random articles',
+  random: 'Scrollsurf',
   liked: 'Liked',
   disliked: 'Disliked',
   datasets: 'Datasets',
@@ -38,32 +38,65 @@ const VIEWS = (Object.keys(VIEW_LABELS) as View[]).filter(
   (v) => v !== 'categories' || CATEGORIES_ENABLED
 );
 
+const TOOLBAR_HEIGHT = 48;
+
 const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showBar, setShowBar] = useState(true);
+  const lastScrollY = useRef(0);
 
   const switchView = (v: View) => {
     setView(v);
     setDrawerOpen(false);
   };
 
+  const on_scroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    setShowBar(y <= 0 || y < lastScrollY.current);
+    lastScrollY.current = y;
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <AppBar position="static">
-        <Toolbar variant="dense">
-          <IconButton
-            edge="start"
-            color="inherit"
-            onClick={() => setDrawerOpen(true)}
-            sx={{ mr: 1 }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" component="div">
-            {VIEW_LABELS[view]}
-          </Typography>
-        </Toolbar>
-      </AppBar>
+      <Box
+        sx={{
+          overflow: 'hidden',
+          maxHeight: showBar ? TOOLBAR_HEIGHT : 0,
+          transition: 'max-height 0.2s ease',
+          flexShrink: 0,
+        }}
+      >
+        <AppBar position="static">
+          <Toolbar variant="dense">
+            <IconButton
+              edge="start"
+              color="inherit"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ mr: 1 }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+              <Typography variant="h6" component="div">
+                {VIEW_LABELS[view]}
+              </Typography>
+              {view === 'random' && (
+                <Typography variant="body2" sx={{ opacity: 0.55 }}>
+                  Discover Wikipedia articles, pictures, topics and categories from curated
+                  datasets.
+                </Typography>
+              )}
+              {view === 'datasets' && (
+                <Typography variant="body2" sx={{ opacity: 0.55 }}>
+                  Choose which datasets to include in your feed. Uncheck a dataset to stop seeing
+                  content from it.
+                </Typography>
+              )}
+            </Box>
+          </Toolbar>
+        </AppBar>
+      </Box>
 
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <List sx={{ width: 220 }}>
@@ -90,7 +123,7 @@ const WikiArticles = () => {
         </List>
       </Drawer>
 
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
+      <Box sx={{ flex: 1, overflow: 'auto' }} onScroll={on_scroll}>
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
