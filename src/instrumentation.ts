@@ -3,6 +3,9 @@ export const register = async () => {
     return;
   }
 
+  const { init_db } = await import('./lib/db');
+  init_db();
+
   const { import_articles_dataset, import_pictures_dataset, import_categories } =
     await import('./lib/import-datasets');
 

@@ -1,0 +1,74 @@
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+
+const [, , command, target] = process.argv;
+
+if (!command || !target || (target !== 'test' && target !== 'prod')) {
+  console.error('Usage: deploy.ts <up|down|logs|funnel> <test|prod>');
+  process.exit(1);
+}
+
+const env_file = `.env.${target}`;
+if (!existsSync(path.resolve(env_file))) {
+  console.error(`${env_file} not found — copy .env.example to ${env_file} and fill it in.`);
+  process.exit(1);
+}
+process.loadEnvFile(path.resolve(env_file));
+
+const pi_ssh = process.env.PI_SSH;
+const data_dir_host = process.env.DATA_DIR_HOST;
+
+if (!pi_ssh) {
+  throw new Error(`PI_SSH must be set in ${env_file}`);
+}
+if (command === 'up') {
+  if (!data_dir_host) {
+    throw new Error(`DATA_DIR_HOST must be set in ${env_file}`);
+  }
+  if (target === 'prod' && !process.env.TS_AUTHKEY) {
+    throw new Error(`TS_AUTHKEY must be set in ${env_file} for prod deploys`);
+  }
+}
+
+const compose_file = `docker-compose.${target}.yml`;
+const project = `scrollsurf-${target}`;
+const dc = `docker --context pi compose -p ${project} --env-file ${env_file} -f ${compose_file}`;
+
+const run = (cmd: string) => execSync(cmd, { stdio: 'inherit' });
+
+if (command === 'up') {
+  const datasets_dir = path.resolve('datasets');
+  const has_datasets =
+    existsSync(datasets_dir) && readdirSync(datasets_dir).some((f) => f.endsWith('.db'));
+  if (has_datasets) {
+    run(`rsync -av --delete ${datasets_dir}/ ${pi_ssh}:${data_dir_host}/datasets/`);
+  } else {
+    console.warn(
+      `No *.db files in ${datasets_dir} — skipping dataset sync. ` +
+        'Run the download-* scripts first if the app should have content.'
+    );
+  }
+  run(`${dc} up -d --build`);
+  if (target === 'prod') {
+    console.warn('\nChecking Tailscale Funnel status...');
+    try {
+      run(`${dc} exec ts-scrollsurf tailscale funnel status`);
+    } catch {
+      console.warn('(funnel status unavailable — container may still be starting)');
+    }
+  }
+} else if (command === 'logs') {
+  run(`${dc} logs -f`);
+} else if (command === 'down') {
+  run(`${dc} down`);
+} else if (command === 'funnel') {
+  if (target !== 'prod') {
+    console.error('funnel command is only available for the prod target');
+    process.exit(1);
+  }
+  run(`${dc} exec ts-scrollsurf tailscale funnel status`);
+} else {
+  console.error(`Unknown command: ${command}`);
+  process.exit(1);
+}

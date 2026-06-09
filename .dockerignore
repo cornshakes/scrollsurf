@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+datasets
+*.db
+*.db-*
+.env*
+DIARY.md

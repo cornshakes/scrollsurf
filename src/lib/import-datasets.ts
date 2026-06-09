@@ -1,8 +1,6 @@
-import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { db } from './db';
-
-const dataset_path = (filename: string) => path.join(process.cwd(), 'datasets', filename);
+import { dataset_path } from './paths';
 
 // Imports one reference DB (built by a download-* script) into scrollsurf.db via
 // ATTACH + bulk INSERT OR IGNORE. The grouping label (e.g. 'Vital'), stored on

@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${TEST_PORT:-3001}:3000"
+    volumes:
+      - ${DATA_DIR_HOST}:/data
+    restart: unless-stopped
