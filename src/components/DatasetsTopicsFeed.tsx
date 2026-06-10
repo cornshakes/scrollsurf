@@ -128,7 +128,7 @@ export const TopicsFeed = () => {
                   checked={enabled[d.dataset] ?? true}
                   onChange={() => toggle_dataset_enabled(d.dataset)}
                   size="small"
-                  aria-label={`Include ${d.dataset} in random articles`}
+                  slotProps={{ input: { 'aria-label': `Include ${d.dataset} in random articles` } }}
                   sx={{ p: 0.5 }}
                 />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, minWidth: 'fit-content' }}>

@@ -72,12 +72,14 @@ const WikiArticles = () => {
             <IconButton
               edge="start"
               color="inherit"
+              aria-label="Open menu"
+              data-testid="menu-button"
               onClick={() => setDrawerOpen(true)}
               sx={{ mr: 1 }}
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" component="div">
+            <Typography variant="h6" component="div" data-testid="view-title">
               {VIEW_LABELS[view]}
             </Typography>
           </Toolbar>
@@ -88,7 +90,11 @@ const WikiArticles = () => {
         <List sx={{ width: 220 }}>
           {VIEWS.map((v) => (
             <ListItem key={v} disablePadding>
-              <ListItemButton selected={view === v} onClick={() => switchView(v)}>
+              <ListItemButton
+                selected={view === v}
+                data-testid={`view-${v}`}
+                onClick={() => switchView(v)}
+              >
                 <ListItemText primary={VIEW_LABELS[v]} />
               </ListItemButton>
             </ListItem>
@@ -109,7 +115,7 @@ const WikiArticles = () => {
         </List>
       </Drawer>
 
-      <Box sx={{ flex: 1, overflow: 'auto' }} onScroll={on_scroll}>
+      <Box sx={{ flex: 1, overflow: 'auto' }} data-testid="feed-scroll" onScroll={on_scroll}>
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}

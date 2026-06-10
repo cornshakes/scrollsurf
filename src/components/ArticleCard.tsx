@@ -35,10 +35,24 @@ export const ArticleCard = ({
 
   const vote_buttons = (
     <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-      <IconButton onClick={() => vote(1)} color={like === 1 ? 'primary' : 'default'} size="small">
+      <IconButton
+        onClick={() => vote(1)}
+        color={like === 1 ? 'primary' : 'default'}
+        size="small"
+        aria-label="Like"
+        aria-pressed={like === 1}
+        data-testid="vote-up"
+      >
         <ThumbUpIcon fontSize="small" />
       </IconButton>
-      <IconButton onClick={() => vote(-1)} color={like === -1 ? 'error' : 'default'} size="small">
+      <IconButton
+        onClick={() => vote(-1)}
+        color={like === -1 ? 'error' : 'default'}
+        size="small"
+        aria-label="Dislike"
+        aria-pressed={like === -1}
+        data-testid="vote-down"
+      >
         <ThumbDownIcon fontSize="small" />
       </IconButton>
     </Box>
@@ -48,6 +62,8 @@ export const ArticleCard = ({
 
   return (
     <Box
+      data-testid="feed-card"
+      data-card-type="article"
       sx={{
         maxWidth: 680,
         mx: 'auto',

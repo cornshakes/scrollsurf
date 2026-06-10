@@ -33,7 +33,11 @@ export const PictureCard = ({
   };
 
   return (
-    <Box sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}>
+    <Box
+      data-testid="feed-card"
+      data-card-type="picture"
+      sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
+    >
       <Link href={picture.url} target="_blank" rel="noopener noreferrer">
         <Box
           component="img"
@@ -86,6 +90,9 @@ export const PictureCard = ({
             onClick={() => vote(1)}
             color={like === 1 ? 'primary' : 'default'}
             size="small"
+            aria-label="Like"
+            aria-pressed={like === 1}
+            data-testid="vote-up"
           >
             <ThumbUpIcon fontSize="small" />
           </IconButton>
@@ -93,6 +100,9 @@ export const PictureCard = ({
             onClick={() => vote(-1)}
             color={like === -1 ? 'error' : 'default'}
             size="small"
+            aria-label="Dislike"
+            aria-pressed={like === -1}
+            data-testid="vote-down"
           >
             <ThumbDownIcon fontSize="small" />
           </IconButton>

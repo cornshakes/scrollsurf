@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "playwright install chromium",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -17,6 +18,8 @@
     "pi:down:prod": "tsx scripts/deploy.ts down prod",
     "lint": "eslint",
     "lint-fix": "eslint --fix",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "download-vital-50000": "tsx scripts/datasets/download-vital-50000.ts",
     "download-unusual": "tsx scripts/datasets/download-unusual.ts",
     "download-good-articles": "tsx scripts/datasets/download-good-articles.ts",
@@ -36,6 +39,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.19.19",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -203,3 +203,12 @@ These 2 features - user cookies and deploy cost me only 10% of my weekly budget.
 - job 1, make cookies gdpr compliant: opus for planning, sonnet for impl, worked
 - job 2, ui overhaul from a list of details, sonnet throughout, first with a plan, then even more detailed with auto edit.
 It's amazing to be able to align text using words instead of violence.
+
+# Playwright / testing
+
+I wanted to add integration testing but also a way for claude to "see what I see" when doing ui development.
+It seems like everybody got a free reset on their weekly budget because they introduced a new model, so I'm just letting opus do the implementation too. As always, the plan was good and I didn't have much to add.
+After adding test suites and some fixes, it ran them 3 times to find flaky tests. It did, did some fixes, then ran all tests again 8 times, then 8 times in parallel, finding way more flakery. So it ran them again, traced them etc. Then it figured that these tests should run in series anyways because of sqlite sync writing, i.e. it started making excuses. I asked why that would be a problem / do all the tests share the same user, and it saw my point and started working again.
+After lots of drama, it turned out the test timeouts were set too short. Opus junior over here.
+
+

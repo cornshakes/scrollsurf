@@ -60,7 +60,11 @@ export const RandomFeed = () => {
           <ArticleCard key={`article-${item.id}`} article={item} />
         )
       )}
-      <Box ref={sentinelRef} sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+      <Box
+        ref={sentinelRef}
+        data-testid="feed-sentinel"
+        sx={{ display: 'flex', justifyContent: 'center', py: 4 }}
+      >
         {isPending && <CircularProgress />}
       </Box>
     </Box>

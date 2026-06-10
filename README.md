@@ -52,9 +52,19 @@ and go to [http://localhost:3000](http://localhost:3000)
 
 Check out the [Diary](./DIARY.md)!
 
-Next, I want to think about a way to make article selection less random by using your liked/disliked articles in some way.
+## Integration Testing
 
-## Future inspiration for more datasets / categorization
+Tests run against a small seeded database (`e2e/.data/`) — never the real `scrollsurf.db`. You need the reference datasets downloaded locally before using these. `npm install` downloads the Playwright browser binary to the global cache (`~/.cache/ms-playwright/`) via `postinstall`.
+
+```bash
+npm run test:e2e      # run all integration tests (seeds DB automatically)
+npm run test:e2e:ui   # same, but with Playwright's interactive UI
+```
+
+
+## Future inspiration 
+
+Next, I want to think about a way to make article selection less random by using your liked/disliked articles in some way.
 
 These [Main topic classifications](https://en.wikipedia.org/wiki/Category:Main_topic_classifications) are not what I have
 
