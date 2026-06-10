@@ -91,7 +91,7 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Box sx={{ p: 2, maxWidth: 300 }}>
+        <Box data-testid="consent-popover" sx={{ p: 2, maxWidth: 300 }}>
           <Typography variant="body2" sx={{ mb: 1.5 }}>
             One optional cookie remembers your likes &amp; dataset choices — nothing else, no third
             parties.{' '}

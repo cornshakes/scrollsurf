@@ -208,7 +208,13 @@ It's amazing to be able to align text using words instead of violence.
 
 I wanted to add integration testing but also a way for claude to "see what I see" when doing ui development.
 It seems like everybody got a free reset on their weekly budget because they introduced a new model, so I'm just letting opus do the implementation too. As always, the plan was good and I didn't have much to add.
-After adding test suites and some fixes, it ran them 3 times to find flaky tests. It did, did some fixes, then ran all tests again 8 times, then 8 times in parallel, finding way more flakery. So it ran them again, traced them etc. Then it figured that these tests should run in series anyways because of sqlite sync writing, i.e. it started making excuses. I asked why that would be a problem / do all the tests share the same user, and it saw my point and started working again.
-After lots of drama, it turned out the test timeouts were set too short. Opus junior over here.
+After adding test suites and some fixes, it ran them 3 times to find flaky tests. It did, did some fixes, then ran all tests again 8 times, then 8 times in parallel, finding way more flakery. So it ran them again, traced them etc. Then it figured that these tests should run in series anyways because of sqlite sync writing, i.e. it started making excuses. I asked why that would be a problem / do all the tests share the same user, and it saw my point and started working again. After lots of drama, it turned out the test timeouts were set too short :)
 
+What I can really say about using opus only is that it is very slow. I think it's not just about the model itself, but also the size of the context ie the fuller it gets, the longer things take. So choosing the right model is not just about money/tokens, but about managing implementation time. opus for planning is great. sonnet for implementation is great too, sometimes even haiku. For the review, I should treat it like a PR instead of going auto-edit bit by bit. Instead, use opus(?) to build up the review and make a change plan, then use sonnet(s) to implement again. Just a thought - could it be useful to have an intermediary - like, opus makes the plan, then sonnet breaks it down. The goal is to get as many small / haiku-solvable tasks as possible, leaving only the harder tasks for sonnet. the reviews could then also happen on a per-task basis, making it much easier to do by sonnet. All of this could be made perfectly auditable using github issues/branches/prs.
+I really want to find out if/how to assign tasks to claude and have them done without my intervention.
+
+## However,
+
+Getting these snapshots to run was almost like regular old test/coding. Claude couldn't get it right.
+It's the old the-screenshot-is-always-a-few-pixels-off, for more than a day. I did some stuff manually because I didn't want to wait for claude's thinking anymore. I think context size was a big problem. The most effective setting was sonnet with max effort. There are just a lot of wrong paths to go down here, and opus spent too much time on each one.
 

@@ -31,6 +31,54 @@ export const cards = (page: Page): Locator => page.getByTestId('feed-card');
 export const article_cards = (page: Page): Locator =>
   page.locator('[data-testid="feed-card"][data-card-type="article"]');
 
+export const picture_cards = (page: Page): Locator =>
+  page.locator('[data-testid="feed-card"][data-card-type="picture"]');
+
+/**
+ * Intercept external image requests with a consistent 400×300 gray SVG so that
+ * card snapshots are stable across runs regardless of CDN state or image loading.
+ * Call before any navigation.
+ */
+export const mock_images = async (page: Page): Promise<void> => {
+  // 2:1 ratio so 326px container (390 − 2×32px padding) gives height 163px — a
+  // whole number. 4:3 (400×300) gives 244.5px which flips between 244/245px
+  // non-deterministically, causing snapshot height mismatches.
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200">' +
+      '<rect width="400" height="200" fill="#c0c0c0"/>' +
+      '</svg>'
+  );
+  await page.route('**/*.{jpg,jpeg,png,gif,webp}', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg })
+  );
+};
+
+/** Scroll the feed until no new cards appear, loading all available items. */
+export const scroll_to_load_all = async (page: Page): Promise<void> => {
+  for (let i = 0; i < 5; i++) {
+    const before = await page.getByTestId('feed-card').count();
+    if (before === 12) {
+      // 12 = full article count defined in fixtures
+      return;
+    }
+    await scroll_feed_to_bottom(page);
+    await page.waitForFunction(
+      (n: number) => document.querySelectorAll('[data-testid="feed-card"]').length > n,
+      before,
+      { timeout: 10000 }
+    );
+  }
+};
+
+/** Load all feed items, then return the first feed card whose heading matches `text`. */
+export const find_card_by_heading = async (page: Page, text: string | RegExp): Promise<Locator> => {
+  await scroll_to_load_all(page);
+  return page
+    .getByTestId('feed-card')
+    .filter({ has: page.getByRole('heading', { name: text }) })
+    .first();
+};
+
 /** Navigate to the home feed and wait for the first card to render. */
 export const goto_feed = async (page: Page): Promise<void> => {
   await page.goto('/');
@@ -47,6 +95,26 @@ export const scroll_feed_to_bottom = async (page: Page): Promise<void> => {
   await page.getByTestId('feed-scroll').evaluate((el) => {
     el.scrollTo(0, el.scrollHeight);
   });
+};
+
+/**
+ * Scroll the feed container so the given card is flush with the container's
+ * top edge. This ensures a deterministic, whole-pixel viewport Y position
+ * before a toHaveScreenshot call — macOS sub-pixel font antialiasing is
+ * position-dependent, so fractional Y from the "scroll minimally" default
+ * causes pixel diffs even when card content is identical.
+ */
+export const scroll_card_to_top = async (page: Page, card: Locator): Promise<void> => {
+  await page.evaluate(
+    ([container, el]) => {
+      const offset =
+        (el as HTMLElement).getBoundingClientRect().top -
+        (container as HTMLElement).getBoundingClientRect().top +
+        (container as HTMLElement).scrollTop;
+      (container as HTMLElement).scrollTop = offset;
+    },
+    await Promise.all([page.getByTestId('feed-scroll').elementHandle(), card.elementHandle()])
+  );
 };
 
 export const open_menu = async (page: Page): Promise<void> => {

@@ -6,15 +6,24 @@ export default defineConfig({
   testDir: 'e2e/tests',
   globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
-  workers: 8,
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    toHaveScreenshot: {
+      // Sub-pixel font AA on macOS/Chromium renders glyph edges non-deterministically
+      // across browser sessions (~1% of pixels differ by >20% YIQ). This tolerance
+      // covers that noise while still catching any real layout/color regression.
+      maxDiffPixelRatio: 0.02,
+    },
+  },
   use: {
     baseURL: 'http://localhost:3100',
     trace: 'on-first-retry',
     actionTimeout: 3_000,
+    colorScheme: 'light',
   },
   projects: [
     {
@@ -23,9 +32,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'SCROLLSURF_DATA_DIR=e2e/.data FEED_PICTURE_RATIO=0.2 next dev -p 3100',
+    command: 'SCROLLSURF_DATA_DIR=e2e/.data next dev -p 3100',
     url: 'http://localhost:3100',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

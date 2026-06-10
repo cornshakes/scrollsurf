@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { db_path } from './paths';
 import { INACTIVITY_DAYS } from './cookie';
@@ -84,8 +86,13 @@ export const init_db = () => {
     return;
   }
 
+  // SQLite creates the DB file but not its parent dir — ensure it exists so the
+  // server and the test seeder are each self-sufficient (no startup ordering race).
+  mkdirSync(path.dirname(db_path()), { recursive: true });
   db = new DatabaseSync(db_path());
 
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(`
