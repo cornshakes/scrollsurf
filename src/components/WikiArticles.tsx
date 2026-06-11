@@ -115,7 +115,11 @@ const WikiArticles = () => {
         </List>
       </Drawer>
 
-      <Box sx={{ flex: 1, overflow: 'auto' }} data-testid="feed-scroll" onScroll={on_scroll}>
+      <Box
+        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
+        data-testid="feed-scroll"
+        onScroll={on_scroll}
+      >
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
