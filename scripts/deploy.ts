@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
+import { arch } from 'node:os';
 import path from 'node:path';
 
 const [, , command, target] = process.argv;
@@ -38,6 +39,9 @@ const dc = `docker --context pi compose -p ${project} --env-file ${env_file} -f 
 const run = (cmd: string) => execSync(cmd, { stdio: 'inherit' });
 
 if (command === 'up') {
+  if (arch() !== 'arm64') {
+    throw new Error(`Local build requires an ARM64 machine (current: ${arch()}).`);
+  }
   const datasets_dir = path.resolve('datasets');
   const has_datasets =
     existsSync(datasets_dir) && readdirSync(datasets_dir).some((f) => f.endsWith('.db'));
@@ -59,7 +63,11 @@ if (command === 'up') {
     }
     run(`rsync -av ${serve_config} ${pi_ssh}:${data_dir_host}/serve.json`);
   }
-  run(`${dc} up -d --build`);
+  const image = `scrollsurf:latest`;
+  const commit_id = execSync('git rev-parse --short HEAD').toString().trim();
+  run(`docker build --platform linux/arm64 --build-arg COMMIT_ID=${commit_id} -t ${image} .`);
+  run(`docker save ${image} | gzip | ssh ${pi_ssh} docker load`);
+  run(`${dc} up -d`);
   if (target === 'prod') {
     console.warn('\nChecking Tailscale Funnel status...');
     try {
