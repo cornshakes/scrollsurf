@@ -1,6 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 scrollsurf.db
+scrollsurf.db-shm
+scrollsurf.db-wal
 /datasets/*.db
 /datasets/*.db-journal
 
