@@ -36,6 +36,21 @@ export default function RootLayout({
         <AppRouterCacheProvider>
           <App>{children}</App>
         </AppRouterCacheProvider>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 8,
+            left: 12,
+            fontSize: 11,
+            opacity: 0.15,
+            pointerEvents: 'none',
+            fontFamily: 'monospace',
+            userSelect: 'none',
+            zIndex: 9999,
+          }}
+        >
+          {process.env.NEXT_PUBLIC_COMMIT_ID}
+        </div>
       </body>
     </html>
   );
