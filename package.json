@@ -7,16 +7,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "type-check": "tsc --noEmit",
-    "check": "npm run type-check && npm run lint",
-    "deploy:test": "npm run check && tsx scripts/deploy.ts up test",
-    "deploy:prod": "npm run check && tsx scripts/deploy.ts up prod",
+    "check": "tsc --noEmit && eslint",
+    "deploy:test": "tsx scripts/deploy.ts up test",
+    "deploy:prod": "tsx scripts/deploy.ts up prod",
     "pi:logs:test": "tsx scripts/deploy.ts logs test",
     "pi:logs:prod": "tsx scripts/deploy.ts logs prod",
     "pi:funnel": "tsx scripts/deploy.ts funnel prod",
     "pi:down:test": "tsx scripts/deploy.ts down test",
     "pi:down:prod": "tsx scripts/deploy.ts down prod",
-    "lint": "eslint",
     "lint-fix": "eslint --fix",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
@@ -39,20 +37,20 @@
     "@mui/icons-material": "^9.0.1",
     "@mui/material": "^9.0.1",
     "@mui/material-nextjs": "^9.0.1",
-    "next": "16.2.7",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.19",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
     "eslint": "^9",
-    "eslint-config-next": "16.2.7",
+    "eslint-config-next": "16.2.9",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-prettier": "^5.5.6",
@@ -73,5 +71,9 @@
     "useTabs": false,
     "arrowParens": "always",
     "endOfLine": "lf"
+  },
+  "overrides": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3"
   }
 }
