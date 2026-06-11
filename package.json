@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "postinstall": "playwright install chromium",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -16,6 +15,7 @@
     "pi:down:test": "tsx scripts/deploy.ts down test",
     "pi:down:prod": "tsx scripts/deploy.ts down prod",
     "lint-fix": "eslint --fix",
+    "test:e2e:setup": "playwright install chromium",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:ui": "playwright test --ui",
