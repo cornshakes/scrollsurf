@@ -218,3 +218,14 @@ I really want to find out if/how to assign tasks to claude and have them done wi
 Getting these snapshots to run was almost like regular old test/coding. Claude couldn't get it right.
 It's the old the-screenshot-is-always-a-few-pixels-off, for more than a day. I did some stuff manually because I didn't want to wait for claude's thinking anymore. I think context size was a big problem. The most effective setting was sonnet with max effort. There are just a lot of wrong paths to go down here, and opus spent too much time on each one.
 
+## Workflow
+
+So, github integration etc requires usage based billing / api which is not available in the pro account.
+What I did for this refactoring:
+- opus high to plan and write a file
+- sonnet high to create 2 files: haiku-tasks.md and other-tasks.md
+- haiku for haiku-tasks, sonnet medium for other-tasks
+- the same sonnet instance that had done the tasks now for review (maybe not a good idea, context got pretty full)
+- rinse and repeat
+
+It worked alright.

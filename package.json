@@ -21,6 +21,10 @@
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:ui": "playwright test --ui",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "coverage:open": "open coverage/lcov-report/index.html",
     "download-vital-50000": "tsx scripts/datasets/download-vital-50000.ts",
     "download-unusual": "tsx scripts/datasets/download-unusual.ts",
     "download-good-articles": "tsx scripts/datasets/download-good-articles.ts",
@@ -41,6 +45,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.19.19",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -53,7 +58,9 @@
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "jest": "^30.4.2",
     "prettier": "^3.8.3",
+    "ts-node": "^10.9.2",
     "tsx": "^4.22.4",
     "typescript": "^5"
   },
