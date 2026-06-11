@@ -58,6 +58,10 @@ export interface CategoryGroup {
 export type TopicTree = DatasetGroup[];
 export type CategoryTree = CategoryGroup[];
 
+// Followed-link kinds we log for engagement. The image link on a picture card
+// is recorded as 'title' (it is that card's primary link to the source page).
+export type LinkType = 'title' | 'by' | 'category' | 'topic' | 'dataset';
+
 // ── Database ────────────────────────────────────────────────────────────────
 
 export let db: DatabaseSync;
@@ -80,6 +84,7 @@ let set_dataset_enabled_stmt: StatementSync;
 let get_datasets_enabled_stmt: StatementSync;
 let insert_user_stmt: StatementSync;
 let touch_user_stmt: StatementSync;
+let record_click_stmt: StatementSync;
 
 export const init_db = () => {
   if (db) {
@@ -179,6 +184,20 @@ export const init_db = () => {
       enabled INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (user_id, dataset)
     ) STRICT;
+
+    -- Append-only engagement log of followed links (title, by, category, topic,
+    -- dataset) — richer signal than the like/dislike vote alone.
+    CREATE TABLE IF NOT EXISTS user_clicks (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      item_type  TEXT    NOT NULL,
+      item_id    INTEGER NOT NULL,
+      link_type  TEXT    NOT NULL,
+      link_label TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_user_clicks_user ON user_clicks(user_id);
   `);
 
   try {
@@ -192,6 +211,11 @@ export const init_db = () => {
   );
 
   touch_user_stmt = db.prepare('UPDATE users SET last_active_at = ? WHERE id = ?');
+
+  record_click_stmt = db.prepare(
+    `INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at)
+     VALUES ($user_id, $item_type, $item_id, $link_type, $link_label, $created_at)`
+  );
 
   // ── Article queries ──────────────────────────────────────────────────────
 
@@ -547,6 +571,24 @@ export const set_like = (
   } else {
     set_picture_like_stmt.run({ $user_id: user_id, $picture_id: id, $like: value });
   }
+};
+
+export const record_click = (
+  item_type: 'article' | 'picture',
+  item_id: number,
+  link_type: LinkType,
+  link_label: string | null,
+  user_id: number
+) => {
+  init_db();
+  record_click_stmt.run({
+    $user_id: user_id,
+    $item_type: item_type,
+    $item_id: item_id,
+    $link_type: link_type,
+    $link_label: link_label,
+    $created_at: Math.floor(Date.now() / 1000),
+  });
 };
 
 export const get_voted_articles = (vote: -1 | 1, user_id: number | null): Article[] => {

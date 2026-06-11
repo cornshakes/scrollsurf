@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import {
   get_next_feed,
   set_like,
+  record_click,
   get_voted_articles,
   get_voted_pictures,
   get_topic_tree,
@@ -16,6 +17,7 @@ import {
   type Picture,
   type TopicTree,
   type CategoryTree,
+  type LinkType,
 } from '@/lib/db';
 import { current_user_id } from '@/lib/user';
 import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
@@ -35,6 +37,19 @@ export const set_article_like = async (
     return;
   }
   set_like(type, id, value, uid);
+};
+
+export const record_link_click = async (
+  type: 'article' | 'picture',
+  id: number,
+  link_type: LinkType,
+  link_label?: string
+) => {
+  const uid = await current_user_id();
+  if (uid === null) {
+    return;
+  }
+  record_click(type, id, link_type, link_label ?? null, uid);
 };
 
 export const get_voted_wiki_articles = async (vote: -1 | 1): Promise<FeedItem[]> => {

@@ -5,6 +5,8 @@
 // first.
 
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 export type View = 'random' | 'liked' | 'disliked' | 'datasets' | 'categories';
@@ -155,4 +157,48 @@ export const vote_card = async (card: Locator, direction: 'up' | 'down'): Promis
 /** The title link text of an article card. */
 export const article_title = async (card: Locator): Promise<string> => {
   return (await card.getByRole('heading').innerText()).trim();
+};
+
+export interface ClickRow {
+  item_type: 'article' | 'picture';
+  item_id: number;
+  link_type: 'title' | 'by' | 'category' | 'topic' | 'dataset';
+  link_label: string | null;
+}
+
+/**
+ * Read the engagement `user_clicks` rows logged for the given session token,
+ * straight from the seeded test DB. Opens a short-lived read-only connection —
+ * WAL mode lets it see the dev server's committed writes from this process.
+ */
+export const read_clicks = (token: string): ClickRow[] => {
+  const db = new DatabaseSync(path.join('e2e', '.data', 'scrollsurf.db'), { readOnly: true });
+  try {
+    return db
+      .prepare(
+        `SELECT c.item_type, c.item_id, c.link_type, c.link_label
+         FROM user_clicks c
+         JOIN users u ON u.id = c.user_id
+         WHERE u.cookie_token = ?
+         ORDER BY c.id`
+      )
+      .all(token) as unknown as ClickRow[];
+  } finally {
+    db.close();
+  }
+};
+
+/**
+ * Block real navigation to Wikipedia/Commons (target="_blank" link follows open
+ * a popup) so link-click tests stay offline and fast; auto-close any popup.
+ */
+export const stub_external_navigation = async (page: Page): Promise<void> => {
+  await page
+    .context()
+    .route(/wikipedia\.org|wikimedia\.org/, (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '' })
+    );
+  page.on('popup', (popup) => {
+    popup.close().catch(() => {});
+  });
 };

@@ -8,8 +8,8 @@ import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import { set_article_like } from '@/app/actions';
-import type { Article } from '@/lib/db';
+import { set_article_like, record_link_click } from '@/app/actions';
+import type { Article, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 
 export const ArticleCard = ({
@@ -31,6 +31,15 @@ export const ArticleCard = ({
     setLike(next);
     set_article_like('article', article.id, next);
     onVoteChange?.('article', article.id, next);
+  };
+
+  // Only log followed links once consent is granted — skip the request entirely
+  // otherwise (the server would no-op anyway).
+  const track = (link_type: LinkType, link_label: string) => {
+    if (consent !== 'granted') {
+      return;
+    }
+    record_link_click('article', article.id, link_type, link_label);
   };
 
   const vote_buttons = (
@@ -90,6 +99,8 @@ export const ArticleCard = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   underline="hover"
+                  data-testid="link-title"
+                  onClick={() => track('title', article.title)}
                 >
                   {article.title}
                 </Link>
@@ -147,6 +158,8 @@ export const ArticleCard = ({
                   target={dataset_url ? '_blank' : undefined}
                   rel={dataset_url ? 'noopener noreferrer' : undefined}
                   clickable={!!dataset_url}
+                  data-testid={dataset_url ? 'link-dataset' : undefined}
+                  onClick={dataset_url ? () => track('dataset', dataset) : undefined}
                 />
                 <Chip
                   label={topic}
@@ -156,6 +169,8 @@ export const ArticleCard = ({
                   target={topic_url ? '_blank' : undefined}
                   rel={topic_url ? 'noopener noreferrer' : undefined}
                   clickable={!!topic_url}
+                  data-testid={topic_url ? 'link-topic' : undefined}
+                  onClick={topic_url ? () => track('topic', topic) : undefined}
                 />
               </Box>
             );
@@ -171,6 +186,8 @@ export const ArticleCard = ({
               target="_blank"
               rel="noopener noreferrer"
               clickable
+              data-testid="link-category"
+              onClick={() => track('category', cat)}
             />
           ))}
         </Box>

@@ -7,8 +7,8 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import { set_article_like } from '@/app/actions';
-import type { Picture } from '@/lib/db';
+import { set_article_like, record_link_click } from '@/app/actions';
+import type { Picture, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 
 export const PictureCard = ({
@@ -32,13 +32,28 @@ export const PictureCard = ({
     onVoteChange?.('picture', picture.id, next);
   };
 
+  // Only log followed links once consent is granted — skip the request entirely
+  // otherwise (the server would no-op anyway).
+  const track = (link_type: LinkType, link_label: string) => {
+    if (consent !== 'granted') {
+      return;
+    }
+    record_link_click('picture', picture.id, link_type, link_label);
+  };
+
   return (
     <Box
       data-testid="feed-card"
       data-card-type="picture"
       sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
     >
-      <Link href={picture.url} target="_blank" rel="noopener noreferrer">
+      <Link
+        href={picture.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="link-title"
+        onClick={() => track('title', picture.title)}
+      >
         <Box
           component="img"
           src={picture.image_url}
@@ -79,6 +94,8 @@ export const PictureCard = ({
                 rel="noopener noreferrer"
                 underline="hover"
                 color="inherit"
+                data-testid="link-by"
+                onClick={() => track('by', picture.credit ?? '')}
               >
                 {picture.credit}
               </Link>
