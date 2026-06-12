@@ -1,8 +1,8 @@
-node_modules
-.next
-.git
-datasets
-*.db
-*.db-*
-.env*
-DIARY.md
+*
+!package.json
+!package-lock.json
+!src/
+!public/
+!next.config.ts
+!tsconfig.json
+!next-env.d.ts

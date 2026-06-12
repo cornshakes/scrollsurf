@@ -63,7 +63,7 @@ if (command === 'up') {
     }
     run(`rsync -av ${serve_config} ${pi_ssh}:${data_dir_host}/serve.json`);
   }
-  const image = `scrollsurf:latest`;
+  const image = `scrollsurf-${target}`;
   const commit_id = execSync('git rev-parse --short HEAD').toString().trim();
   run(`docker build --platform linux/arm64 --build-arg COMMIT_ID=${commit_id} -t ${image} .`);
   run(`docker save ${image} | gzip | ssh ${pi_ssh} docker load`);

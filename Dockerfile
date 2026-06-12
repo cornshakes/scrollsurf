@@ -8,11 +8,14 @@ RUN npm ci
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_OPTIONS=--max-old-space-size=2048
+NODE_OPTIONS=--max-old-space-size=2048
 ARG COMMIT_ID
 ENV COMMIT_ID=$COMMIT_ID
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/package.json /app/package-lock.json ./
+COPY src/ ./src/
+COPY public/ ./public/
+COPY next.config.ts tsconfig.json next-env.d.ts ./
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime

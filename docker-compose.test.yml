@@ -1,6 +1,6 @@
 services:
   app:
-    image: scrollsurf:latest
+    image: scrollsurf-test
     ports:
       - "${TEST_PORT:-3001}:3000"
     volumes:

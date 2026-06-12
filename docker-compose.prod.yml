@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: scrollsurf:latest
+    image: scrollsurf-prod
     network_mode: service:ts-scrollsurf
     volumes:
       - ${DATA_DIR_HOST}:/data
