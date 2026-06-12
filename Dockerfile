@@ -14,7 +14,6 @@ ENV COMMIT_ID=$COMMIT_ID
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json /app/package-lock.json ./
 COPY src/ ./src/
-COPY public/ ./public/
 COPY next.config.ts tsconfig.json next-env.d.ts ./
 RUN npm run build
 
