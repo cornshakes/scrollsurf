@@ -229,3 +229,24 @@ What I did for this refactoring:
 - rinse and repeat
 
 It worked alright.
+
+# Ok Fable time
+
+I want to try Fable once (starting next week it won't be available for Pro accounts anymore). I used it to make a plan for weighting the random feed. As expected, it ate lots of tokens - 4% of my weekly limit just for the first iteration. Also kind-of expected: I don't fully understand it - too much math.
+What do? I decided to save & go through with the plan so that I can see it in code too - maybe that will help me understand better. I'm definitely getting a better understanding of how it feels to use ai without sufficient prior coding experience.
+I'm pretty sure I won't be able to afford just letting Fable rip through it, so I'll go back to my workflow.
+
+I hated the pre-prepared statement thing (prepared statements all created at init). It's microseconds to compile a new one, who cares. I should have done the refactoring for that before this major task - it created so much confusion and made claude make lots of weird workaround edits (not the first time).
+It's just like real development - the more the code sucks, the harder it is to change. Actually, that's the other way around isn't it: A measure of suck is how hard it is to change. Now, at (almost) the end of this issue, I feel like I have to mix in that refactor (I used fable but still had to yank it around) because without it, suck explodes. This is a genuinely new learning for me: I thought I can accept dodgy code to a degree because it's mostly a problem of too much typing, which AI doesn't care about. But it's more than that - dodgy code is really in the way, even if typing is free.  
+Fable created a memory:
+
+name: prefer-fixing-prod-code-over-test-workarounds  
+description: User prefers simplifying production code (e.g. per-call statement prepares) over test-only workarounds when tests expose a design flaw
+
+Flattering for sure.
+
+Omg I just had Fable add some readme sections (one after another, I heavily edited the first paragraph, the examples and sql sections came out better).
+NOW I GET IT. I learned a thing today. Happiness is on the rise.
+Geesus now I have to actually go and read all that code.
+
+This time I also created some documents with my workflow that I'll just add to the commit.

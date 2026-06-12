@@ -63,10 +63,81 @@ npm run test:e2e            # run all integration tests (seeds DB automatically)
 npm run test:e2e:ui         # same, but with Playwright's interactive UI
 ```
 
+## Clicks, Likes & Dislikes
+
+The feed is random, but influenced by user activity. Three signals are tracked **per topic** (e.g. Vital → History):
+
+- Like counts +1
+- Dislike counts −1
+- Following a link counts +0.5
+
+These are averaged over seen articles of that topic, so a topic needs a few signals before it starts to move — one stray like won't change much. 
+
+Unseen articles are then drawn with weights based on the average affinity of their topics, i.e. liked topics show up more often, disliked topics show up less.
+
+Without any votes (or without the consent cookie) the feed is random.
+
+The weighting strength can be adjusted using the `FEED_AFFINITY_STRENGTH` env var (`0` = random).
+
+### Example
+
+Say you've scrolled for a while and your history per topic looks like this:
+
+| Topic | Seen | Likes | Dislikes | Clicks | Affinity = (likes + 0.5·clicks − dislikes) / (seen + 5) |
+|---|---|---|---|---|---|
+| Vital → History | 15 | 6 | 0 | 2 | (6 + 1 − 0) / 20 = **0.35** |
+| Vital → Sports | 15 | 0 | 6 | 0 | (0 + 0 − 6) / 20 = **−0.30** |
+| Vital → Arts | 4 | 1 | 0 | 0 | (1 + 0 − 0) / 9 = **0.11** |
+| anything you haven't voted on | | | | | **0** |
+
+The `+ 5` in the denominator is the smoothing: the lone Arts like only gets a third of the affinity of the six History likes, even though it's a 100% like rate.
+
+Each unseen article then gets a weight of `exp(2 · affinity)` (the `2` is `FEED_AFFINITY_STRENGTH`):
+
+| Article tagged | Mean affinity | Weight |
+|---|---|---|
+| History | 0.35 | exp(0.70) ≈ **2.0** |
+| Sports | −0.30 | exp(−0.60) ≈ **0.55** |
+| Arts | 0.11 | exp(0.22) ≈ **1.25** |
+| History **and** Sports | (0.35 − 0.30) / 2 = 0.025 | exp(0.05) ≈ **1.05** |
+| no voted topics | 0 | exp(0) = **1.0** |
+
+The weight is the article's relative chance per feed slot: a History article is about twice as likely to appear as a neutral one, and about 3.7× as likely as a Sports one — but even Sports articles keep showing up at roughly half the neutral rate. An article tagged with both a liked and a disliked topic lands back near neutral, because affinities are averaged across its topics.
+
+### The SQL behind it
+
+There are no per-topic queries and no mixing of result sets in TypeScript — the whole draw happens inside **one SELECT** per item type. The statement is assembled from shared SQL fragments in `src/lib/db/affinity.ts` (the constants from the example are baked into the string; only `$user_id` and `$limit` are bound at query time) and chains three CTEs before the actual selection:
+
+```sql
+WITH clicked AS (              -- distinct items you clicked links on
+  SELECT DISTINCT item_id FROM user_clicks WHERE user_id = $user_id ...
+),
+topic_affinity AS (            -- the first table from the example:
+  SELECT dataset, topic,       -- one GROUP BY over your seen items
+         (likes + 0.5*clicks - dislikes) / (seen + 5) AS affinity
+  FROM user_articles JOIN article_topics ... LEFT JOIN clicked ...
+  WHERE user_id = $user_id
+  GROUP BY dataset, topic
+),
+item_affinity AS (             -- the second table: AVG over each item's topics
+  SELECT article_id AS item_id, AVG(COALESCE(affinity, 0)) AS affinity
+  FROM article_topics LEFT JOIN topic_affinity ...
+  GROUP BY article_id
+)
+SELECT a.* FROM articles a
+LEFT JOIN item_affinity ia ON ia.item_id = a.id
+WHERE <unseen, dataset enabled>
+ORDER BY -ln(random_0_to_1) / exp(2 * ia.affinity)   -- the weighted draw
+LIMIT $limit
+```
+
+The `ORDER BY` line is the whole sampling trick ([Efraimidis–Spirakis](https://en.wikipedia.org/wiki/Reservoir_sampling#Weighted_random_sampling)): every candidate row draws its own uniform random number, the weight stretches it, and taking the smallest `n` keys is mathematically the same as drawing `n` items without replacement with probability proportional to weight. So the "randomness" and the "weighting" live in the same expression — there's no second pass, no shuffle in TS.
+
+For anonymous users `$user_id` is `NULL`, which matches nothing in the CTEs, so every article falls back to affinity `0` → weight `1` → plain uniform random, through the exact same query.
+
+Pictures run the same query against their own tables (`user_pictures`, `picture_topics`). The only thing TypeScript does afterwards is interleave the two result lists at `FEED_PICTURE_RATIO` in `src/lib/db/feed.ts` — two queries per feed page, total.
 
 ## Future inspiration 
-
-Next, I want to think about a way to make article selection less random by using your liked/disliked articles in some way.
 
 These [Main topic classifications](https://en.wikipedia.org/wiki/Category:Main_topic_classifications) are not what I have
 

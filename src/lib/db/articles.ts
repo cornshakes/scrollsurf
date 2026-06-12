@@ -1,6 +1,6 @@
-import { type StatementSync } from 'node:sqlite';
 import { type Article } from './types';
 import { get_db } from './connection';
+import { affinity_ctes, weighted_random_order_by } from './affinity';
 
 const VISIBLE_CATEGORIES_SUBQUERY = `
   (SELECT GROUP_CONCAT(c.name, '|||')
@@ -42,64 +42,65 @@ export const row_to_article = (r: ArticleDbRow): Article => ({
     : [],
 });
 
-let stmts: {
-  get_next: StatementSync;
-  mark_seen: StatementSync;
-  set_like: StatementSync;
-  get_voted: StatementSync;
-} | null = null;
+const ARTICLE_AFFINITY_CTES = affinity_ctes({
+  topics_table: 'article_topics',
+  user_table: 'user_articles',
+  item_id_col: 'article_id',
+  item_type: 'article',
+});
 
-const s = () => {
-  if (stmts) {
-    return stmts;
-  }
-  const db = get_db();
-  stmts = {
-    get_next: db.prepare(`
-      SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
-             COALESCE(ua.like, 0) AS like,
-             ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
-             ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
-      FROM articles a
-      LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
-      WHERE ua.article_id IS NULL
-        AND EXISTS (
-          SELECT 1
-          FROM article_topics at
-          LEFT JOIN user_settings us ON us.dataset = at.dataset AND us.user_id = $user_id
-          WHERE at.article_id = a.id
-          AND COALESCE(us.enabled, 1) = 1
-        )
-      ORDER BY RANDOM()
-      LIMIT $limit
-    `),
-    mark_seen: db.prepare(
-      'INSERT OR IGNORE INTO user_articles (user_id, article_id) VALUES ($user_id, $article_id)'
-    ),
-    set_like: db.prepare(
-      `INSERT INTO user_articles (user_id, article_id, like) VALUES ($user_id, $article_id, $like)
-       ON CONFLICT(user_id, article_id) DO UPDATE SET like = excluded.like`
-    ),
-    get_voted: db.prepare(`
-      SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url, ua.like,
-             ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
-             ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
-      FROM articles a
-      JOIN user_articles ua ON a.id = ua.article_id
-      WHERE ua.like = $like AND ua.user_id = $user_id
-      ORDER BY a.id DESC
-    `),
-  };
-  return stmts;
-};
+const ARTICLE_GET_NEXT_SQL = (order_by: string) => `
+  ${ARTICLE_AFFINITY_CTES}
+  SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
+         COALESCE(ua.like, 0) AS like,
+         ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
+         ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
+  FROM articles a
+  LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
+  LEFT JOIN item_affinity ia ON ia.item_id = a.id
+  WHERE ua.article_id IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM article_topics at
+      LEFT JOIN user_settings us ON us.dataset = at.dataset AND us.user_id = $user_id
+      WHERE at.article_id = a.id
+      AND COALESCE(us.enabled, 1) = 1
+    )
+  ${order_by}
+  LIMIT $limit
+`;
 
-export const get_next_articles_internal = (limit: number, user_id: number | null): Article[] => {
+const ARTICLE_MARK_SEEN_SQL =
+  'INSERT OR IGNORE INTO user_articles (user_id, article_id) VALUES ($user_id, $article_id)';
+
+const ARTICLE_SET_LIKE_SQL = `
+  INSERT INTO user_articles (user_id, article_id, like) VALUES ($user_id, $article_id, $like)
+  ON CONFLICT(user_id, article_id) DO UPDATE SET like = excluded.like
+`;
+
+const ARTICLE_GET_VOTED_SQL = `
+  SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url, ua.like,
+         ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
+         ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
+  FROM articles a
+  JOIN user_articles ua ON a.id = ua.article_id
+  WHERE ua.like = $like AND ua.user_id = $user_id
+  ORDER BY a.id DESC
+`;
+
+export const get_next_articles_internal = (
+  limit: number,
+  user_id: number | null,
+  strength?: number
+): Article[] => {
   const db = get_db();
-  const rows = s().get_next.all({ $limit: limit, $user_id: user_id }) as unknown as ArticleDbRow[];
+  const get_next = db.prepare(ARTICLE_GET_NEXT_SQL(weighted_random_order_by(strength)));
+  const mark_seen = db.prepare(ARTICLE_MARK_SEEN_SQL);
+  const rows = get_next.all({ $limit: limit, $user_id: user_id }) as unknown as ArticleDbRow[];
   if (user_id !== null) {
     db.exec('BEGIN');
     for (const row of rows) {
-      s().mark_seen.run({ $user_id: user_id, $article_id: row.id });
+      mark_seen.run({ $user_id: user_id, $article_id: row.id });
     }
     db.exec('COMMIT');
   }
@@ -110,10 +111,12 @@ export const get_next_articles = (limit: number, user_id: number | null): Articl
   get_next_articles_internal(limit, user_id);
 
 export const set_article_like = (id: number, value: -1 | 0 | 1, user_id: number) => {
-  s().set_like.run({ $user_id: user_id, $article_id: id, $like: value });
+  get_db().prepare(ARTICLE_SET_LIKE_SQL).run({ $user_id: user_id, $article_id: id, $like: value });
 };
 
 export const get_voted_articles = (vote: -1 | 1, user_id: number | null): Article[] => {
-  const rows = s().get_voted.all({ $like: vote, $user_id: user_id }) as unknown as ArticleDbRow[];
+  const rows = get_db()
+    .prepare(ARTICLE_GET_VOTED_SQL)
+    .all({ $like: vote, $user_id: user_id }) as unknown as ArticleDbRow[];
   return rows.map(row_to_article);
 };

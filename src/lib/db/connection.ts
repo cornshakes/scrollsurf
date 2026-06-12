@@ -115,8 +115,8 @@ export const create_schema = (target: DatabaseSync) => {
   } catch {}
 };
 
-export const init_db = () => {
-  if (db) {
+export const init_db = (reset = false) => {
+  if (!reset && db) {
     return;
   }
   // SQLite creates the DB file but not its parent dir — ensure it exists so the

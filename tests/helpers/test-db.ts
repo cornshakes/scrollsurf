@@ -1,9 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { create_schema, get_db } from '@/lib/db/connection';
+import { get_db, init_db } from '@/lib/db/connection';
 import { randomUUID } from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
 
 let test_dir: string;
 
@@ -22,7 +21,9 @@ export const setup = () => {
 export const reset_db = () => {
   const target_db = path.join(test_dir, 'scrollsurf.db');
   rmSync(target_db, { force: true });
-  create_schema(new DatabaseSync(target_db));
+  rmSync(target_db + '-wal', { force: true });
+  rmSync(target_db + '-shm', { force: true });
+  init_db(true);
 };
 
 export const insert_user = (cookie_token?: string): number => {

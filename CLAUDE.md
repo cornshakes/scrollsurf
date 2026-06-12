@@ -84,7 +84,7 @@ Pictures and articles use **fully separate schemas** end-to-end:
 
 The feed returns `FeedItem = Article | Picture`. Always switch on `.type` when handling feed items.
 
-Pictures are interleaved in the feed at a configurable ratio (see `FEED_PICTURE_RATIO` below). Each type has its own `ORDER BY RANDOM()` query; there is no SQL UNION.
+Pictures are interleaved in the feed at a configurable ratio (see `FEED_PICTURE_RATIO` below). Each type has its own weighted-random query; there is no SQL UNION.
 
 ## Feature flags (env vars)
 
@@ -92,6 +92,7 @@ Pictures are interleaved in the feed at a configurable ratio (see `FEED_PICTURE_
 |---|---|---|
 | `DOWNLOAD_LIMIT=N` | unlimited | Caps articles downloaded per `npm run download-vital-50000` run |
 | `FEED_PICTURE_RATIO=N` | `0.2` | Fraction of each feed page that is pictures (0–1) |
+| `FEED_AFFINITY_STRENGTH=N` | `2.0` | Strength of topic-affinity feed weighting; `0` = pure random |
 
 ## Wikipedia API etiquette
 
@@ -107,4 +108,4 @@ Per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and [Wikimedia
 
 ## Feed selection
 
-`get_next_articles` and `get_next_pictures` each use `ORDER BY RANDOM()` — do not add a secondary sort. `get_next_feed` interleaves them at `FEED_PICTURE_RATIO`.
+`get_next_articles` and `get_next_pictures` use Efraimidis–Spirakis weighted sampling (`ORDER BY -ln(random)/weight`) where weight = `exp(AFFINITY_STRENGTH · mean_topic_affinity)`. Topic affinity is derived from the user's likes, dislikes, and link clicks on seen items, normalized by exposure (smoothing constant 5). Neutral users, anonymous users, and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random — strict generalization of the previous behavior. Dislikes downweight topics but never hard-exclude items. Constants live in `src/lib/db/affinity.ts`. Do not add hard exclusions or deterministic secondary sorts. `get_next_feed` interleaves articles and pictures at `FEED_PICTURE_RATIO`.
