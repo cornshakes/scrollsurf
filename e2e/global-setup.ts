@@ -1,3 +1,3 @@
-import { seed } from './fixtures/seed-test-db';
+import { reset_e2e_db } from './fixtures/reset-e2e-db';
 
-export default seed;
+export default reset_e2e_db;

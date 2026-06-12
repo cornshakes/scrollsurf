@@ -1,8 +1,9 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { init_db, get_db } from '@/lib/db/connection';
+import { create_schema, get_db } from '@/lib/db/connection';
 import { randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 
 let test_dir: string;
 
@@ -16,42 +17,12 @@ export const setup = () => {
   // This overrides the SCROLLSURF_DATA_DIR=. from .env.test so all modules
   // (articles.ts, pictures.ts, topics.ts, …) share this temp DB.
   process.env.SCROLLSURF_DATA_DIR = test_dir;
-  init_db();
 };
 
-export const get_test_db = () => get_db();
-
-export const cleanup = () => {
-  try {
-    get_db().close();
-  } catch {}
-  if (test_dir) {
-    try {
-      rmSync(test_dir, { recursive: true, force: true });
-    } catch {}
-  }
-};
-
-export const reset = () => {
-  const db = get_db();
-  db.exec(`
-    PRAGMA foreign_keys = OFF;
-    DELETE FROM user_clicks;
-    DELETE FROM user_settings;
-    DELETE FROM user_pictures;
-    DELETE FROM user_articles;
-    DELETE FROM users;
-    DELETE FROM picture_topics;
-    DELETE FROM pictures;
-    DELETE FROM category_hierarchy;
-    DELETE FROM article_topics;
-    DELETE FROM article_categories;
-    DELETE FROM datasets;
-    DELETE FROM categories;
-    DELETE FROM articles;
-    DELETE FROM sqlite_sequence WHERE name IN ('articles', 'categories', 'pictures', 'users', 'user_clicks');
-    PRAGMA foreign_keys = ON;
-  `);
+export const reset_db = () => {
+  const target_db = path.join(test_dir, 'scrollsurf.db');
+  rmSync(target_db, { force: true });
+  create_schema(new DatabaseSync(target_db));
 };
 
 export const insert_user = (cookie_token?: string): number => {

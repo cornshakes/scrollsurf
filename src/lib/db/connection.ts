@@ -5,21 +5,12 @@ import { db_path } from '../paths';
 
 export let db: DatabaseSync;
 
-export const init_db = () => {
-  if (db) {
-    return;
-  }
+export const create_schema = (target: DatabaseSync) => {
+  target.exec('PRAGMA journal_mode = WAL');
+  target.exec('PRAGMA busy_timeout = 5000');
+  target.exec('PRAGMA foreign_keys = ON');
 
-  // SQLite creates the DB file but not its parent dir — ensure it exists so the
-  // server and the test seeder are each self-sufficient (no startup ordering race).
-  mkdirSync(path.dirname(db_path()), { recursive: true });
-  db = new DatabaseSync(db_path());
-
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA busy_timeout = 5000');
-  db.exec('PRAGMA foreign_keys = ON');
-
-  db.exec(`
+  target.exec(`
     CREATE TABLE IF NOT EXISTS articles (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       title       TEXT    NOT NULL,
@@ -120,8 +111,19 @@ export const init_db = () => {
   `);
 
   try {
-    db.exec("ALTER TABLE pictures ADD COLUMN caption TEXT NOT NULL DEFAULT ''");
+    target.exec("ALTER TABLE pictures ADD COLUMN caption TEXT NOT NULL DEFAULT ''");
   } catch {}
+};
+
+export const init_db = () => {
+  if (db) {
+    return;
+  }
+  // SQLite creates the DB file but not its parent dir — ensure it exists so the
+  // server and the test seeder are each self-sufficient (no startup ordering race).
+  mkdirSync(path.dirname(db_path()), { recursive: true });
+  db = new DatabaseSync(db_path());
+  create_schema(db);
 };
 
 export const get_db = (): DatabaseSync => {

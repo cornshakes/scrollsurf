@@ -1,4 +1,4 @@
-import { setup, cleanup, reset, insert_user, insert_picture } from '../../helpers/test-db';
+import { setup, insert_user, insert_picture, reset_db } from '../../helpers/test-db';
 import { get_voted_pictures, set_picture_like } from '@/lib/db/pictures';
 import { get_next_feed } from '@/lib/db/feed';
 
@@ -9,8 +9,7 @@ import { get_next_feed } from '@/lib/db/feed';
 import { get_next_pictures_internal } from '@/lib/db/pictures';
 
 beforeAll(setup);
-afterAll(cleanup);
-beforeEach(reset);
+beforeEach(reset_db);
 
 it('returns unseen pictures', () => {
   const uid = insert_user();

@@ -1,6 +1,6 @@
 # Scrollsurf
 
-[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net)
+[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net) and read the [diary](./DIARY.md)!
 
 
 Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike them, and visit the full articles on wikipedia itself. The articles that it shows you are randomly selected from these datasets:
@@ -50,15 +50,17 @@ npm run dev
 
 and go to [http://localhost:3000](http://localhost:3000)
 
-Check out the [Diary](./DIARY.md)!
-
 ## Integration Testing
 
-Tests run against a small seeded database (`e2e/.data/`) — never the real `scrollsurf.db`. You need the reference datasets downloaded locally before using these. `npm install` downloads the Playwright browser binary to the global cache (`~/.cache/ms-playwright/`) via `postinstall`.
+All e2e tests run against a small example database (`e2e/.data/`).
+That database is created from the downloaded datasets using the test:e2e:create-db script.
+It is committed so that you don't have to download all datasets before being able to run e2e tests.
 
 ```bash
-npm run test:e2e      # run all integration tests (seeds DB automatically)
-npm run test:e2e:ui   # same, but with Playwright's interactive UI
+npm run test:e2e:create_db  # creates e2e test db, you don't have to do this
+npm run test:e2e:setup      # downloads chromium for playwright
+npm run test:e2e            # run all integration tests (seeds DB automatically)
+npm run test:e2e:ui         # same, but with Playwright's interactive UI
 ```
 
 

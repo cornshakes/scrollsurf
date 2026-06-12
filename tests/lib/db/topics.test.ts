@@ -1,18 +1,16 @@
 import {
   setup,
-  cleanup,
-  reset,
   insert_user,
   insert_article,
   insert_picture,
   set_like,
+  reset_db,
 } from '../../helpers/test-db';
 import { db } from '@/lib/db/connection';
 import { get_topic_tree, get_category_tree } from '@/lib/db/topics';
 
 beforeAll(setup);
-afterAll(cleanup);
-beforeEach(reset);
+beforeEach(reset_db);
 
 const topic = (dataset: string, t: string) => ({ dataset, topic: t });
 

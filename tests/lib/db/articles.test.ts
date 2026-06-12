@@ -1,17 +1,15 @@
 import {
   setup,
-  cleanup,
-  reset,
   insert_user,
   insert_article,
   insert_dataset,
+  reset_db,
 } from '../../helpers/test-db';
 import { get_next_articles, set_article_like, get_voted_articles } from '@/lib/db/articles';
 import { set_dataset_enabled } from '@/lib/db/settings';
 
 beforeAll(setup);
-afterAll(cleanup);
-beforeEach(reset);
+beforeEach(reset_db);
 
 it('returns unseen articles', () => {
   const uid = insert_user();

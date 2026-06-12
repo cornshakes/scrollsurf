@@ -1,4 +1,5 @@
-import { setup, reset, cleanup, get_test_db } from '../../helpers/test-db';
+import { get_db } from '@/lib/db/connection';
+import { reset_db, setup } from '../../helpers/test-db';
 import { get_or_create_user, cleanup_inactive_users } from '@/lib/db/users';
 
 // Mock environment
@@ -9,12 +10,9 @@ beforeAll(() => {
   process.env.USER_INACTIVITY_DAYS = String(INACTIVITY_DAYS);
 });
 
-beforeEach(() => {
-  reset();
-});
+beforeEach(reset_db);
 
 afterAll(() => {
-  cleanup();
   delete process.env.USER_INACTIVITY_DAYS;
 });
 
@@ -50,7 +48,7 @@ describe('get_or_create_user', () => {
   });
 
   test('updates last_active_at on the second call', () => {
-    const db = get_test_db();
+    const db = get_db();
     const token = 'test-token-456';
     jest.useFakeTimers();
 
@@ -74,7 +72,7 @@ describe('get_or_create_user', () => {
 
 describe('cleanup_inactive_users', () => {
   test('sets cookie_token = NULL for users older than INACTIVITY_DAYS', () => {
-    const db = get_test_db();
+    const db = get_db();
     const now = Math.floor(Date.now() / 1000);
 
     // Insert an old user
@@ -107,7 +105,7 @@ describe('cleanup_inactive_users', () => {
   });
 
   test('leaves recent users untouched', () => {
-    const db = get_test_db();
+    const db = get_db();
     const now = Math.floor(Date.now() / 1000);
 
     db.prepare('INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)').run(

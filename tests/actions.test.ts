@@ -1,11 +1,10 @@
 import {
   setup,
-  cleanup,
-  reset,
   insert_user,
   insert_article,
   insert_picture,
   set_like as db_set_like,
+  reset_db,
 } from './helpers/test-db';
 
 // Mock user and headers before importing the actions module
@@ -28,9 +27,8 @@ const mock_uid = current_user_id as jest.Mock;
 const topic = [{ dataset: 'D', topic: 'T' }];
 
 beforeAll(setup);
-afterAll(cleanup);
 beforeEach(() => {
-  reset();
+  reset_db();
   mock_uid.mockReset();
 });
 

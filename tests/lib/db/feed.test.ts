@@ -4,17 +4,15 @@
 // separate describe block with FEED_PICTURE_RATIO set before the import.
 import {
   setup,
-  cleanup,
-  reset,
   insert_user,
   insert_article,
   insert_picture,
+  reset_db,
 } from '../../helpers/test-db';
 import { get_next_feed } from '@/lib/db/feed';
 
 beforeAll(setup);
-afterAll(cleanup);
-beforeEach(reset);
+beforeEach(reset_db);
 
 const topic = [{ dataset: 'D', topic: 'T' }];
 

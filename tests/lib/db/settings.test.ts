@@ -1,26 +1,16 @@
 import {
   setup,
-  reset,
-  cleanup,
-  get_test_db,
   insert_user,
   insert_article,
   insert_dataset,
+  reset_db,
 } from '../../helpers/test-db';
 import { set_dataset_enabled, get_datasets_enabled } from '@/lib/db/settings';
 import { get_next_articles_internal } from '@/lib/db/articles';
+import { get_db } from '@/lib/db/connection';
 
-beforeAll(() => {
-  setup();
-});
-
-beforeEach(() => {
-  reset();
-});
-
-afterAll(() => {
-  cleanup();
-});
+beforeAll(setup);
+beforeEach(reset_db);
 
 describe('set_dataset_enabled and get_datasets_enabled', () => {
   test('round-trip: set enabled=false, read back false', () => {
@@ -49,7 +39,7 @@ describe('set_dataset_enabled and get_datasets_enabled', () => {
     insert_dataset('unusual');
 
     const article_id = insert_article();
-    const db = get_test_db();
+    const db = get_db();
     db.prepare(
       'INSERT INTO article_topics (article_id, dataset, topic) VALUES ($id, $dataset, $topic)'
     ).run({
