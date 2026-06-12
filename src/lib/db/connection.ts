@@ -88,12 +88,8 @@ export const create_schema = (target: DatabaseSync) => {
       PRIMARY KEY (user_id, picture_id)
     ) STRICT;
 
-    CREATE TABLE IF NOT EXISTS user_settings (
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      dataset TEXT    NOT NULL REFERENCES datasets(name),
-      enabled INTEGER NOT NULL DEFAULT 1,
-      PRIMARY KEY (user_id, dataset)
-    ) STRICT;
+    -- Per-user dataset selection was removed; clean up the table on existing DBs.
+    DROP TABLE IF EXISTS user_settings;
 
     -- Append-only engagement log of followed links (title, by, category, topic,
     -- dataset) — richer signal than the like/dislike vote alone.

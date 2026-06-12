@@ -33,9 +33,7 @@ const PICTURE_GET_NEXT_SQL = (order_by: string) => `
     AND EXISTS (
       SELECT 1
       FROM picture_topics pt
-      LEFT JOIN user_settings us ON us.dataset = pt.dataset AND us.user_id = $user_id
       WHERE pt.picture_id = p.id
-      AND COALESCE(us.enabled, 1) = 1
     )
   ${order_by}
   LIMIT $limit

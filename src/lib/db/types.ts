@@ -30,15 +30,6 @@ export interface TopicStat {
   disliked: number;
 }
 
-export interface DatasetGroup {
-  dataset: string;
-  source_url: string | null;
-  article_count: number;
-  liked: number;
-  disliked: number;
-  topics: TopicStat[];
-}
-
 export interface CategoryGroup {
   top_level: string;
   article_count: number;
@@ -47,7 +38,6 @@ export interface CategoryGroup {
   categories: TopicStat[];
 }
 
-export type TopicTree = DatasetGroup[];
 export type CategoryTree = CategoryGroup[];
 
 // Followed-link kinds we log for engagement. The image link on a picture card

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
-export type View = 'random' | 'liked' | 'disliked' | 'datasets' | 'categories';
+export type View = 'random' | 'liked' | 'disliked' | 'categories';
 
 /**
  * Inject consent + a fresh user-id cookie so the session starts already

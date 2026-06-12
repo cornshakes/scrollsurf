@@ -16,16 +16,14 @@ import Divider from '@mui/material/Divider';
 import MenuIcon from '@mui/icons-material/Menu';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
-import { TopicsFeed } from './DatasetsTopicsFeed';
 import { CategoryFeed } from './CategoryFeed';
 
-type View = 'random' | 'liked' | 'disliked' | 'datasets' | 'categories';
+type View = 'random' | 'liked' | 'disliked' | 'categories';
 
 const VIEW_LABELS: Record<View, string> = {
   random: 'Scrollsurf',
   liked: 'Liked',
   disliked: 'Disliked',
-  datasets: 'Datasets',
   categories: 'Categories',
 };
 
@@ -123,7 +121,6 @@ const WikiArticles = () => {
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
-        {view === 'datasets' && <TopicsFeed />}
         {view === 'categories' && CATEGORIES_ENABLED && <CategoryFeed />}
       </Box>
     </Box>

@@ -1,12 +1,5 @@
-import {
-  setup,
-  insert_user,
-  insert_article,
-  insert_dataset,
-  reset_db,
-} from '../../helpers/test-db';
+import { setup, insert_user, insert_article, reset_db } from '../../helpers/test-db';
 import { get_next_articles, set_article_like, get_voted_articles } from '@/lib/db/articles';
-import { set_dataset_enabled } from '@/lib/db/settings';
 
 beforeAll(setup);
 beforeEach(reset_db);
@@ -67,23 +60,6 @@ it('correctly parses topic names containing :: (e.g. Science::Physics)', () => {
     topic: 'Science::Physics',
     dataset_url: null,
   });
-});
-
-it('excludes articles from a disabled dataset', () => {
-  const uid = insert_user();
-  insert_dataset('D');
-  insert_article({ title: 'A', url: 'https://a', topics: [{ dataset: 'D', topic: 'T' }] });
-  set_dataset_enabled('D', false, uid);
-  expect(get_next_articles(10, uid)).toHaveLength(0);
-});
-
-it('disabled dataset does not affect other users', () => {
-  const uid1 = insert_user();
-  const uid2 = insert_user();
-  insert_dataset('D');
-  insert_article({ title: 'A', url: 'https://a', topics: [{ dataset: 'D', topic: 'T' }] });
-  set_dataset_enabled('D', false, uid1);
-  expect(get_next_articles(10, uid2)).toHaveLength(1);
 });
 
 it('set_article_like upsert: inserts then updates', () => {

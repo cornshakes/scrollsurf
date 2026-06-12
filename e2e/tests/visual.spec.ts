@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { cards, goto_feed, grant_consent, open_consent, switch_view } from '../helpers/pages';
+import { cards, goto_feed, grant_consent, open_consent } from '../helpers/pages';
 
 test('home feed', async ({ page }) => {
   await goto_feed(page);
@@ -26,12 +26,5 @@ test('consent dialog - post-consent', async ({ page }) => {
 test('privacy page', async ({ page }) => {
   await page.goto('/privacy');
   await page.getByRole('heading').first().waitFor();
-  await expect(page).toHaveScreenshot();
-});
-
-test('datasets view', async ({ page }) => {
-  await goto_feed(page);
-  await switch_view(page, 'datasets');
-  await page.getByText('Choose which datasets').waitFor();
   await expect(page).toHaveScreenshot();
 });

@@ -53,11 +53,9 @@ All download scripts are resumable: already-downloaded articles are skipped.
 - **Featured** — topics from Wikipedia Featured articles page sections.
 - **Pictures** — gallery section headings from `Wikipedia:Featured pictures` subpages: Animals, Artwork, Space, etc. (`datasets/featured_pictures.db`'s `picture_topics`). Stored in the runtime `picture_topics` table, not `article_topics`.
 
-The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics; the topics page (`get_topic_tree`) returns a `DatasetGroup[]` and the UI nests topics under their dataset. Pictures are appended as a separate group from `picture_topics`.
+The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics. Datasets are not user-selectable — every user gets all of them; the feed only requires that an item has at least one topic row.
 
-Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which `get_topic_tree` joins so the UI can show a link button per dataset.
-
-User preferences for dataset inclusion are stored in `user_settings (dataset, enabled)`. When unchecked in the topics page, a dataset is excluded from `get_next_articles` — the WHERE clause checks if any article_topics row for an article has `enabled = 1`. All datasets default to enabled if no entry exists.
+Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which the article queries join so each card's dataset chip can link to its source page.
 
 ## Categories
 

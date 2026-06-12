@@ -91,12 +91,6 @@ export const insert_article = (
   return id;
 };
 
-export const insert_dataset = (name: string, source_url?: string): void => {
-  const db = get_db();
-  const stmt = db.prepare('INSERT INTO datasets (name, source_url) VALUES ($name, $source_url)');
-  stmt.run({ $name: name, $source_url: source_url ?? null });
-};
-
 export const insert_picture = (data: {
   title?: string;
   url?: string;

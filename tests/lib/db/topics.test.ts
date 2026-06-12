@@ -1,96 +1,11 @@
-import {
-  setup,
-  insert_user,
-  insert_article,
-  insert_picture,
-  set_like,
-  reset_db,
-} from '../../helpers/test-db';
+import { setup, insert_user, insert_article, set_like, reset_db } from '../../helpers/test-db';
 import { db } from '@/lib/db/connection';
-import { get_topic_tree, get_category_tree } from '@/lib/db/topics';
+import { get_category_tree } from '@/lib/db/topics';
 
 beforeAll(setup);
 beforeEach(reset_db);
 
 const topic = (dataset: string, t: string) => ({ dataset, topic: t });
-
-// ── get_topic_tree ───────────────────────────────────────────────────────────
-
-it('nests topics under their dataset group', () => {
-  insert_article({ title: 'A', url: 'https://a', topics: [topic('Vital', 'People')] });
-  insert_article({ title: 'B', url: 'https://b', topics: [topic('Vital', 'Geography')] });
-  insert_article({ title: 'C', url: 'https://c', topics: [topic('Unusual', 'Science')] });
-
-  const tree = get_topic_tree(null);
-  const vital = tree.find((g) => g.dataset === 'Vital');
-  const unusual = tree.find((g) => g.dataset === 'Unusual');
-
-  expect(vital).toBeDefined();
-  expect(vital?.topics.map((t) => t.topic)).toEqual(
-    expect.arrayContaining(['People', 'Geography'])
-  );
-  expect(unusual).toBeDefined();
-  expect(unusual?.topics.map((t) => t.topic)).toEqual(['Science']);
-});
-
-it('picture topics appear as a separate dataset group', () => {
-  insert_picture({
-    title: 'P',
-    url: 'https://p',
-    image_url: 'https://img',
-    topics: [topic('Featured Pictures', 'Animals')],
-  });
-  insert_article({
-    title: 'A',
-    url: 'https://a',
-    topics: [topic('Vital', 'People')],
-  });
-
-  const tree = get_topic_tree(null);
-  const pic_group = tree.find((g) => g.dataset === 'Featured Pictures');
-  const art_group = tree.find((g) => g.dataset === 'Vital');
-
-  expect(pic_group).toBeDefined();
-  expect(pic_group?.topics[0].topic).toBe('Animals');
-  expect(art_group).toBeDefined();
-});
-
-it('liked and disliked counts per topic are correct per user', () => {
-  const uid = insert_user();
-  const id1 = insert_article({ title: 'A', url: 'https://a', topics: [topic('Vital', 'People')] });
-  const id2 = insert_article({ title: 'B', url: 'https://b', topics: [topic('Vital', 'People')] });
-  insert_article({ title: 'C', url: 'https://c', topics: [topic('Vital', 'People')] });
-
-  set_like('article', id1, uid, 1);
-  set_like('article', id2, uid, -1);
-
-  const tree = get_topic_tree(uid);
-  const vital = tree.find((g) => g.dataset === 'Vital');
-  const people = vital?.topics.find((t) => t.topic === 'People');
-
-  expect(people?.article_count).toBe(3);
-  expect(people?.liked).toBe(1);
-  expect(people?.disliked).toBe(1);
-});
-
-it('picture topic liked/disliked counts are correct', () => {
-  const uid = insert_user();
-  const id = insert_picture({
-    title: 'P',
-    url: 'https://p',
-    image_url: 'https://img',
-    topics: [topic('Featured Pictures', 'Animals')],
-  });
-
-  set_like('picture', id, uid, 1);
-
-  const tree = get_topic_tree(uid);
-  const pic_group = tree.find((g) => g.dataset === 'Featured Pictures');
-  const animals = pic_group?.topics.find((t) => t.topic === 'Animals');
-
-  expect(animals?.liked).toBe(1);
-  expect(animals?.disliked).toBe(0);
-});
 
 // ── get_category_tree ────────────────────────────────────────────────────────
 

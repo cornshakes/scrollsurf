@@ -62,9 +62,7 @@ const ARTICLE_GET_NEXT_SQL = (order_by: string) => `
     AND EXISTS (
       SELECT 1
       FROM article_topics at
-      LEFT JOIN user_settings us ON us.dataset = at.dataset AND us.user_id = $user_id
       WHERE at.article_id = a.id
-      AND COALESCE(us.enabled, 1) = 1
     )
   ${order_by}
   LIMIT $limit
