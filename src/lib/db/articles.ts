@@ -1,6 +1,7 @@
 import { type Article } from './types';
 import { get_db } from './connection';
 import { affinity_ctes, weighted_random_order_by } from './affinity';
+import { topics_subquery, parse_topics_str } from './topics';
 
 const VISIBLE_CATEGORIES_SUBQUERY = `
   (SELECT GROUP_CONCAT(c.name, '|||')
@@ -9,12 +10,7 @@ const VISIBLE_CATEGORIES_SUBQUERY = `
    WHERE ac.article_id = a.id AND c.hidden = 0)
 `;
 
-const ARTICLE_TOPICS_SUBQUERY = `
-  (SELECT GROUP_CONCAT(at2.dataset || '::' || at2.topic || '::' || COALESCE(d.source_url, ''), '|||')
-   FROM article_topics at2
-   LEFT JOIN datasets d ON d.name = at2.dataset
-   WHERE at2.article_id = a.id)
-`;
+const ARTICLE_TOPICS_SUBQUERY = topics_subquery('article_topics', 'article_id', 'a');
 
 type ArticleDbRow = Omit<Article, 'type' | 'categories' | 'topics'> & {
   visible_categories: string | null;
@@ -31,15 +27,7 @@ export const row_to_article = (r: ArticleDbRow): Article => ({
   description: r.description,
   image_url: r.image_url,
   categories: r.visible_categories ? r.visible_categories.split('|||') : [],
-  topics: r.article_topics_str
-    ? r.article_topics_str.split('|||').map((t) => {
-        const parts = t.split('::');
-        const dataset_url = parts.length >= 3 ? parts[parts.length - 1] || null : null;
-        const dataset = parts[0];
-        const topic = parts.slice(1, parts.length - 1).join('::');
-        return { dataset, topic, dataset_url };
-      })
-    : [],
+  topics: parse_topics_str(r.article_topics_str),
 });
 
 const ARTICLE_AFFINITY_CTES = affinity_ctes({

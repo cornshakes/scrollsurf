@@ -1,8 +1,13 @@
 import { type Picture } from './types';
 import { get_db } from './connection';
 import { affinity_ctes, weighted_random_order_by } from './affinity';
+import { topics_subquery, parse_topics_str } from './topics';
 
-type PictureDbRow = Omit<Picture, 'type'>;
+const PICTURE_TOPICS_SUBQUERY = topics_subquery('picture_topics', 'picture_id', 'p');
+
+type PictureDbRow = Omit<Picture, 'type' | 'topics'> & {
+  picture_topics_str: string | null;
+};
 
 const row_to_picture = (r: PictureDbRow): Picture => ({
   type: 'picture',
@@ -13,6 +18,7 @@ const row_to_picture = (r: PictureDbRow): Picture => ({
   image_url: r.image_url,
   caption: r.caption,
   credit: r.credit,
+  topics: parse_topics_str(r.picture_topics_str),
 });
 
 const PICTURE_AFFINITY_CTES = affinity_ctes({
@@ -25,7 +31,8 @@ const PICTURE_AFFINITY_CTES = affinity_ctes({
 const PICTURE_GET_NEXT_SQL = (order_by: string) => `
   ${PICTURE_AFFINITY_CTES}
   SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit,
-         COALESCE(up.like, 0) AS like
+         COALESCE(up.like, 0) AS like,
+         ${PICTURE_TOPICS_SUBQUERY} AS picture_topics_str
   FROM pictures p
   LEFT JOIN user_pictures up ON p.id = up.picture_id AND up.user_id = $user_id
   LEFT JOIN item_affinity ia ON ia.item_id = p.id
@@ -48,7 +55,8 @@ const PICTURE_SET_LIKE_SQL = `
 `;
 
 const PICTURE_GET_VOTED_SQL = `
-  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like
+  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like,
+         ${PICTURE_TOPICS_SUBQUERY} AS picture_topics_str
   FROM pictures p
   JOIN user_pictures up ON p.id = up.picture_id
   WHERE up.like = $like AND up.user_id = $user_id

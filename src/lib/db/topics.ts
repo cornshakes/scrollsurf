@@ -1,5 +1,27 @@
-import { type CategoryTree, type TopicStat, type CategoryGroup } from './types';
+import { type CategoryTree, type TopicStat, type CategoryGroup, type Topic } from './types';
 import { get_db } from './connection';
+
+// SQL subquery that aggregates an item's dataset/topic rows into a single
+// '|||'-delimited string of 'dataset::topic::source_url' triples. Shared by the
+// article and picture queries (each has its own topics table + id column).
+export const topics_subquery = (topics_table: string, item_id_col: string, item_alias: string) => `
+  (SELECT GROUP_CONCAT(t.dataset || '::' || t.topic || '::' || COALESCE(d.source_url, ''), '|||')
+   FROM ${topics_table} t
+   LEFT JOIN datasets d ON d.name = t.dataset
+   WHERE t.${item_id_col} = ${item_alias}.id)
+`;
+
+// Inverse of topics_subquery: parse the aggregated string back into Topic[].
+export const parse_topics_str = (str: string | null): Topic[] =>
+  str
+    ? str.split('|||').map((t) => {
+        const parts = t.split('::');
+        const dataset_url = parts.length >= 3 ? parts[parts.length - 1] || null : null;
+        const dataset = parts[0];
+        const topic = parts.slice(1, parts.length - 1).join('::');
+        return { dataset, topic, dataset_url };
+      })
+    : [];
 
 const GET_TOP_LEVELS_SQL = `
   SELECT

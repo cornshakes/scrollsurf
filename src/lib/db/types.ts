@@ -11,7 +11,13 @@ export interface Article extends BaseFeedItem {
   description: string | null;
   image_url: string | null;
   categories: string[];
-  topics: Array<{ dataset: string; topic: string; dataset_url: string | null }>;
+  topics: Topic[];
+}
+
+export interface Topic {
+  dataset: string;
+  topic: string;
+  dataset_url: string | null;
 }
 
 export interface Picture extends BaseFeedItem {
@@ -19,6 +25,7 @@ export interface Picture extends BaseFeedItem {
   image_url: string;
   caption: string;
   credit: string | null;
+  topics: Topic[];
 }
 
 export type FeedItem = Article | Picture;
