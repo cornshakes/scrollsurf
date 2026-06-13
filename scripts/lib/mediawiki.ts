@@ -50,13 +50,18 @@ export const create_mediawiki_api = (api_url: string) => {
       'User-Agent': user_agent,
       'Accept-Encoding': 'gzip',
     },
-    // POST must be listed explicitly — ky does not retry POST by default. Only
-    // 429/503 retry (matching the previous behavior); Retry-After is honored by
-    // the library for both, capped so a pathological header can't hang a script.
+    // Wikipedia's larger content batches occasionally take longer than ky's 10s
+    // default, so give each request a more generous budget before it's a timeout.
+    timeout: 30_000,
+    // POST must be listed explicitly — ky does not retry POST by default. We
+    // retry 429/503 plus transient timeouts (retryOnTimeout is off by default in
+    // ky, so a slow request would otherwise throw immediately). Retry-After is
+    // honored for 429/503, capped so a pathological header can't hang a script.
     retry: {
-      limit: 2,
+      limit: 4,
       methods: ['post'],
       statusCodes: [429, 503],
+      retryOnTimeout: true,
       maxRetryAfter: 60_000,
     },
     hooks: { afterResponse: [maxlag_as_503] },
