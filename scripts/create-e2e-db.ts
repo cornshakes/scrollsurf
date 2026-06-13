@@ -6,8 +6,7 @@
 
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { create_schema } from '../src/lib/db/connection';
+import { open_db } from '../src/lib/db/connection';
 
 const articles = {
   'unusual.db': [
@@ -44,8 +43,7 @@ const e2e_db_path = path.join('e2e', 'fixtures', 'scrollsurf-e2e-test.db');
 const create = async () => {
   mkdirSync(path.dirname(e2e_db_path), { recursive: true });
   rmSync(e2e_db_path, { force: true });
-  const e2e_db = new DatabaseSync(e2e_db_path);
-  create_schema(e2e_db);
+  const e2e_db = open_db(e2e_db_path);
 
   e2e_db.exec('CREATE TEMP TABLE wanted_urls (url TEXT PRIMARY KEY)');
   const urls = [...Object.values(articles).flat(), ...Object.values(pictures).flat()];
