@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import NextLink from 'next/link';
+import Image from 'next/image';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
@@ -14,7 +15,6 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
-import MenuIcon from '@mui/icons-material/Menu';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
 import { CategoryFeed } from './CategoryFeed';
@@ -72,7 +72,7 @@ const WikiArticles = () => {
               onClick={() => setDrawerOpen(true)}
               sx={{ mr: 1 }}
             >
-              <MenuIcon />
+              <Image src="/menu-icon.png" alt="" width={24} height={24} />
             </IconButton>
             <Typography variant="h6" component="div" data-testid="view-title">
               {VIEW_LABELS[view]}
