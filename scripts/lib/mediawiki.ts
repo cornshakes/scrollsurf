@@ -8,6 +8,15 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const REQUEST_DELAY_MS = 500;
 
+// Per API:Etiquette the User-Agent must identify the app and a contact, so it
+// carries an email — kept out of source and read from the env instead. Fail
+// loudly rather than fall back to a spoofed/blank UA, which would breach the
+// guidelines and risk a block.
+const user_agent = process.env.WIKIPEDIA_USER_AGENT;
+if (!user_agent) {
+  throw new Error('WIKIPEDIA_USER_AGENT is not set (see .env.example)');
+}
+
 // maxlag throttling arrives as an HTTP 200 carrying an error body
 // (`error.code === 'maxlag'`) rather than a real 503. This hook surfaces it as a
 // synthetic 503 that re-uses the original `Retry-After` header, so ky's retry
@@ -38,7 +47,7 @@ const maxlag_as_503: AfterResponseHook = async (_request, _options, response) =>
 export const create_mediawiki_api = (api_url: string) => {
   const client = ky.create({
     headers: {
-      'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
+      'User-Agent': user_agent,
       'Accept-Encoding': 'gzip',
     },
     // POST must be listed explicitly — ky does not retry POST by default. Only
