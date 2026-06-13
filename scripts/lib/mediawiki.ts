@@ -14,7 +14,7 @@ const REQUEST_DELAY_MS = 500;
 // guidelines and risk a block.
 const user_agent = process.env.WIKIPEDIA_USER_AGENT;
 if (!user_agent) {
-  throw new Error('WIKIPEDIA_USER_AGENT is not set (see .env.example)');
+  throw new Error('WIKIPEDIA_USER_AGENT is not set (see scripts/.env.example)');
 }
 
 // maxlag throttling arrives as an HTTP 200 carrying an error body

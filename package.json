@@ -24,13 +24,13 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "coverage:open": "open coverage/lcov-report/index.html",
-    "download-vital-50000": "tsx scripts/datasets/download-vital-50000.ts",
-    "download-unusual": "tsx scripts/datasets/download-unusual.ts",
-    "download-good-articles": "tsx scripts/datasets/download-good-articles.ts",
-    "download-featured-articles": "tsx scripts/datasets/download-featured-articles.ts",
-    "download-featured-pictures": "tsx scripts/datasets/download-featured-pictures.ts",
-    "download-commons-featured-pictures": "tsx scripts/datasets/download-commons-featured-pictures.ts",
-    "categorize": "tsx scripts/categorize.ts"
+    "download-vital-50000": "tsx --env-file=scripts/.env scripts/datasets/download-vital-50000.ts",
+    "download-unusual": "tsx --env-file=scripts/.env scripts/datasets/download-unusual.ts",
+    "download-good-articles": "tsx --env-file=scripts/.env scripts/datasets/download-good-articles.ts",
+    "download-featured-articles": "tsx --env-file=scripts/.env scripts/datasets/download-featured-articles.ts",
+    "download-featured-pictures": "tsx --env-file=scripts/.env scripts/datasets/download-featured-pictures.ts",
+    "download-commons-featured-pictures": "tsx --env-file=scripts/.env scripts/datasets/download-commons-featured-pictures.ts",
+    "categorize": "tsx --env-file=scripts/.env scripts/categorize.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
