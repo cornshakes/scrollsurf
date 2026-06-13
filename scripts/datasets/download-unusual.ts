@@ -1,6 +1,6 @@
 import wtf from 'wtf_wikipedia';
 import { run_download, type DiscoveredArticle } from '../lib/dataset';
-import { fetch_wikitext } from '../lib/wiki';
+import { fetch_wikitext, is_namespaced_link } from '../lib/wiki';
 
 // Sections of Wikipedia:Unusual articles to import, in page order, up to and
 // including Military. Each is transcluded as a subpage {{/<Section>}}.
@@ -39,7 +39,7 @@ const get_article_titles_in_section = (wikitext: string): string[] => {
   const titles: string[] = [];
   for (const m of wikitext.matchAll(/'''\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]'''/g)) {
     const target = m[1].trim();
-    if (!target || target.includes(':')) {
+    if (!target || is_namespaced_link(target)) {
       continue; // skip File:/Category:/etc.
     }
     titles.push(target.replace(/_/g, ' '));

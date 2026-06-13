@@ -2,6 +2,12 @@ import { create_mediawiki_api } from './mediawiki';
 
 export const wiki_api = create_mediawiki_api('https://en.wikipedia.org/w/api.php');
 
+// Mainspace titles may contain colons ("Star Trek: First Contact"); only skip
+// links into a real namespace (File:, Category:, Wikipedia:, ...).
+const NAMESPACE_RE =
+  /^(?:Talk|User|Wikipedia|Project|WP|File|Image|Media|MediaWiki|Template|Help|Category|CAT|Portal|Draft|TimedText|Module|Special)(?:[ _]talk)?[ _]*:/i;
+export const is_namespaced_link = (target: string): boolean => NAMESPACE_RE.test(target);
+
 export const title_to_url = (title: string) =>
   `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
 

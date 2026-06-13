@@ -1,5 +1,5 @@
 import { run_download, type DiscoveredArticle } from '../lib/dataset';
-import { fetch_wikitext } from '../lib/wiki';
+import { fetch_wikitext, is_namespaced_link } from '../lib/wiki';
 
 // Featured articles are listed on Wikipedia:Featured articles, grouped under
 // ==Section== headings. The section is the article's topic.
@@ -23,7 +23,7 @@ run_download({
       }
       for (const m of line.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) {
         const target = m[1].trim();
-        if (!target || target.includes(':')) {
+        if (!target || is_namespaced_link(target)) {
           continue;
         }
         results.push({ title: target.replace(/_/g, ' '), topic: current_topic });

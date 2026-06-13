@@ -1,6 +1,6 @@
 import wtf from 'wtf_wikipedia';
 import { run_download, type DiscoveredArticle } from '../lib/dataset';
-import { fetch_wikitext } from '../lib/wiki';
+import { fetch_wikitext, is_namespaced_link } from '../lib/wiki';
 
 const TOPIC_PREFIX = '{{Wikipedia:Good articles/';
 
@@ -34,7 +34,7 @@ const get_articles_in_subpage = (wikitext: string, topic: string): DiscoveredArt
   for (const m of wikitext.matchAll(/\{\{#invoke:Good Articles\|subsection\|([\s\S]*?)\}\}/g)) {
     for (const link of m[1].matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) {
       const title = link[1].trim();
-      if (!title || title.includes(':')) {
+      if (!title || is_namespaced_link(title)) {
         continue;
       }
       results.push({ title: title.replace(/_/g, ' '), topic });
