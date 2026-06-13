@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import NextLink from 'next/link';
+import useScrollTrigger from '@mui/material/useScrollTrigger';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -41,18 +42,14 @@ const TOOLBAR_HEIGHT = 48;
 const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [showBar, setShowBar] = useState(true);
-  const lastScrollY = useRef(0);
+  const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
+
+  const trigger = useScrollTrigger({ target: scroll_node, threshold: 0 });
+  const showBar = !trigger;
 
   const switchView = (v: View) => {
     setView(v);
     setDrawerOpen(false);
-  };
-
-  const on_scroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const y = e.currentTarget.scrollTop;
-    setShowBar(y <= 0 || y < lastScrollY.current);
-    lastScrollY.current = y;
   };
 
   return (
@@ -116,7 +113,7 @@ const WikiArticles = () => {
       <Box
         sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
         data-testid="feed-scroll"
-        onScroll={on_scroll}
+        ref={(node: HTMLDivElement | null) => set_scroll_node(node)}
       >
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}

@@ -1,78 +1,6 @@
-// Wikipedia API layer — shared by the dataset download scripts and categorize.
-// Follows API:Etiquette: serial requests, maxlag, user-agent, gzip, json, backoff.
+import { create_mediawiki_api } from './mediawiki';
 
-const REQUEST_DELAY_MS = 500;
-
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
-const retry_delay = (res: Response, fallback_ms: number): number => {
-  const retryAfter = res.headers.get('Retry-After');
-  if (!retryAfter) {
-    return fallback_ms;
-  }
-  return isNaN(Number(retryAfter))
-    ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
-    : Number(retryAfter) * 1000;
-};
-
-export const wiki_api = async (params: URLSearchParams): Promise<unknown> => {
-  params.set('maxlag', '5');
-  const headers = {
-    'User-Agent': 'scrollsurf/1.0 (michael.hopfner@icloud.com)',
-    'Accept-Encoding': 'gzip',
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
-
-  // One initial request, plus a single retry on rate-limit (429/503), maxlag,
-  // or a thrown connection error (e.g. HTTP/2 GOAWAY). On a GOAWAY, undici evicts
-  // the dead socket from its pool, so the retry establishes a fresh connection.
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const last = attempt === 2;
-
-    let res: Response;
-    try {
-      res = await fetch('https://en.wikipedia.org/w/api.php', {
-        method: 'POST',
-        headers,
-        body: params.toString(),
-      });
-    } catch (err) {
-      if (last) {
-        throw err;
-      }
-      console.warn(`[wiki_api] connection error (${(err as Error).message}), retrying...`);
-      await sleep(1000);
-      continue;
-    }
-
-    if (res.status === 429 || res.status === 503) {
-      if (last) {
-        throw new Error(`Wikipedia API error: ${res.status} (after retry)`);
-      }
-      console.warn(`[wiki_api] ${res.status}, retrying...`);
-      await sleep(retry_delay(res, 5000));
-      continue;
-    }
-    if (!res.ok) {
-      throw new Error(`Wikipedia API error: ${res.status}`);
-    }
-
-    const data = await res.json();
-    if (data?.error?.code === 'maxlag') {
-      if (last) {
-        throw new Error('Wikipedia API maxlag (after retry)');
-      }
-      console.warn('[wiki_api] maxlag, retrying...');
-      await sleep(retry_delay(res, 5000));
-      continue;
-    }
-
-    await sleep(REQUEST_DELAY_MS);
-    return data;
-  }
-
-  throw new Error('Wikipedia API: unreachable'); // loop always returns or throws
-};
+export const wiki_api = create_mediawiki_api('https://en.wikipedia.org/w/api.php');
 
 export const title_to_url = (title: string) =>
   `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
@@ -85,8 +13,14 @@ export const fetch_wikitext = async (page: string): Promise<string> => {
     format: 'json',
     formatversion: '2',
   });
-  const data = (await wiki_api(params)) as { parse: { wikitext: string } };
-  return data.parse.wikitext;
+  const data = (await wiki_api(params)) as {
+    parse?: { wikitext: string };
+    error?: { code: string };
+  };
+  if (data.error) {
+    throw new Error(data.error.code);
+  }
+  return data.parse?.wikitext ?? '';
 };
 
 interface CategoryMembersOptions {

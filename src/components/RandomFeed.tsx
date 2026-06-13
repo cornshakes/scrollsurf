@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
+import { useInView } from 'react-intersection-observer';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
@@ -14,7 +15,7 @@ const PAGE_SIZE = 10;
 export const RandomFeed = () => {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [isPending, startTransition] = useTransition();
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const { ref, inView } = useInView({ rootMargin: '200px' });
 
   const fetchNext = () => {
     startTransition(async () => {
@@ -28,21 +29,10 @@ export const RandomFeed = () => {
   }, []);
 
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) {
-      return;
+    if (inView && !isPending) {
+      fetchNext();
     }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !isPending) {
-          fetchNext();
-        }
-      },
-      { rootMargin: '200px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [isPending]);
+  }, [inView, isPending]);
 
   return (
     <Box>
@@ -61,7 +51,7 @@ export const RandomFeed = () => {
         )
       )}
       <Box
-        ref={sentinelRef}
+        ref={ref}
         data-testid="feed-sentinel"
         sx={{ display: 'flex', justifyContent: 'center', py: 4 }}
       >

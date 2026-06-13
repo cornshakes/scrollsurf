@@ -1,15 +1,34 @@
+import wtf from 'wtf_wikipedia';
 import { run_download, type DiscoveredArticle } from '../lib/dataset';
 import { fetch_wikitext } from '../lib/wiki';
 
+const TOPIC_PREFIX = '{{Wikipedia:Good articles/';
+
 // Good articles are organized into topic subpages transcluded from
 // Wikipedia:Good_articles/all and Wikipedia:Good_articles/all2.
-// Parse {{Wikipedia:Good articles/TOPIC}} transclusions to get topic names.
-const get_topic_names = (wikitext: string): string[] =>
-  [...wikitext.matchAll(/\{\{Wikipedia:Good articles\/([^|}#\n]+)\}\}/g)]
-    .map((m) => m[1].trim())
-    .filter((name) => /^[A-Z]/.test(name)); // actual topics start with uppercase
+// doc.templates() replaces the transclusion regex; wikitext() preserves original
+// capitalisation (json().template lowercases it). Only topics starting with an
+// uppercase letter are real sections.
+const get_topic_names = (wikitext: string): string[] => {
+  const doc = wtf(wikitext);
+  const topics: string[] = [];
+  for (const tmpl of doc.templates()) {
+    const raw = tmpl.wikitext();
+    if (!raw.startsWith(TOPIC_PREFIX) || !raw.endsWith('}}')) {
+      continue;
+    }
+    const topic = raw.slice(TOPIC_PREFIX.length, -2).trim();
+    if (!topic || topic.includes('|') || !/^[A-Z]/.test(topic)) {
+      continue;
+    }
+    topics.push(topic);
+  }
+  return topics;
+};
 
 // Each topic subpage lists articles inside {{#invoke:Good Articles|subsection|...}} blocks.
+// wtf swallows #invoke template contents — doc.links() returns empty inside them —
+// so the inner-link extraction keeps its regex per the plan's known-limitation allowance.
 const get_articles_in_subpage = (wikitext: string, topic: string): DiscoveredArticle[] => {
   const results: DiscoveredArticle[] = [];
   for (const m of wikitext.matchAll(/\{\{#invoke:Good Articles\|subsection\|([\s\S]*?)\}\}/g)) {
@@ -36,7 +55,15 @@ run_download({
 
     const results: DiscoveredArticle[] = [];
     for (const topic of topics) {
-      const wikitext = await fetch_wikitext(`Wikipedia:Good articles/${topic}`);
+      let wikitext: string;
+      try {
+        wikitext = await fetch_wikitext(`Wikipedia:Good articles/${topic}`);
+      } catch (err) {
+        process.stdout.write(
+          `\nSkipping topic "${topic}": ${err instanceof Error ? err.message : err}\n`
+        );
+        continue;
+      }
       results.push(...get_articles_in_subpage(wikitext, topic));
       process.stdout.write(`\r${results.length} articles found...`);
     }

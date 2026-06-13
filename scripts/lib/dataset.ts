@@ -2,6 +2,7 @@
 // scripts. Each script supplies only its filename, source URL, and a discover()
 // that finds article titles (+ optional topics); everything else lives here.
 
+import { chunk } from 'es-toolkit';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fetch_article_content, title_to_url } from './wiki';
@@ -104,15 +105,12 @@ export const download_dataset = async (options: DownloadDatasetOptions): Promise
   const discovered = await discover_with_cache(db, options.discover);
 
   // title -> set of topics (an article may appear under several topics)
-  const topic_map = new Map<string, Set<string>>();
-  for (const { title, topic } of discovered) {
-    if (!topic_map.has(title)) {
-      topic_map.set(title, new Set());
-    }
-    if (topic) {
-      topic_map.get(title)?.add(topic);
-    }
-  }
+  const topic_map = new Map(
+    [...Map.groupBy(discovered, (d) => d.title)].map(([title, items]) => [
+      title,
+      new Set(items.flatMap((d) => (d.topic ? [d.topic] : []))),
+    ])
+  );
 
   // Seed the done flag from already-saved articles (covers DBs downloaded before
   // the flag existed). Matches by exact title; normalized/redirect titles that
@@ -147,8 +145,7 @@ export const download_dataset = async (options: DownloadDatasetOptions): Promise
 
   process.stdout.write('Phase 2: Downloading article content (extract, description, image)...\n');
   let processed = 0;
-  for (let i = 0; i < to_download.length; i += BATCH_SIZE) {
-    const batch = to_download.slice(i, i + BATCH_SIZE);
+  for (const batch of chunk(to_download, BATCH_SIZE)) {
     const { pages, resolve } = await fetch_article_content(batch);
     const page_by_title = new Map(pages.map((p) => [p.title, p]));
 

@@ -253,3 +253,7 @@ This time I also created some documents with my workflow that I'll just add to t
 
 # Fable time
 For this smaller commit (remove dataset selection), I just let Fable rip.
+
+# Fable gone, good fun :)
+Yeah so now it's been considered too dangerous and is gone for a while, which is ok with me.
+My workflow using plan.md, tasks.md and review-%n.md is working alright, I'll just have to check more myself.

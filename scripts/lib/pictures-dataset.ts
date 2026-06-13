@@ -1,6 +1,7 @@
 // Separate download pipeline for picture datasets (e.g. Featured pictures).
 // Fully parallel to dataset.ts — no shared types with the article pipeline.
 
+import { chunk } from 'es-toolkit';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fetch_image_content, type ImageInfo } from './wiki';
@@ -97,19 +98,17 @@ export const download_pictures_dataset = async (
 
   const discovered = await discover_with_cache(db, options.discover);
 
-  // file_title -> { caption, credit, topics[] }
-  const pic_map = new Map<
-    string,
-    { caption: string; credit: string | null; topics: Set<string> }
-  >();
-  for (const { file_title, caption, credit, topic } of discovered) {
-    if (!pic_map.has(file_title)) {
-      pic_map.set(file_title, { caption, credit: credit ?? null, topics: new Set() });
-    }
-    if (topic) {
-      pic_map.get(file_title)?.topics.add(topic);
-    }
-  }
+  // file_title -> { caption, credit, topics[] } — caption/credit from first occurrence
+  const pic_map = new Map(
+    [...Map.groupBy(discovered, (d) => d.file_title)].map(([file_title, items]) => [
+      file_title,
+      {
+        caption: items[0].caption,
+        credit: items[0].credit,
+        topics: new Set(items.map((d) => d.topic)),
+      },
+    ])
+  );
 
   // Seed done flag from already-saved pictures.
   db.exec(
@@ -142,8 +141,7 @@ export const download_pictures_dataset = async (
 
   process.stdout.write('Phase 2: Downloading image info (thumbnail URL, description page)...\n');
   let processed = 0;
-  for (let i = 0; i < to_download.length; i += BATCH_SIZE) {
-    const batch = to_download.slice(i, i + BATCH_SIZE);
+  for (const batch of chunk(to_download, BATCH_SIZE)) {
     const images = await (options.fetch_image_info ?? fetch_image_content)(batch);
     const by_title = new Map(images.map((img) => [img.title, img]));
 

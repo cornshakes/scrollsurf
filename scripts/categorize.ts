@@ -1,3 +1,4 @@
+import { chunk } from 'es-toolkit';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { readdirSync } from 'node:fs';
@@ -137,8 +138,7 @@ const walk_up_batch = async (categories: string[]): Promise<Map<string, string |
 
     // Fetch parents for all pooled nodes, in API-sized chunks.
     const parents_of = new Map<string, string[]>();
-    for (let i = 0; i < nodes.length; i += API_TITLE_LIMIT) {
-      const slice = nodes.slice(i, i + API_TITLE_LIMIT);
+    for (const slice of chunk(nodes, API_TITLE_LIMIT)) {
       for (const [name, parents] of await fetch_category_parents_batch(slice)) {
         parents_of.set(name, parents);
       }
@@ -302,12 +302,11 @@ const categorize = async () => {
 
   let mapped = 0;
   let failed = 0;
-  for (let i = 0; i < unmapped.length; i += CHUNK_SIZE) {
-    const chunk = unmapped.slice(i, i + CHUNK_SIZE);
-    const results = await walk_up_batch(chunk);
+  for (const batch_cats of chunk(unmapped, CHUNK_SIZE)) {
+    const results = await walk_up_batch(batch_cats);
 
     categories_db.exec('BEGIN');
-    for (const cat of chunk) {
+    for (const cat of batch_cats) {
       const top_level = results.get(cat) ?? null;
       if (top_level) {
         insert_stmt.run(cat, top_level);
@@ -319,7 +318,7 @@ const categorize = async () => {
     categories_db.exec('COMMIT');
 
     process.stdout.write(
-      `\r[${Math.min(i + CHUNK_SIZE, unmapped.length)}/${unmapped.length}] mapped ${mapped} failed ${failed}`
+      `\r[${mapped + failed}/${unmapped.length}] mapped ${mapped} failed ${failed}`
     );
   }
 

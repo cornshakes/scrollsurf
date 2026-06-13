@@ -40,7 +40,8 @@
     "@mui/material-nextjs": "^9.0.1",
     "next": "16.2.9",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "react-intersection-observer": "^9"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
@@ -50,6 +51,8 @@
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
+    "entities": "^4",
+    "es-toolkit": "^1",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "eslint-config-prettier": "^10.1.8",
@@ -58,10 +61,12 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jest": "^30.4.2",
+    "ky": "^1",
     "prettier": "^3.8.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wtf_wikipedia": "^10"
   },
   "prettier": {
     "semi": true,
