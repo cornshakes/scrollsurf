@@ -39,7 +39,7 @@ export const RandomFeed = () => {
       <Typography
         variant="body2"
         color="text.secondary"
-        sx={{ maxWidth: 680, mx: 'auto', px: { xs: 2, sm: 4 }, pt: 3, pb: 1 }}
+        sx={{ maxWidth: 680, mx: 'auto', px: { xs: 2, sm: 4 }, pt: 1.5, pb: 1 }}
       >
         Discover Wikipedia articles, pictures, topics and categories from curated datasets.
       </Typography>

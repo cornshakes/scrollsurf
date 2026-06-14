@@ -5,10 +5,10 @@ import NextLink from 'next/link';
 import Image from 'next/image';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import Box from '@mui/material/Box';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -37,15 +37,27 @@ const VIEWS = (Object.keys(VIEW_LABELS) as View[]).filter(
   (v) => v !== 'categories' || CATEGORIES_ENABLED
 );
 
-const TOOLBAR_HEIGHT = 48;
+// The floating menu icon reflects the current view: a thumbs-up/down on the
+// voted feeds, and the normal menu icon everywhere else.
+const renderViewIcon = (v: View) => {
+  if (v === 'liked') {
+    return <ThumbUpIcon sx={{ fontSize: 32 }} />;
+  }
+  if (v === 'disliked') {
+    return <ThumbDownIcon sx={{ fontSize: 32 }} />;
+  }
+  return <Image src="/menu-icon.png" alt="" width={32} height={32} />;
+};
 
 const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
 
-  const trigger = useScrollTrigger({ target: scroll_node, threshold: 0 });
-  const showBar = !trigger;
+  // Default hysteresis encodes scroll direction: true when scrolling down,
+  // false when scrolling up or at the very top.
+  const trigger = useScrollTrigger({ target: scroll_node });
+  const showIcon = !trigger;
 
   const switchView = (v: View) => {
     setView(v);
@@ -53,33 +65,34 @@ const WikiArticles = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        position: 'relative',
+      }}
+    >
+      <IconButton
+        color="inherit"
+        aria-label="Open menu"
+        data-testid="menu-button"
+        onClick={() => setDrawerOpen(true)}
         sx={{
-          overflow: 'hidden',
-          maxHeight: showBar ? TOOLBAR_HEIGHT : 0,
-          transition: 'max-height 0.2s ease',
-          flexShrink: 0,
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          zIndex: (theme) => theme.zIndex.appBar,
+          bgcolor: 'background.paper',
+          boxShadow: 1,
+          '&:hover': { bgcolor: 'background.paper' },
+          opacity: showIcon ? 1 : 0,
+          pointerEvents: showIcon ? 'auto' : 'none',
+          transition: 'opacity 0.2s ease',
         }}
       >
-        <AppBar position="static">
-          <Toolbar variant="dense">
-            <IconButton
-              edge="start"
-              color="inherit"
-              aria-label="Open menu"
-              data-testid="menu-button"
-              onClick={() => setDrawerOpen(true)}
-              sx={{ mr: 1 }}
-            >
-              <Image src="/menu-icon.png" alt="" width={24} height={24} />
-            </IconButton>
-            <Typography variant="h6" component="div" data-testid="view-title">
-              {VIEW_LABELS[view]}
-            </Typography>
-          </Toolbar>
-        </AppBar>
-      </Box>
+        {renderViewIcon(view)}
+      </IconButton>
 
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <List sx={{ width: 220 }}>
@@ -115,6 +128,9 @@ const WikiArticles = () => {
         data-testid="feed-scroll"
         ref={(node: HTMLDivElement | null) => set_scroll_node(node)}
       >
+        <Typography variant="h6" component="h1" sx={{ pl: 8, pr: 2, pt: 2.2, pb: 0.5 }}>
+          Scrollsurf
+        </Typography>
         {view === 'random' && <RandomFeed />}
         {view === 'liked' && <VotedFeed vote={1} />}
         {view === 'disliked' && <VotedFeed vote={-1} />}
