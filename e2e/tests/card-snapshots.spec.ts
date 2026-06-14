@@ -6,7 +6,6 @@ import {
   mock_images,
   picture_cards,
   scroll_card_to_top,
-  scroll_to_load_all,
   start_consented,
   switch_view,
   vote_card,
@@ -72,7 +71,6 @@ test('picture card - long caption', async ({ page, context }) => {
   await mock_images(page);
   await start_consented(context);
   await goto_feed(page);
-  await scroll_to_load_all(page);
   const card = picture_cards(page)
     .filter({ hasText: /One of the wards/ })
     .first();
@@ -84,7 +82,6 @@ test('picture card - long credit', async ({ page, context }) => {
   await mock_images(page);
   await start_consented(context);
   await goto_feed(page);
-  await scroll_to_load_all(page);
   const card = picture_cards(page)
     .filter({ hasText: /Chae Yong-sin/ })
     .first();
@@ -96,7 +93,6 @@ test('picture card - liked', async ({ page, context }) => {
   await mock_images(page);
   await start_consented(context);
   await goto_feed(page);
-  await scroll_to_load_all(page);
   const card = picture_cards(page)
     .filter({ hasText: /Chae Yong-sin/ })
     .first();
@@ -112,7 +108,6 @@ test('picture card - disliked', async ({ page, context }) => {
   await mock_images(page);
   await start_consented(context);
   await goto_feed(page);
-  await scroll_to_load_all(page);
   const card = picture_cards(page)
     .filter({ hasText: /Chae Yong-sin/ })
     .first();

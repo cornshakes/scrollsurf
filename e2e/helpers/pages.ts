@@ -55,26 +55,12 @@ export const mock_images = async (page: Page): Promise<void> => {
   );
 };
 
-/** Scroll the feed until no new cards appear, loading all available items. */
-export const scroll_to_load_all = async (page: Page): Promise<void> => {
-  for (let i = 0; i < 5; i++) {
-    const before = await page.getByTestId('feed-card').count();
-    if (before === 12) {
-      // 12 = full article count defined in fixtures
-      return;
-    }
-    await scroll_feed_to_bottom(page);
-    await page.waitForFunction(
-      (n: number) => document.querySelectorAll('[data-testid="feed-card"]').length > n,
-      before,
-      { timeout: 10000 }
-    );
-  }
-};
-
-/** Load all feed items, then return the first feed card whose heading matches `text`. */
-export const find_card_by_heading = async (page: Page, text: string | RegExp): Promise<Locator> => {
-  await scroll_to_load_all(page);
+/**
+ * Return the first feed card whose heading matches `text`. The whole fixture
+ * feed fits on the first page (PAGE_SIZE > fixture item count), so no scrolling
+ * is needed to surface every item.
+ */
+export const find_card_by_heading = (page: Page, text: string | RegExp): Locator => {
   return page
     .getByTestId('feed-card')
     .filter({ has: page.getByRole('heading', { name: text }) })
@@ -90,12 +76,6 @@ export const goto_feed = async (page: Page): Promise<void> => {
 export const scroll_feed_to_top = async (page: Page): Promise<void> => {
   await page.getByTestId('feed-scroll').evaluate((el) => {
     el.scrollTop = 0;
-  });
-};
-
-export const scroll_feed_to_bottom = async (page: Page): Promise<void> => {
-  await page.getByTestId('feed-scroll').evaluate((el) => {
-    el.scrollTo(0, el.scrollHeight);
   });
 };
 

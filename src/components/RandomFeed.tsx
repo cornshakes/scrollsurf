@@ -10,7 +10,7 @@ import { ArticleCard } from './ArticleCard';
 import { PictureCard } from './PictureCard';
 import type { FeedItem } from '@/lib/db';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 export const RandomFeed = () => {
   const [items, setItems] = useState<FeedItem[]>([]);

@@ -144,4 +144,16 @@ export const migrations: readonly migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    name: 'add_feed_items_view',
+    up: (db) => {
+      db.exec(`
+        CREATE VIEW IF NOT EXISTS feed_items AS
+          SELECT 'article' AS type, id FROM articles
+          UNION ALL
+          SELECT 'picture' AS type, id FROM pictures;
+      `);
+    },
+  },
 ];

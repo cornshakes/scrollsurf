@@ -1,7 +1,8 @@
 # Code Style
 Prefer snake_case unless it's awkward to mix with camelCase.
 Prefer const arrow functions over `function`.
-Always use curly braces for if/else/loop blocks, even if they are single line
+Always use curly braces for if/else/loop blocks, even if there is only a single statement.
+Don't use one-letter variable names, be more clear.
 
 After type-check passes, always run `npm run lint-fix` to format and fix code automatically.
 
@@ -82,14 +83,14 @@ Pictures and articles use **fully separate schemas** end-to-end:
 
 The feed returns `FeedItem = Article | Picture`. Always switch on `.type` when handling feed items.
 
-Pictures are interleaved in the feed at a configurable ratio (see `FEED_PICTURE_RATIO` below). Each type has its own weighted-random query; there is no SQL UNION.
+A `feed_items` SQL view unifies the two item tables at the identity level (`type, id`) for feed selection. The fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection.
 
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |
 |---|---|---|
 | `DOWNLOAD_LIMIT=N` | unlimited | Caps articles downloaded per `npm run download-vital-50000` run |
-| `FEED_PICTURE_RATIO=N` | `0.2` | Fraction of each feed page that is pictures (0–1) |
+| `FEED_PICTURE_RATIO=N` | `0.1` | Per-type weight multiplier in the unified SQL draw (expected picture fraction: 0–1); `0` → zero pictures, `1` → zero articles |
 | `FEED_AFFINITY_STRENGTH=N` | `2.0` | Strength of topic-affinity feed weighting; `0` = pure random |
 
 ## Wikipedia API etiquette
@@ -106,4 +107,12 @@ Per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and [Wikimedia
 
 ## Feed selection
 
-`get_next_articles` and `get_next_pictures` use Efraimidis–Spirakis weighted sampling (`ORDER BY -ln(random)/weight`) where weight = `exp(AFFINITY_STRENGTH · mean_topic_affinity)`. Topic affinity is derived from the user's likes, dislikes, and link clicks on seen items, normalized by exposure (smoothing constant 5). Neutral users, anonymous users, and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random — strict generalization of the previous behavior. Dislikes downweight topics but never hard-exclude items. Constants live in `src/lib/db/affinity.ts`. Do not add hard exclusions or deterministic secondary sorts. `get_next_feed` interleaves articles and pictures at `FEED_PICTURE_RATIO`.
+`get_next_feed` issues a single Efraimidis–Spirakis weighted draw over a unified `feed_items` view. The query joins both `articles` and `pictures` at the identity level (`type, id`) and selects unseen items with at least one topic. Weight is calculated per-item as:
+
+```
+weight = exp(AFFINITY_STRENGTH · affinity) · type_share / pool_size
+```
+
+where `type_share` is `FEED_PICTURE_RATIO` for pictures and `1 - FEED_PICTURE_RATIO` for articles, and `pool_size` is the count of eligible items of that type. This ensures the expected picture fraction equals the ratio, independent of pool sizes. `FEED_PICTURE_RATIO=0` hard-excludes pictures (via `WHERE`); `FEED_PICTURE_RATIO=1` hard-excludes articles.
+
+Topic affinity is derived from the user's likes, dislikes, and link clicks on seen items, normalized by exposure (smoothing constant 5). Neutral users, anonymous users, and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random — strict generalization of the previous behavior. Dislikes downweight topics but never hard-exclude items. Constants live in `src/lib/db/affinity.ts`. Do not add hard exclusions or deterministic secondary sorts.

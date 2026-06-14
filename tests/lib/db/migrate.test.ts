@@ -288,4 +288,49 @@ describe('migrate — real history', () => {
     expect(() => migrate(db)).not.toThrow();
     expect(get_user_version(db)).toBe(version_after_first);
   });
+
+  test('version 4 creates the feed_items view', () => {
+    migrate(db);
+
+    expect(has_object(db, 'feed_items')).toBe(true);
+    const view_row = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = 'feed_items'")
+      .get() as { name: string } | undefined;
+    expect(view_row).toBeDefined();
+  });
+
+  test('version 4 view returns both article and picture types', () => {
+    migrate(db);
+
+    db.prepare('INSERT INTO articles (title, extract, url) VALUES (?, ?, ?)').run(
+      'Test Article',
+      'Extract',
+      'https://example.com/article'
+    );
+
+    db.prepare('INSERT INTO pictures (title, url, image_url) VALUES (?, ?, ?)').run(
+      'Test Picture',
+      'https://example.com/picture',
+      'https://example.com/picture.jpg'
+    );
+
+    const rows = db.prepare('SELECT type, id FROM feed_items').all() as {
+      type: string;
+      id: number;
+    }[];
+
+    expect(rows).toHaveLength(2);
+    const types = rows.map((r) => r.type).sort();
+    expect(types).toEqual(['article', 'picture']);
+  });
+
+  test('version 4 upgrades cleanly from version 3', () => {
+    stamp_version(db, 3);
+
+    make_recording_list();
+    migrate(db);
+
+    expect(get_user_version(db)).toBe(migrations.length);
+    expect(has_object(db, 'feed_items')).toBe(true);
+  });
 });

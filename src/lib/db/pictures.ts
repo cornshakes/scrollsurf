@@ -17,6 +17,28 @@ const row_to_picture = (r: PictureDbRow, topics: Topic[]): Picture => ({
   topics,
 });
 
+export const fetch_pictures_by_ids = (ids: number[], user_id: number | null): Picture[] => {
+  if (ids.length === 0) {
+    return [];
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = get_db()
+    .prepare(
+      `SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit,
+              COALESCE(up.like, 0) AS like
+       FROM pictures p
+       LEFT JOIN user_pictures up ON p.id = up.picture_id AND up.user_id = ?
+       WHERE p.id IN (${placeholders})`
+    )
+    .all(user_id, ...ids) as unknown as PictureDbRow[];
+  const topics_by_id = fetch_topics_by_item('picture_topics', 'picture_id', ids);
+  const by_id = new Map(rows.map((r) => [r.id, row_to_picture(r, topics_by_id.get(r.id) ?? [])]));
+  return ids.flatMap((id) => {
+    const p = by_id.get(id);
+    return p ? [p] : [];
+  });
+};
+
 const PICTURE_AFFINITY_CTES = affinity_ctes({
   topics_table: 'picture_topics',
   user_table: 'user_pictures',
@@ -67,7 +89,6 @@ export const get_next_pictures_internal = (
   const mark_seen = db.prepare(PICTURE_MARK_SEEN_SQL);
   const rows = get_next.all({ $limit: limit, $user_id: user_id }) as unknown as PictureDbRow[];
   const ids = rows.map((r) => r.id);
-  const topics_by_id = fetch_topics_by_item('picture_topics', 'picture_id', ids);
   if (user_id !== null) {
     db.exec('BEGIN');
     for (const row of rows) {
@@ -75,7 +96,7 @@ export const get_next_pictures_internal = (
     }
     db.exec('COMMIT');
   }
-  return rows.map((r) => row_to_picture(r, topics_by_id.get(r.id) ?? []));
+  return fetch_pictures_by_ids(ids, user_id);
 };
 
 export const set_picture_like = (id: number, value: -1 | 0 | 1, user_id: number) => {
@@ -85,8 +106,9 @@ export const set_picture_like = (id: number, value: -1 | 0 | 1, user_id: number)
 export const get_voted_pictures = (vote: -1 | 1, user_id: number | null): Picture[] => {
   const rows = get_db()
     .prepare(PICTURE_GET_VOTED_SQL)
-    .all({ $like: vote, $user_id: user_id }) as unknown as PictureDbRow[];
-  const ids = rows.map((r) => r.id);
-  const topics_by_id = fetch_topics_by_item('picture_topics', 'picture_id', ids);
-  return rows.map((r) => row_to_picture(r, topics_by_id.get(r.id) ?? []));
+    .all({ $like: vote, $user_id: user_id }) as unknown as { id: number }[];
+  return fetch_pictures_by_ids(
+    rows.map((r) => r.id),
+    user_id
+  );
 };

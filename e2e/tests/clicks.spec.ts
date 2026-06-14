@@ -5,7 +5,6 @@ import {
   mock_images,
   picture_cards,
   read_clicks,
-  scroll_to_load_all,
   start_consented,
   stub_external_navigation,
   type ClickRow,
@@ -39,7 +38,6 @@ test('every article link click is recorded', async ({ page, context }) => {
   await mock_images(page);
   await stub_external_navigation(page);
   await goto_feed(page);
-  await scroll_to_load_all(page);
 
   // title — the article heading link; label is the title text.
   const title_link = article_cards(page).first().getByTestId('link-title');
@@ -71,7 +69,6 @@ test('every picture link click is recorded', async ({ page, context }) => {
   await mock_images(page);
   await stub_external_navigation(page);
   await goto_feed(page);
-  await scroll_to_load_all(page);
 
   // title — the image link (no text, so assert on type only).
   await picture_cards(page).first().getByTestId('link-title').click();

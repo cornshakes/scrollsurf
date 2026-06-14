@@ -85,6 +85,34 @@ const ARTICLE_GET_VOTED_SQL = `
   ORDER BY a.id DESC
 `;
 
+export const fetch_articles_by_ids = (ids: number[], user_id: number | null): Article[] => {
+  if (ids.length === 0) {
+    return [];
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = get_db()
+    .prepare(
+      `SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
+              COALESCE(ua.like, 0) AS like
+       FROM articles a
+       LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = ?
+       WHERE a.id IN (${placeholders})`
+    )
+    .all(user_id, ...ids) as unknown as ArticleDbRow[];
+  const topics_by_id = fetch_topics_by_item('article_topics', 'article_id', ids);
+  const cats_by_id = fetch_visible_categories(ids);
+  const by_id = new Map(
+    rows.map((r) => [
+      r.id,
+      row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? []),
+    ])
+  );
+  return ids.flatMap((id) => {
+    const a = by_id.get(id);
+    return a ? [a] : [];
+  });
+};
+
 export const get_next_articles_internal = (
   limit: number,
   user_id: number | null,
@@ -95,8 +123,6 @@ export const get_next_articles_internal = (
   const mark_seen = db.prepare(ARTICLE_MARK_SEEN_SQL);
   const rows = get_next.all({ $limit: limit, $user_id: user_id }) as unknown as ArticleDbRow[];
   const ids = rows.map((r) => r.id);
-  const topics_by_id = fetch_topics_by_item('article_topics', 'article_id', ids);
-  const cats_by_id = fetch_visible_categories(ids);
   if (user_id !== null) {
     db.exec('BEGIN');
     for (const row of rows) {
@@ -104,9 +130,7 @@ export const get_next_articles_internal = (
     }
     db.exec('COMMIT');
   }
-  return rows.map((r) =>
-    row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? [])
-  );
+  return fetch_articles_by_ids(ids, user_id);
 };
 
 export const get_next_articles = (limit: number, user_id: number | null): Article[] =>
@@ -119,11 +143,9 @@ export const set_article_like = (id: number, value: -1 | 0 | 1, user_id: number)
 export const get_voted_articles = (vote: -1 | 1, user_id: number | null): Article[] => {
   const rows = get_db()
     .prepare(ARTICLE_GET_VOTED_SQL)
-    .all({ $like: vote, $user_id: user_id }) as unknown as ArticleDbRow[];
-  const ids = rows.map((r) => r.id);
-  const topics_by_id = fetch_topics_by_item('article_topics', 'article_id', ids);
-  const cats_by_id = fetch_visible_categories(ids);
-  return rows.map((r) =>
-    row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? [])
+    .all({ $like: vote, $user_id: user_id }) as unknown as { id: number }[];
+  return fetch_articles_by_ids(
+    rows.map((r) => r.id),
+    user_id
   );
 };
