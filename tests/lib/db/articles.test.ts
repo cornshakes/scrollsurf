@@ -1,4 +1,5 @@
 import { setup, insert_user, insert_article, reset_db } from '../../helpers/test-db';
+import { get_db } from '@/lib/db/connection';
 import { get_next_articles, set_article_like, get_voted_articles } from '@/lib/db/articles';
 
 beforeAll(setup);
@@ -33,7 +34,7 @@ it('does not mark articles seen when user_id is null', () => {
   expect(get_next_articles(10, null)).toHaveLength(1);
 });
 
-it('parses |||-delimited categories correctly', () => {
+it('returns all visible categories', () => {
   const uid = insert_user();
   insert_article({
     title: 'A',
@@ -46,7 +47,7 @@ it('parses |||-delimited categories correctly', () => {
   expect(article.categories).toEqual(expect.arrayContaining(['Science', 'History']));
 });
 
-it('correctly parses topic names containing :: (e.g. Science::Physics)', () => {
+it('topic names containing :: round-trip intact (regression: value is never parsed)', () => {
   const uid = insert_user();
   insert_article({
     title: 'A',
@@ -107,4 +108,80 @@ it('get_voted_articles(-1) returns disliked articles', () => {
   const result = get_voted_articles(-1, uid);
   expect(result).toHaveLength(1);
   expect(result[0].id).toBe(id);
+});
+
+it('batch fetch: each article gets exactly its own topics and categories with no cross-leak', () => {
+  const uid = insert_user();
+  const id1 = insert_article({
+    title: 'A1',
+    url: 'https://a1',
+    topics: [
+      { dataset: 'D', topic: 'T1' },
+      { dataset: 'D', topic: 'T2' },
+    ],
+    categories: ['Science'],
+  });
+  const id2 = insert_article({
+    title: 'A2',
+    url: 'https://a2',
+    topics: [{ dataset: 'D', topic: 'T3' }],
+    categories: ['History', 'Arts'],
+  });
+  const result = get_next_articles(10, uid);
+  expect(result).toHaveLength(2);
+  const a1 = result.find((a) => a.id === id1) as (typeof result)[number];
+  const a2 = result.find((a) => a.id === id2) as (typeof result)[number];
+  expect(a1.topics.map((t) => t.topic).sort()).toEqual(['T1', 'T2']);
+  expect(a1.categories).toEqual(['Science']);
+  expect(a2.topics.map((t) => t.topic)).toEqual(['T3']);
+  expect(a2.categories.sort()).toEqual(['Arts', 'History']);
+});
+
+it('dataset_url is populated when datasets.source_url is set, null when absent', () => {
+  const uid = insert_user();
+  insert_article({
+    title: 'A',
+    url: 'https://a',
+    topics: [
+      { dataset: 'WithUrl', topic: 'T1' },
+      { dataset: 'NoUrl', topic: 'T2' },
+    ],
+  });
+  get_db()
+    .prepare('UPDATE datasets SET source_url = ? WHERE name = ?')
+    .run('https://example.com/dataset', 'WithUrl');
+  const [article] = get_next_articles(10, uid);
+  const withUrl = article.topics.find(
+    (t) => t.dataset === 'WithUrl'
+  ) as (typeof article.topics)[number];
+  const noUrl = article.topics.find(
+    (t) => t.dataset === 'NoUrl'
+  ) as (typeof article.topics)[number];
+  expect(withUrl.dataset_url).toBe('https://example.com/dataset');
+  expect(noUrl.dataset_url).toBeNull();
+});
+
+it('hidden categories are excluded from article results', () => {
+  const uid = insert_user();
+  insert_article({
+    title: 'A',
+    url: 'https://a',
+    topics: [{ dataset: 'D', topic: 'T' }],
+    categories: ['Visible'],
+  });
+  const db = get_db();
+  db.prepare('INSERT OR IGNORE INTO categories (name, hidden) VALUES (?, 1)').run('Hidden');
+  const hidden_id = (
+    db.prepare('SELECT id FROM categories WHERE name = ?').get('Hidden') as { id: number }
+  ).id;
+  const article_id = (
+    db.prepare('SELECT id FROM articles WHERE title = ?').get('A') as { id: number }
+  ).id;
+  db.prepare('INSERT INTO article_categories (article_id, category_id) VALUES (?, ?)').run(
+    article_id,
+    hidden_id
+  );
+  const [article] = get_next_articles(10, uid);
+  expect(article.categories).toEqual(['Visible']);
+  expect(article.categories).not.toContain('Hidden');
 });

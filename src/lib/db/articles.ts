@@ -1,23 +1,38 @@
-import { type Article } from './types';
+import { type Article, type Topic } from './types';
 import { get_db } from './connection';
 import { affinity_ctes, weighted_random_order_by } from './affinity';
-import { topics_subquery, parse_topics_str } from './topics';
+import { fetch_topics_by_item } from './topics';
 
-const VISIBLE_CATEGORIES_SUBQUERY = `
-  (SELECT GROUP_CONCAT(c.name, '|||')
-   FROM article_categories ac
-   JOIN categories c ON ac.category_id = c.id
-   WHERE ac.article_id = a.id AND c.hidden = 0)
-`;
-
-const ARTICLE_TOPICS_SUBQUERY = topics_subquery('article_topics', 'article_id', 'a');
-
-type ArticleDbRow = Omit<Article, 'type' | 'categories' | 'topics'> & {
-  visible_categories: string | null;
-  article_topics_str: string | null;
+// Batch-fetch visible (non-hidden) category names. Returns article_id -> string[].
+const fetch_visible_categories = (ids: number[]): Map<number, string[]> => {
+  const by_id = new Map<number, string[]>();
+  if (ids.length === 0) {
+    return by_id;
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = get_db()
+    .prepare(
+      `SELECT ac.article_id AS item_id, c.name
+       FROM article_categories ac
+       JOIN categories c ON ac.category_id = c.id
+       WHERE c.hidden = 0 AND ac.article_id IN (${placeholders})`
+    )
+    .all(...ids) as unknown as { item_id: number; name: string }[];
+  for (const r of rows) {
+    const list = by_id.get(r.item_id) ?? [];
+    list.push(r.name);
+    by_id.set(r.item_id, list);
+  }
+  return by_id;
 };
 
-export const row_to_article = (r: ArticleDbRow): Article => ({
+type ArticleDbRow = Omit<Article, 'type' | 'categories' | 'topics'>;
+
+export const row_to_article = (
+  r: ArticleDbRow,
+  topics: Topic[],
+  categories: string[]
+): Article => ({
   type: 'article',
   id: r.id,
   title: r.title,
@@ -26,8 +41,8 @@ export const row_to_article = (r: ArticleDbRow): Article => ({
   like: r.like,
   description: r.description,
   image_url: r.image_url,
-  categories: r.visible_categories ? r.visible_categories.split('|||') : [],
-  topics: parse_topics_str(r.article_topics_str),
+  categories,
+  topics,
 });
 
 const ARTICLE_AFFINITY_CTES = affinity_ctes({
@@ -40,9 +55,7 @@ const ARTICLE_AFFINITY_CTES = affinity_ctes({
 const ARTICLE_GET_NEXT_SQL = (order_by: string) => `
   ${ARTICLE_AFFINITY_CTES}
   SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url,
-         COALESCE(ua.like, 0) AS like,
-         ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
-         ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
+         COALESCE(ua.like, 0) AS like
   FROM articles a
   LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
   LEFT JOIN item_affinity ia ON ia.item_id = a.id
@@ -65,9 +78,7 @@ const ARTICLE_SET_LIKE_SQL = `
 `;
 
 const ARTICLE_GET_VOTED_SQL = `
-  SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url, ua.like,
-         ${VISIBLE_CATEGORIES_SUBQUERY} AS visible_categories,
-         ${ARTICLE_TOPICS_SUBQUERY} AS article_topics_str
+  SELECT a.id, a.title, a.extract, a.url, a.description, a.image_url, ua.like
   FROM articles a
   JOIN user_articles ua ON a.id = ua.article_id
   WHERE ua.like = $like AND ua.user_id = $user_id
@@ -83,6 +94,9 @@ export const get_next_articles_internal = (
   const get_next = db.prepare(ARTICLE_GET_NEXT_SQL(weighted_random_order_by(strength)));
   const mark_seen = db.prepare(ARTICLE_MARK_SEEN_SQL);
   const rows = get_next.all({ $limit: limit, $user_id: user_id }) as unknown as ArticleDbRow[];
+  const ids = rows.map((r) => r.id);
+  const topics_by_id = fetch_topics_by_item('article_topics', 'article_id', ids);
+  const cats_by_id = fetch_visible_categories(ids);
   if (user_id !== null) {
     db.exec('BEGIN');
     for (const row of rows) {
@@ -90,7 +104,9 @@ export const get_next_articles_internal = (
     }
     db.exec('COMMIT');
   }
-  return rows.map(row_to_article);
+  return rows.map((r) =>
+    row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? [])
+  );
 };
 
 export const get_next_articles = (limit: number, user_id: number | null): Article[] =>
@@ -104,5 +120,10 @@ export const get_voted_articles = (vote: -1 | 1, user_id: number | null): Articl
   const rows = get_db()
     .prepare(ARTICLE_GET_VOTED_SQL)
     .all({ $like: vote, $user_id: user_id }) as unknown as ArticleDbRow[];
-  return rows.map(row_to_article);
+  const ids = rows.map((r) => r.id);
+  const topics_by_id = fetch_topics_by_item('article_topics', 'article_id', ids);
+  const cats_by_id = fetch_visible_categories(ids);
+  return rows.map((r) =>
+    row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? [])
+  );
 };

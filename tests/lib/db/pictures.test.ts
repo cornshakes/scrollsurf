@@ -1,11 +1,6 @@
 import { setup, insert_user, insert_picture, reset_db } from '../../helpers/test-db';
 import { get_voted_pictures, set_picture_like } from '@/lib/db/pictures';
 import { get_next_feed } from '@/lib/db/feed';
-
-// get_next_pictures_internal is not exported — test it via get_next_feed with
-// FEED_PICTURE_RATIO=1 would require module reset; instead call get_next_feed
-// with only pictures in the DB (no articles) so it returns pictures.
-// For simpler isolation, we import and re-export an internal for direct testing:
 import { get_next_pictures_internal } from '@/lib/db/pictures';
 
 beforeAll(setup);
@@ -109,6 +104,31 @@ it('get_voted_pictures(-1) returns disliked pictures', () => {
   const result = get_voted_pictures(-1, uid);
   expect(result).toHaveLength(1);
   expect(result[0].id).toBe(id);
+});
+
+it('batch fetch: each picture gets exactly its own topics with no cross-leak', () => {
+  const uid = insert_user();
+  const id1 = insert_picture({
+    title: 'P1',
+    url: 'https://p1',
+    image_url: 'https://img1',
+    topics: [
+      { dataset: 'D', topic: 'T1' },
+      { dataset: 'D', topic: 'T2' },
+    ],
+  });
+  const id2 = insert_picture({
+    title: 'P2',
+    url: 'https://p2',
+    image_url: 'https://img2',
+    topics: [{ dataset: 'D', topic: 'T3' }],
+  });
+  const result = get_next_pictures_internal(10, uid);
+  expect(result).toHaveLength(2);
+  const p1 = result.find((p) => p.id === id1) as (typeof result)[number];
+  const p2 = result.find((p) => p.id === id2) as (typeof result)[number];
+  expect(p1.topics.map((t) => t.topic).sort()).toEqual(['T1', 'T2']);
+  expect(p2.topics.map((t) => t.topic)).toEqual(['T3']);
 });
 
 it('pictures appear in feed when no articles exist', () => {

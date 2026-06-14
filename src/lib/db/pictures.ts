@@ -1,15 +1,11 @@
-import { type Picture } from './types';
+import { type Picture, type Topic } from './types';
 import { get_db } from './connection';
 import { affinity_ctes, weighted_random_order_by } from './affinity';
-import { topics_subquery, parse_topics_str } from './topics';
+import { fetch_topics_by_item } from './topics';
 
-const PICTURE_TOPICS_SUBQUERY = topics_subquery('picture_topics', 'picture_id', 'p');
+type PictureDbRow = Omit<Picture, 'type' | 'topics'>;
 
-type PictureDbRow = Omit<Picture, 'type' | 'topics'> & {
-  picture_topics_str: string | null;
-};
-
-const row_to_picture = (r: PictureDbRow): Picture => ({
+const row_to_picture = (r: PictureDbRow, topics: Topic[]): Picture => ({
   type: 'picture',
   id: r.id,
   title: r.title,
@@ -18,7 +14,7 @@ const row_to_picture = (r: PictureDbRow): Picture => ({
   image_url: r.image_url,
   caption: r.caption,
   credit: r.credit,
-  topics: parse_topics_str(r.picture_topics_str),
+  topics,
 });
 
 const PICTURE_AFFINITY_CTES = affinity_ctes({
@@ -31,8 +27,7 @@ const PICTURE_AFFINITY_CTES = affinity_ctes({
 const PICTURE_GET_NEXT_SQL = (order_by: string) => `
   ${PICTURE_AFFINITY_CTES}
   SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit,
-         COALESCE(up.like, 0) AS like,
-         ${PICTURE_TOPICS_SUBQUERY} AS picture_topics_str
+         COALESCE(up.like, 0) AS like
   FROM pictures p
   LEFT JOIN user_pictures up ON p.id = up.picture_id AND up.user_id = $user_id
   LEFT JOIN item_affinity ia ON ia.item_id = p.id
@@ -55,8 +50,7 @@ const PICTURE_SET_LIKE_SQL = `
 `;
 
 const PICTURE_GET_VOTED_SQL = `
-  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like,
-         ${PICTURE_TOPICS_SUBQUERY} AS picture_topics_str
+  SELECT p.id, p.title, p.url, p.image_url, p.caption, p.credit, up.like
   FROM pictures p
   JOIN user_pictures up ON p.id = up.picture_id
   WHERE up.like = $like AND up.user_id = $user_id
@@ -72,6 +66,8 @@ export const get_next_pictures_internal = (
   const get_next = db.prepare(PICTURE_GET_NEXT_SQL(weighted_random_order_by(strength)));
   const mark_seen = db.prepare(PICTURE_MARK_SEEN_SQL);
   const rows = get_next.all({ $limit: limit, $user_id: user_id }) as unknown as PictureDbRow[];
+  const ids = rows.map((r) => r.id);
+  const topics_by_id = fetch_topics_by_item('picture_topics', 'picture_id', ids);
   if (user_id !== null) {
     db.exec('BEGIN');
     for (const row of rows) {
@@ -79,7 +75,7 @@ export const get_next_pictures_internal = (
     }
     db.exec('COMMIT');
   }
-  return rows.map(row_to_picture);
+  return rows.map((r) => row_to_picture(r, topics_by_id.get(r.id) ?? []));
 };
 
 export const set_picture_like = (id: number, value: -1 | 0 | 1, user_id: number) => {
@@ -90,5 +86,7 @@ export const get_voted_pictures = (vote: -1 | 1, user_id: number | null): Pictur
   const rows = get_db()
     .prepare(PICTURE_GET_VOTED_SQL)
     .all({ $like: vote, $user_id: user_id }) as unknown as PictureDbRow[];
-  return rows.map(row_to_picture);
+  const ids = rows.map((r) => r.id);
+  const topics_by_id = fetch_topics_by_item('picture_topics', 'picture_id', ids);
+  return rows.map((r) => row_to_picture(r, topics_by_id.get(r.id) ?? []));
 };

@@ -1,27 +1,37 @@
 import { type CategoryTree, type TopicStat, type CategoryGroup, type Topic } from './types';
 import { get_db } from './connection';
 
-// SQL subquery that aggregates an item's dataset/topic rows into a single
-// '|||'-delimited string of 'dataset::topic::source_url' triples. Shared by the
-// article and picture queries (each has its own topics table + id column).
-export const topics_subquery = (topics_table: string, item_id_col: string, item_alias: string) => `
-  (SELECT GROUP_CONCAT(t.dataset || '::' || t.topic || '::' || COALESCE(d.source_url, ''), '|||')
-   FROM ${topics_table} t
-   LEFT JOIN datasets d ON d.name = t.dataset
-   WHERE t.${item_id_col} = ${item_alias}.id)
-`;
-
-// Inverse of topics_subquery: parse the aggregated string back into Topic[].
-export const parse_topics_str = (str: string | null): Topic[] =>
-  str
-    ? str.split('|||').map((t) => {
-        const parts = t.split('::');
-        const dataset_url = parts.length >= 3 ? parts[parts.length - 1] || null : null;
-        const dataset = parts[0];
-        const topic = parts.slice(1, parts.length - 1).join('::');
-        return { dataset, topic, dataset_url };
-      })
-    : [];
+// Batch-fetch topics for a set of items. Returns item_id -> Topic[].
+export const fetch_topics_by_item = (
+  topics_table: 'article_topics' | 'picture_topics',
+  item_id_col: 'article_id' | 'picture_id',
+  ids: number[]
+): Map<number, Topic[]> => {
+  const by_id = new Map<number, Topic[]>();
+  if (ids.length === 0) {
+    return by_id;
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = get_db()
+    .prepare(
+      `SELECT t.${item_id_col} AS item_id, t.dataset, t.topic, d.source_url
+       FROM ${topics_table} t
+       LEFT JOIN datasets d ON d.name = t.dataset
+       WHERE t.${item_id_col} IN (${placeholders})`
+    )
+    .all(...ids) as unknown as {
+    item_id: number;
+    dataset: string;
+    topic: string;
+    source_url: string | null;
+  }[];
+  for (const r of rows) {
+    const list = by_id.get(r.item_id) ?? [];
+    list.push({ dataset: r.dataset, topic: r.topic, dataset_url: r.source_url ?? null });
+    by_id.set(r.item_id, list);
+  }
+  return by_id;
+};
 
 const GET_TOP_LEVELS_SQL = `
   SELECT
