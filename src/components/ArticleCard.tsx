@@ -5,12 +5,12 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import Chip from '@mui/material/Chip';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { set_article_like, record_link_click } from '@/app/actions';
 import type { Article, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
+import { CardTags } from './CardTags';
 
 export const ArticleCard = ({
   article,
@@ -143,55 +143,7 @@ export const ArticleCard = ({
           {article.extract}
         </Typography>
       )}
-      {has_tags && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-          {article.topics.map(({ dataset, topic, dataset_url }) => {
-            const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
-            return (
-              <Box key={`${dataset}::${topic}`} sx={{ display: 'flex', gap: 0.5 }}>
-                <Chip
-                  label={dataset}
-                  size="small"
-                  color="default"
-                  component={dataset_url ? 'a' : 'div'}
-                  href={dataset_url ?? undefined}
-                  target={dataset_url ? '_blank' : undefined}
-                  rel={dataset_url ? 'noopener noreferrer' : undefined}
-                  clickable={!!dataset_url}
-                  data-testid={dataset_url ? 'link-dataset' : undefined}
-                  onClick={dataset_url ? () => track('dataset', dataset) : undefined}
-                />
-                <Chip
-                  label={topic}
-                  size="small"
-                  component={topic_url ? 'a' : 'div'}
-                  href={topic_url ?? undefined}
-                  target={topic_url ? '_blank' : undefined}
-                  rel={topic_url ? 'noopener noreferrer' : undefined}
-                  clickable={!!topic_url}
-                  data-testid={topic_url ? 'link-topic' : undefined}
-                  onClick={topic_url ? () => track('topic', topic) : undefined}
-                />
-              </Box>
-            );
-          })}
-          {article.categories.map((cat) => (
-            <Chip
-              key={cat}
-              label={cat}
-              size="small"
-              variant="outlined"
-              component="a"
-              href={`https://en.wikipedia.org/wiki/Category:${encodeURIComponent(cat)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              clickable
-              data-testid="link-category"
-              onClick={() => track('category', cat)}
-            />
-          ))}
-        </Box>
-      )}
+      <CardTags topics={article.topics} categories={article.categories} onTrack={track} />
     </Box>
   );
 };

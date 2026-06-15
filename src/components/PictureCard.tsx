@@ -5,12 +5,12 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import Chip from '@mui/material/Chip';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { set_article_like, record_link_click } from '@/app/actions';
 import type { Picture, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
+import { CardTags } from './CardTags';
 
 export const PictureCard = ({
   picture,
@@ -126,40 +126,7 @@ export const PictureCard = ({
           </IconButton>
         </Box>
       </Box>
-      {picture.topics.length > 0 && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 2 }}>
-          {picture.topics.map(({ dataset, topic, dataset_url }) => {
-            const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
-            return (
-              <Box key={`${dataset}::${topic}`} sx={{ display: 'flex', gap: 0.5 }}>
-                <Chip
-                  label={dataset}
-                  size="small"
-                  color="default"
-                  component={dataset_url ? 'a' : 'div'}
-                  href={dataset_url ?? undefined}
-                  target={dataset_url ? '_blank' : undefined}
-                  rel={dataset_url ? 'noopener noreferrer' : undefined}
-                  clickable={!!dataset_url}
-                  data-testid={dataset_url ? 'link-dataset' : undefined}
-                  onClick={dataset_url ? () => track('dataset', dataset) : undefined}
-                />
-                <Chip
-                  label={topic}
-                  size="small"
-                  component={topic_url ? 'a' : 'div'}
-                  href={topic_url ?? undefined}
-                  target={topic_url ? '_blank' : undefined}
-                  rel={topic_url ? 'noopener noreferrer' : undefined}
-                  clickable={!!topic_url}
-                  data-testid={topic_url ? 'link-topic' : undefined}
-                  onClick={topic_url ? () => track('topic', topic) : undefined}
-                />
-              </Box>
-            );
-          })}
-        </Box>
-      )}
+      <CardTags topics={picture.topics} onTrack={track} sx={{ mt: 2 }} />
     </Box>
   );
 };
