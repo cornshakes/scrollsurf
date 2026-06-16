@@ -81,5 +81,13 @@
   "overrides": {
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3"
+  },
+  "allowScripts": {
+    "wtf_wikipedia@10.4.2": true,
+    "unrs-resolver@1.12.2": true,
+    "sharp@0.34.5": true,
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true
   }
 }
