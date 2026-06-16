@@ -37,6 +37,7 @@ export default function RootLayout({
           <App>{children}</App>
         </AppRouterCacheProvider>
         <div
+          data-testid="commit-id"
           style={{
             position: 'fixed',
             bottom: 8,

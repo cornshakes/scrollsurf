@@ -16,7 +16,7 @@
     "pi:down:prod": "tsx scripts/deploy.ts down prod",
     "lint-fix": "eslint --fix",
     "test:e2e:setup": "playwright install chromium",
-    "test:e2e:create-db": "tsx scripts/create-e2e-db.ts",
+    "test:e2e:reset-db": "rm -r e2e/.data",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:ui": "playwright test --ui",

@@ -10,7 +10,7 @@ import { ArticleCard } from './ArticleCard';
 import { PictureCard } from './PictureCard';
 import type { FeedItem } from '@/lib/db';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 export const RandomFeed = () => {
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -20,7 +20,12 @@ export const RandomFeed = () => {
   const fetchNext = () => {
     startTransition(async () => {
       const batch = await get_next_wiki_articles(PAGE_SIZE);
-      setItems((prev) => [...prev, ...batch]);
+      // without a cookie, the same feed items might show up multiple times.
+      // we filter.
+      setItems((prev) => {
+        const seen = new Set(prev.map(({ type, id }) => `${type}-${id}`));
+        return [...prev, ...batch.filter(({ type, id }) => !seen.has(`${type}-${id}`))];
+      });
     });
   };
 

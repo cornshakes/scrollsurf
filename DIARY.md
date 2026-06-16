@@ -260,3 +260,13 @@ My workflow using plan.md, tasks.md and review-%n.md is working alright, I'll ju
 
 # Yeah I can see the dodgy SQL too
 Sorry, I can't get myself to care rn
+
+# Ok I did some of the sql now.
+
+More to come I guess.
+
+# Integration testing again
+The bots can't deal with it. Right now I'm back to coding myself again. The pixel-off-ness, but other screenshot/update problems too - It's hard, I know. So, me time.
+
+# Alas
+I manually reworked most of the Integration testing. Finally, no more maxDiffPixels making every screenshot almost worthless anyway. Nicer to read, nicer organized, nicer. I have no idea how I would have made AI do this, this way.

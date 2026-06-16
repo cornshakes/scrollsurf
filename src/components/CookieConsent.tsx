@@ -72,6 +72,7 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
         onClick={() => setAnchor(icon_ref.current)}
         size="small"
         aria-label="Cookie consent settings"
+        data-testid="cookie-button"
         sx={{
           position: 'fixed',
           bottom: 12,
