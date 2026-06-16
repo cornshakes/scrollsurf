@@ -1,35 +1,65 @@
 # Code Style
+
 Prefer snake_case unless it's awkward to mix with camelCase.
 Prefer const arrow functions over `function`.
 Always use curly braces for if/else/loop blocks, even if there is only a single statement.
 Don't use one-letter variable names, be more clear.
 
-After type-check passes, always run `npm run lint-fix` to format and fix code automatically.
+After type-check passes, always run `npm run lint-fix` — it applies Prettier (configured in `package.json`, enforced through `eslint-plugin-prettier`) and fixes lint.
 
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 
+# Tech stack
+
+- **Next.js 16.2.9** (App Router) + **React 19.2.7**. Output mode `standalone`; deployed to a Raspberry Pi via `scripts/deploy.ts`.
+- **MUI v9** (`@mui/material`) for all UI — styling is the `sx` prop only. **No Tailwind, no CSS modules** in components. Theme and light/dark color schemes live in `src/components/App.tsx`.
+- **`node:sqlite` `DatabaseSync`** for all data access — no ORM (see SQLite section).
+- **TypeScript strict.** Path alias `@/*` → `src/*`.
+- Download/build scripts run under **`tsx`**.
+- Tests: **Jest** (unit) + **Playwright** (e2e).
+
+# Commands
+
+**Dev / build**
+
+`dev` / `build` / `start` are standard `next` scripts. The rest:
+
+| Command | What it does |
+|---|---|
+| `npm run check` | Type-check + lint (`tsc --noEmit && eslint`) |
+| `npm run lint-fix` | Auto-format and fix (`eslint --fix`) — run after `check` passes |
+| `download-*` | Download datasets | 
+| `categorize` | Categorize datasets |
+| `npm test` | Jest unit tests (`test:watch`, `test:coverage` also available) |
+| `npm run test:e2e:setup` | One-time: install Playwright's chromium |
+| `npm run test:e2e` | Run Playwright e2e (seeds the fixture DB automatically) |
+| `npm run test:e2e:update` | Update visual snapshots |
+| `npm run test:e2e:ui` | Playwright interactive UI |
+| `test:e2e:reset-db` | removes the e2e fixture db |
+| `deploy:test|prod`  | Deploy|
+| `pi:logs:test|prod` | Read logs|
+| `pi:funnel`         | Turn on tailscale funnel|
+| `pi:down:test|prod` | Shut down instance|
+
 # Architecture
 
 ## Runtime DB + prepared reference DBs
 
-- `scrollsurf.db` — runtime database. Holds articles, user votes, categories, and topic classifications. This is the only DB the app reads from.
-- Reference databases — stored in `datasets/` and built offline by their own download scripts. New ones are added by following this same pattern (download script → `datasets/<name>.db` → `import-<name>.ts`):
+`SCROLLSURF_DATA_DIR` is the root holding `scrollsurf.db` and the `datasets/` folder.
+
+- `scrollsurf.db` — runtime database. Holds articles, pictures, user votes/clicks, categories, and topic classifications. This is the only DB the app reads from.
+- Reference databases — stored in `datasets/` and built offline by their own download scripts. New ones are added by following this same pattern (download script → `datasets/<name>.db` → importer):
   - `datasets/vital_50000.db` — Wikipedia Level 5 vital articles. Built by `npm run download-vital-50000`.
   - `datasets/unusual.db` — articles from [Wikipedia:Unusual articles](https://en.wikipedia.org/wiki/Wikipedia:Unusual_articles), sections up to and including Military. Built by `npm run download-unusual`.
   - `datasets/good_articles.db` — [Wikipedia Good articles](https://en.wikipedia.org/wiki/Wikipedia:Good_articles). Built by `npm run download-good-articles`.
   - `datasets/featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
-  - `datasets/featured_pictures.db` — [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures). Built by `npm run download-featured-pictures`. **Uses a separate schema** (`pictures`/`picture_topics`) — not the article schema. Import is handled by `import_pictures_dataset`, not `import_articles_dataset`.
+  - `datasets/featured_pictures.db` — [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures). Built by `npm run download-featured-pictures`. **Uses the picture schema** (`pictures`/`picture_topics`) — not the article schema.
+  - `datasets/commons_featured_pictures.db` — [Wikimedia Commons Featured pictures](https://commons.wikimedia.org/wiki/Commons:Featured_pictures). Built by `npm run download-commons-featured-pictures`. Also the picture schema.
   - `datasets/categories.db` — Wikipedia category hierarchy mapped to top-level categories. Built by `npm run categorize`.
 
-On startup, `src/instrumentation.ts` discovers and imports available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE`.
-
-## SQLite
-
-Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, not Drizzle, no ORM. All queries are hand-written prepared statements in `src/lib/db.ts`.
-
-**Important:** `DatabaseSync` `.all()` returns rows with null prototypes. Always map results to plain object literals before returning from server actions — raw rows cannot be serialized by Next.js for client components.
+On startup, `src/instrumentation.ts` (`register`, Node runtime only) calls `init_db()`, then imports the available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-datasets.ts`), then runs `cleanup_inactive_users()`. Picture datasets go through `import_pictures_dataset`, article datasets through `import_articles_dataset`, categories through `import_categories`. Each import is wrapped in try/catch — a missing or broken reference DB just warns and is skipped.
 
 ## Data pipeline
 
@@ -37,37 +67,55 @@ Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, 
 npm run download-* → datasets/<name>.db → instrumentation.ts (on startup) → scrollsurf.db → server actions → UI
 ```
 
-Each download script ends by fetching article **content** (extract, description, image, categories) in batches, then storing it in its reference DB. They differ only in how they discover article URLs first:
+Each download script ends by fetching item **content** (extract/caption, description, image, categories) in batches, then storing it in its reference DB. They differ only in how they discover URLs first (vital uses the quality-class category API; unusual extracts the bold-wrapped `'''[[…]]'''` links from the section subpages; etc.). Shared helpers live in `scripts/lib/`:
 
-- **download-vital-50000** — fetches titles from Wikipedia's quality-class category API (FA-Class, GA-Class, etc.).
-- **download-unusual** — reads the section subpages transcluded by `Wikipedia:Unusual articles` (in page order, up to and including Military) and extracts the bold-wrapped `'''[[…]]'''` links listed in each.
+- `dataset.ts` / `pictures-dataset.ts` — the two-phase discover→batch-download orchestration for articles vs pictures.
+- `wiki.ts` / `commons.ts` — Wikipedia and Wikimedia Commons API clients.
+- `mediawiki.ts` — the shared serial MediaWiki client (serial pacing, `maxlag`, exponential backoff, gzip) — where API etiquette is enforced.
 
-All download scripts are resumable: already-downloaded articles are skipped.
+All download scripts are resumable: already-downloaded items are skipped. **Datasets are download-once, no backfill** — if a download bug ships bad data, fix the bug, delete the reference DB, and redownload; never add repair/migration machinery to the pipeline.
+
+## SQLite & the `src/lib/db/` layer
+
+Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, not Drizzle, no ORM. The connection (`src/lib/db/connection.ts`) opens with `PRAGMA journal_mode = WAL`, `busy_timeout = 5000`, `foreign_keys = ON`, then runs migrations.
+
+`src/lib/db/` is a directory of focused modules (re-exported from `index.ts`), split by responsibility: `connection.ts` (pragmas, `init_db`/`get_db`), `migrate.ts`/`migrations.ts`, `articles.ts`/`pictures.ts`, `feed.ts`, `affinity.ts`, `topics.ts`, `votes.ts`, `users.ts`, `types.ts`.
+
+**All queries are hand-written prepared statements, prepared per call.** Do **not** reintroduce module-level statement caches (e.g. a `let stmts` holding prepared statements) — that pattern was removed deliberately.
+
+**Null-prototype gotcha:** `DatabaseSync` `.all()` returns rows with null prototypes. Always map results to plain object literals (`row_to_article` / `row_to_picture`) before returning from server actions — raw rows cannot be serialized by Next.js for client components.
+
+## Migrations
+
+Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracked by the `user_version` PRAGMA and applied in order by `migrate.ts` on connection open (the runner owns the transaction; there's a downgrade guard). **Never edit or reorder a shipped migration — append a new one.** No `BEGIN/COMMIT` and no non-transactional PRAGMAs inside a migration's `up`.
+
+## Schema (runtime `scrollsurf.db`)
+
+- Content: `articles`, `pictures`, `categories`, `article_categories`, `article_topics`, `picture_topics`.
+- Metadata: `datasets`, `category_hierarchy`.
+- Users (STRICT tables): `users`, `user_articles`/`user_pictures` (`like` −1/0/1), `user_clicks` (append-only engagement log).
+- `feed_items` — a VIEW unifying articles + pictures at the identity level (`type, id`) for feed selection.
+
+(Columns are authoritative in `src/lib/db/migrations.ts`.)
 
 ## Topics
 
-`article_topics` (in `scrollsurf.db`) is `(article_id, dataset, topic)`. Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
+`article_topics` / `picture_topics` are `(item_id, dataset, topic)`. Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
 
-- **Vital** — sublists from Wikipedia's Level 5 vital articles: People, Geography, Arts, etc. (`datasets/vital_50000.db`'s `article_vital_topics`).
-- **Unusual** — each article's section heading from `Wikipedia:Unusual articles`: Military, Science, Folklore, etc. (`datasets/unusual.db`'s `article_topics`).
+- **Vital** — sublists from Wikipedia's Level 5 vital articles (People, Geography, Arts, …).
+- **Unusual** — each article's section heading from `Wikipedia:Unusual articles` (Military, Science, Folklore, …).
 - **Good** — topics from Wikipedia Good articles page sections.
 - **Featured** — topics from Wikipedia Featured articles page sections.
-- **Pictures** — gallery section headings from `Wikipedia:Featured pictures` subpages: Animals, Artwork, Space, etc. (`datasets/featured_pictures.db`'s `picture_topics`). Stored in the runtime `picture_topics` table, not `article_topics`.
+- **Pictures** — gallery section headings from `Wikipedia:Featured pictures`.
+- **Commons** — section headings from `Commons:Featured pictures`.
 
-The dataset grouping is why topic names may safely collide across datasets (both Vital and Unusual have a History/Technology). An article may have several topics. Datasets are not user-selectable — every user gets all of them; the feed only requires that an item has at least one topic row.
-
-Per-dataset metadata (currently just `source_url`, the Wikipedia page the dataset comes from) lives in each reference DB's `metadata` key/value table. On import it's copied into `scrollsurf.db`'s `datasets (name, source_url)` table, which the article queries join so each card's dataset chip can link to its source page.
+The dataset grouping is why topic names may safely collide across datasets (multiple datasets can have a History/Technology). An item may have several topics. Per-dataset `source_url` lives in each reference DB's `metadata` key/value table and is copied into `scrollsurf.db`'s `datasets` table on import, so each card's dataset chip can link to its source page.
 
 ## Categories
 
-Article categories are mapped to 34 Wikipedia top-level categories (Society, Geography, History, Arts, Medicine, etc.) via `category_hierarchy (category_name, top_level)`. Build the mapping offline with `npm run categorize`, which creates `categories.db`:
+Article categories are mapped to 34 Wikipedia top-level categories (Society, Geography, History, Arts, Medicine, …) via `category_hierarchy (category_name, top_level)`. `npm run categorize` creates `categories.db`. On startup `import_categories()` (`src/lib/import-datasets.ts`) bulk-imports the mapping.
 
-1. **Bootstrap** — fetches direct children of each top-level from Wikipedia (~2 mins, one-time).
-2. **Categorize** — walks up the Wikipedia category DAG incrementally for unmapped categories, storing the mapping.
-
-**Do not attempt top-down BFS from top-level categories** — the Wikipedia category graph fans out exponentially (depth 3 ≈ 900K nodes, depth 4 ≈ 27M) making it completely impractical. The walk-up approach is the only viable API-based option, though slow (~30–90 hours for all dataset categories).
-
-On startup, `src/instrumentation.ts` imports the category hierarchy from `categories.db` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-categories.ts`). The script is resumable and respects Wikipedia API etiquette.
+**Do not attempt top-down BFS from top-level categories** — the Wikipedia category graph fans out exponentially (depth 3 ≈ 900K nodes, depth 4 ≈ 27M), making it completely impractical. The walk-up approach is the only viable API-based option. The script is resumable and respects API etiquette. 
 
 ## Pictures vs articles
 
@@ -81,38 +129,56 @@ Pictures and articles use **fully separate schemas** end-to-end:
 | Download pipeline | `scripts/lib/dataset.ts` / `DiscoveredArticle` | `scripts/lib/pictures-dataset.ts` / `DiscoveredPicture` |
 | TS type | `Article` (`type: 'article'`) | `Picture` (`type: 'picture'`) |
 
-The feed returns `FeedItem = Article | Picture`. Always switch on `.type` when handling feed items.
+The feed returns `FeedItem = Article | Picture`. The `feed_items` view unifies the two only at the identity level (`type, id`) for selection; the fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection. **Always switch on `.type` when handling feed items.**
 
-A `feed_items` SQL view unifies the two item tables at the identity level (`type, id`) for feed selection. The fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection.
+## Feed selection
+
+`get_next_feed` (`src/lib/db/feed.ts`) issues a single Efraimidis–Spirakis weighted draw over the `feed_items` view, assembled from `feed_affinity_ctes()` + `weighted_random_order_by()` in `src/lib/db/affinity.ts`. It selects unseen items. Weight per item:
+
+```
+weight = exp(AFFINITY_STRENGTH · clamped_affinity) · type_share / pool_size
+```
+
+- `type_share` is `FEED_PICTURE_RATIO` for pictures and `1 − FEED_PICTURE_RATIO` for articles, and `pool_size` is the count of eligible items of that type — so the expected picture fraction equals the ratio, independent of pool sizes. `FEED_PICTURE_RATIO=0` hard-excludes pictures (via `WHERE`); `FEED_PICTURE_RATIO=1` hard-excludes articles.
+- Per-item affinity is the **average** of its topics' affinities. Per-topic affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. Dislikes downweight topics but never hard-exclude items.
+
+Neutral users, anonymous users (`$user_id` is NULL → empty affinity CTEs → affinity 0 everywhere), and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random through the same query — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
+
+## Users, cookies & consent
+
+- **Anonymous** users get a random feed but cannot vote or track clicks.
+- **Identity** is the `ss_uid` cookie (httpOnly, sameSite lax, a UUID set on consent grant), which drives `get_or_create_user`. Inactivity cleanup after `USER_INACTIVITY_DAYS` (default 14) runs as `cleanup_inactive_users` on startup; the cookie Max-Age matches. Constants in `src/lib/cookie.ts`; lookup in `src/lib/user.ts` (`current_user_id`).
+- **Consent** is recorded in the client-readable `ss_consent` cookie. `src/components/CookieConsent.tsx` provides `ConsentContext` (`granted | denied | unknown`). **Voting and link-click tracking are consent-gated** — without `granted` consent the client fires no server request and opens the consent dialog instead.
+
+## Server actions & UI
+
+All client↔DB traffic goes through server actions in `src/app/actions.ts` (no REST routes). Each resolves the user via `current_user_id()` and returns plain-object-mapped rows:
+
+- `get_next_wiki_articles(count)` → `get_next_feed`
+- `set_article_like(type, id, value)` → `set_like`
+- `record_link_click(type, id, link_type, label)` → `record_click`
+- `get_voted_wiki_articles(vote)` — merged liked/disliked articles + pictures
+- `get_wiki_category_tree()` — dev-only (returns `[]` otherwise)
+- `grant_consent()` / `revoke_consent()` — manage the consent + `ss_uid` cookies
+
+Component map (all client components except the root layout/page): `App` (theme + consent providers) → `WikiArticles` (view switch: random / liked / disliked / categories) → `RandomFeed` (infinite scroll via `react-intersection-observer`, page size 10), `VotedFeed`, `CategoryFeed` (dev-only). Cards `ArticleCard` / `PictureCard` are chosen by `.type` and share `CardTags` (topic / category / dataset chips, click-tracked).
 
 ## Feature flags (env vars)
 
 | Flag | Default | Effect |
 |---|---|---|
-| `DOWNLOAD_LIMIT=N` | unlimited | Caps articles downloaded per `npm run download-vital-50000` run |
-| `FEED_PICTURE_RATIO=N` | `0.1` | Per-type weight multiplier in the unified SQL draw (expected picture fraction: 0–1); `0` → zero pictures, `1` → zero articles |
-| `FEED_AFFINITY_STRENGTH=N` | `2.0` | Strength of topic-affinity feed weighting; `0` = pure random |
+| `SCROLLSURF_DATA_DIR` | (required) | Root dir for `scrollsurf.db` + `datasets/` |
+| `WIKIPEDIA_USER_AGENT` | (required for downloads) | App name, version, contact email for the MediaWiki client |
+| `FEED_PICTURE_RATIO=N` | `0.1` | Expected picture fraction (0–1); `0` → no pictures, `1` → no articles |
+| `FEED_AFFINITY_STRENGTH=N` | `2.0` | Strength of topic-affinity weighting; `0` = pure random |
+| `USER_INACTIVITY_DAYS=N` | `14` | Days of inactivity before a user is cleaned up / cookie expires |
+| `COMMIT_ID` | `dev` | Surfaced to the client as `NEXT_PUBLIC_COMMIT_ID` |
 
 ## Wikipedia API etiquette
 
-Per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and [Wikimedia API Usage Guidelines](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_API_Usage_Guidelines):
+All etiquette is enforced in `scripts/lib/mediawiki.ts` per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and the [Wikimedia API Usage Guidelines](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_API_Usage_Guidelines) — serial requests only (batch titles with `|`), descriptive `User-Agent`, `maxlag`, backoff on `429`/`503`, gzip, `format=json`, no re-fetching cached data. Route all MediaWiki calls through it; don't bypass it.
 
-- **Serial requests only** — no concurrent connections; batch multiple titles with `|` instead
-- **User-Agent** — must include app name, version, and contact email; never impersonate a browser
-- **`maxlag` parameter** — always set on non-interactive requests to respect server load
-- **Respect rate limits** — back off with exponential delay on `429`/`503`; never mask high usage via multiple user agents
-- **Cache results** — never re-fetch data you already have
-- **GZip** — send `Accept-Encoding: gzip` on all requests
-- **JSON** — use `format=json` for all requests
+## Testing
 
-## Feed selection
-
-`get_next_feed` issues a single Efraimidis–Spirakis weighted draw over a unified `feed_items` view. The query joins both `articles` and `pictures` at the identity level (`type, id`) and selects unseen items with at least one topic. Weight is calculated per-item as:
-
-```
-weight = exp(AFFINITY_STRENGTH · affinity) · type_share / pool_size
-```
-
-where `type_share` is `FEED_PICTURE_RATIO` for pictures and `1 - FEED_PICTURE_RATIO` for articles, and `pool_size` is the count of eligible items of that type. This ensures the expected picture fraction equals the ratio, independent of pool sizes. `FEED_PICTURE_RATIO=0` hard-excludes pictures (via `WHERE`); `FEED_PICTURE_RATIO=1` hard-excludes articles.
-
-Topic affinity is derived from the user's likes, dislikes, and link clicks on seen items, normalized by exposure (smoothing constant 5). Neutral users, anonymous users, and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random — strict generalization of the previous behavior. Dislikes downweight topics but never hard-exclude items. Constants live in `src/lib/db/affinity.ts`. Do not add hard exclusions or deterministic secondary sorts.
+- **Unit (Jest)** — `jest.config.ts`, node environment, coverage over `src/lib/db/*`, `src/lib/user.ts`, `src/app/actions.ts`. Tests live in `tests/` (helpers in `tests/helpers/`).
+- **E2e (Playwright)** — `playwright.config.ts`, runs a dev server on **port 3100** and the db at `e2e/.data/` (seeded by `e2e/global-setup.ts`). Mobile-chromium viewport; images are mocked and external navigation stubbed for stable visual snapshots.

@@ -1,8 +1,6 @@
 import { run_download, type DiscoveredArticle } from '../lib/dataset';
 import { fetch_category_members } from '../lib/wiki';
 
-const LIMIT = parseInt(process.env.DOWNLOAD_LIMIT ?? '') || Infinity;
-
 // Wikipedia's Level 5 vital articles, grouped into 11 sublists. Each sublist is
 // a quality-tracking category over Talk pages, so we list namespace 1 and strip
 // the 'Talk:' prefix to get the article title. The sublist is the topic.
@@ -33,10 +31,6 @@ run_download({
       );
       for (const title of members) {
         results.push({ title: title.replace(/^Talk:/, ''), topic });
-        if (results.length >= LIMIT) {
-          process.stdout.write('\n');
-          return results;
-        }
       }
       process.stdout.write(`\r${results.length} article URLs found...`);
     }
