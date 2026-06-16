@@ -25,6 +25,7 @@ npm install
 
 Before you run the app for the first time, you have to download the datasets that you want using the provided package scripts.
 The downloads take a long time, but one dataset is enough to run the app:
+First, you have to add an .env file in scripts/, next to .env.example, and add your own User-Agent. Then you can
 
 ```bash
 npm run download-vital-50000
