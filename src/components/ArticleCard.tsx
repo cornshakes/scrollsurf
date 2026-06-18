@@ -73,6 +73,7 @@ export const ArticleCard = ({
     <Box
       data-testid="feed-card"
       data-card-type="article"
+      data-item-title={article.title}
       sx={{
         maxWidth: 680,
         mx: 'auto',

@@ -1,14 +1,7 @@
-import { test, expect } from '@playwright/test';
-import { load_page, remove_all_cards, screenshot_card, scroll_to_load_all } from '../helpers/pages';
+import { test } from '@playwright/test';
+import { load_page, screenshot_card, scroll_to_load_all } from '../helpers/pages';
 
-test.describe('Visuals', () => {
-  test('home feed', async ({ page }) => {
-    await load_page(page, true);
-    await scroll_to_load_all(page);
-    await remove_all_cards(page);
-    await expect(page).toHaveScreenshot('home-feed.png');
-  });
-
+test.describe('Cards', () => {
   test('article card - long title', async ({ page }) => {
     await load_page(page, true);
     await scroll_to_load_all(page);

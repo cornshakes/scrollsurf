@@ -46,6 +46,7 @@ export const PictureCard = ({
     <Box
       data-testid="feed-card"
       data-card-type="picture"
+      data-item-title={picture.title}
       sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
     >
       <Link

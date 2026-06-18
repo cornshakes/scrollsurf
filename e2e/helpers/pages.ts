@@ -76,6 +76,11 @@ export const find_card_by_text = (page: Page, text: string): Locator => {
   return page.locator('[data-testid="feed-card"]').filter({ hasText: text }).first();
 };
 
+export const get_card_titles = async (page: Page) => {
+  const cards = await page.getByTestId('feed-card').all();
+  return await Promise.all(cards.map((card) => card.getAttribute('data-item-title')));
+};
+
 export const open_menu = async (page: Page) => {
   // scroll up to make button appear, then click
   await page
