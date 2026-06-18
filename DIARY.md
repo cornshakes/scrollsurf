@@ -270,3 +270,6 @@ The bots can't deal with it. Right now I'm back to coding myself again. The pixe
 
 # Alas
 I manually reworked most of the Integration testing. Finally, no more maxDiffPixels making every screenshot almost worthless anyway. Nicer to read, nicer organized, nicer. I have no idea how I would have made AI do this, this way.
+
+# Nothing big here
+I just changed the scripts slightly, the bigger changes are over in [my new repo](https://github.com/cornshakes/home-automation) which is about using claude to write code in this one.
