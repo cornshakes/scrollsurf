@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useTransition } from 'react';
 import { useInView } from 'react-intersection-observer';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -8,16 +8,16 @@ import Typography from '@mui/material/Typography';
 import { get_next_wiki_articles } from '@/app/actions';
 import { ArticleCard } from './ArticleCard';
 import { PictureCard } from './PictureCard';
-import type { FeedItem } from '@/lib/db';
+import { useFeed } from './FeedContext';
 
 const PAGE_SIZE = 10;
 
 export const RandomFeed = () => {
-  const [items, setItems] = useState<FeedItem[]>([]);
+  const { items, setItems } = useFeed();
   const [isPending, startTransition] = useTransition();
   const { ref, inView } = useInView({ rootMargin: '200px' });
 
-  const fetchNext = () => {
+  const fetchNext = useCallback(() => {
     startTransition(async () => {
       const batch = await get_next_wiki_articles(PAGE_SIZE);
       // without a cookie, the same feed items might show up multiple times.
@@ -27,17 +27,19 @@ export const RandomFeed = () => {
         return [...prev, ...batch.filter(({ type, id }) => !seen.has(`${type}-${id}`))];
       });
     });
-  };
+  }, [setItems]);
 
   useEffect(() => {
-    fetchNext();
-  }, []);
+    if (items.length === 0) {
+      fetchNext();
+    }
+  }, [items.length, fetchNext]);
 
   useEffect(() => {
     if (inView && !isPending) {
       fetchNext();
     }
-  }, [inView, isPending]);
+  }, [inView, isPending, fetchNext]);
 
   return (
     <Box>

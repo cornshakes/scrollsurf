@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useLayoutEffect, useRef } from 'react';
 import NextLink from 'next/link';
 import Image from 'next/image';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
@@ -18,6 +18,7 @@ import Divider from '@mui/material/Divider';
 import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
 import { CategoryFeed } from './CategoryFeed';
+import { useFeed } from './FeedContext';
 
 type View = 'random' | 'liked' | 'disliked' | 'categories';
 
@@ -53,6 +54,14 @@ const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
+  const { scrollTopRef } = useFeed();
+  const scroll_nodeRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (view === 'random' && scroll_nodeRef.current) {
+      scroll_nodeRef.current.scrollTop = scrollTopRef.current;
+    }
+  }, [view, scroll_node, scrollTopRef]);
 
   // Default hysteresis encodes scroll direction: true when scrolling down,
   // false when scrolling up or at the very top.
@@ -126,7 +135,15 @@ const WikiArticles = () => {
       <Box
         sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
         data-testid="feed-scroll"
-        ref={(node: HTMLDivElement | null) => set_scroll_node(node)}
+        ref={(node: HTMLDivElement | null) => {
+          scroll_nodeRef.current = node;
+          set_scroll_node(node);
+        }}
+        onScroll={(event) => {
+          if (view === 'random') {
+            scrollTopRef.current = event.currentTarget.scrollTop;
+          }
+        }}
       >
         <Typography variant="h6" component="h1" sx={{ pl: 8, pr: 2, pt: 2.2, pb: 0.5 }}>
           Scrollsurf
