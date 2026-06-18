@@ -101,7 +101,7 @@ test.describe('Click Tracking', () => {
     }
   });
 
-  test('every picture link click is recorded', async ({ page, context }) => {
+  test('every picture link click is recorded', async ({ page }) => {
     const token = (await load_page(page, true)) || '';
     await picture_cards(page).first().getByTestId('link-title').click();
     await expect_click_in_db(
