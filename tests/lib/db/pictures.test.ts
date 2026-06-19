@@ -1,10 +1,14 @@
 import { setup, insert_user, insert_picture, reset_db } from '../../helpers/test-db';
-import { get_voted_pictures, set_picture_like } from '@/lib/db/pictures';
+import { get_voted_pictures } from '@/lib/db/pictures';
 import { get_next_feed } from '@/lib/db/feed';
-import { get_next_pictures_internal } from '@/lib/db/pictures';
+import { set_like } from '@/lib/db/votes';
+import type { Picture } from '@/lib/db/types';
 
 beforeAll(setup);
 beforeEach(reset_db);
+
+const get_next_pictures = (count: number, uid: number | null): Picture[] =>
+  get_next_feed(count, uid).filter((r): r is Picture => r.type === 'picture');
 
 it('returns unseen pictures', () => {
   const uid = insert_user();
@@ -14,7 +18,7 @@ it('returns unseen pictures', () => {
     image_url: 'https://img',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  const result = get_next_pictures_internal(10, uid);
+  const result = get_next_pictures(10, uid);
   expect(result).toHaveLength(1);
   expect(result[0].title).toBe('P');
   expect(result[0].type).toBe('picture');
@@ -28,11 +32,11 @@ it('excludes already-seen pictures', () => {
     image_url: 'https://img',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  get_next_pictures_internal(10, uid);
-  expect(get_next_pictures_internal(10, uid)).toHaveLength(0);
+  get_next_pictures(10, uid);
+  expect(get_next_pictures(10, uid)).toHaveLength(0);
 });
 
-it('marks pictures seen after fetching with user_id', () => {
+it('marks pictures seen in user_items after fetching with user_id', () => {
   const uid = insert_user();
   insert_picture({
     title: 'P',
@@ -40,8 +44,8 @@ it('marks pictures seen after fetching with user_id', () => {
     image_url: 'https://img',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  get_next_pictures_internal(10, uid);
-  expect(get_next_pictures_internal(10, uid)).toHaveLength(0);
+  get_next_pictures(10, uid);
+  expect(get_next_pictures(10, uid)).toHaveLength(0);
 });
 
 it('does not mark pictures seen when user_id is null', () => {
@@ -51,11 +55,11 @@ it('does not mark pictures seen when user_id is null', () => {
     image_url: 'https://img',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  get_next_pictures_internal(10, null);
-  expect(get_next_pictures_internal(10, null)).toHaveLength(1);
+  get_next_pictures(10, null);
+  expect(get_next_pictures(10, null)).toHaveLength(1);
 });
 
-it('set_picture_like upsert: inserts then updates', () => {
+it('set_like upsert: inserts then updates', () => {
   const uid = insert_user();
   const id = insert_picture({
     title: 'P',
@@ -64,10 +68,10 @@ it('set_picture_like upsert: inserts then updates', () => {
     topics: [{ dataset: 'D', topic: 'T' }],
   });
 
-  set_picture_like(id, 1, uid);
+  set_like(uid, id, 1);
   expect(get_voted_pictures(1, uid)).toHaveLength(1);
 
-  set_picture_like(id, -1, uid);
+  set_like(uid, id, -1);
   expect(get_voted_pictures(1, uid)).toHaveLength(0);
   expect(get_voted_pictures(-1, uid)).toHaveLength(1);
 });
@@ -86,8 +90,8 @@ it('get_voted_pictures(1) returns liked pictures ordered by id DESC', () => {
     image_url: 'https://img2',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  set_picture_like(id1, 1, uid);
-  set_picture_like(id2, 1, uid);
+  set_like(uid, id1, 1);
+  set_like(uid, id2, 1);
   const result = get_voted_pictures(1, uid);
   expect(result.map((p) => p.id)).toEqual([id2, id1]);
 });
@@ -100,7 +104,7 @@ it('get_voted_pictures(-1) returns disliked pictures', () => {
     image_url: 'https://img',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  set_picture_like(id, -1, uid);
+  set_like(uid, id, -1);
   const result = get_voted_pictures(-1, uid);
   expect(result).toHaveLength(1);
   expect(result[0].id).toBe(id);
@@ -123,10 +127,10 @@ it('batch fetch: each picture gets exactly its own topics with no cross-leak', (
     image_url: 'https://img2',
     topics: [{ dataset: 'D', topic: 'T3' }],
   });
-  const result = get_next_pictures_internal(10, uid);
+  const result = get_next_pictures(10, uid);
   expect(result).toHaveLength(2);
-  const p1 = result.find((p) => p.id === id1) as (typeof result)[number];
-  const p2 = result.find((p) => p.id === id2) as (typeof result)[number];
+  const p1 = result.find((p) => p.id === id1) as Picture;
+  const p2 = result.find((p) => p.id === id2) as Picture;
   expect(p1.topics.map((t) => t.topic).sort()).toEqual(['T1', 'T2']);
   expect(p2.topics.map((t) => t.topic)).toEqual(['T3']);
 });

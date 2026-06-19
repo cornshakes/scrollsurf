@@ -2,11 +2,7 @@ import { type CategoryTree, type TopicStat, type CategoryGroup, type Topic } fro
 import { get_db } from './connection';
 
 // Batch-fetch topics for a set of items. Returns item_id -> Topic[].
-export const fetch_topics_by_item = (
-  topics_table: 'article_topics' | 'picture_topics',
-  item_id_col: 'article_id' | 'picture_id',
-  ids: number[]
-): Map<number, Topic[]> => {
+export const fetch_topics_for_items = (ids: number[]): Map<number, Topic[]> => {
   const by_id = new Map<number, Topic[]>();
   if (ids.length === 0) {
     return by_id;
@@ -14,10 +10,10 @@ export const fetch_topics_by_item = (
   const placeholders = ids.map(() => '?').join(', ');
   const rows = get_db()
     .prepare(
-      `SELECT t.${item_id_col} AS item_id, t.dataset, t.topic, d.source_url
-       FROM ${topics_table} t
-       LEFT JOIN datasets d ON d.name = t.dataset
-       WHERE t.${item_id_col} IN (${placeholders})`
+      `SELECT it.item_id, it.dataset, it.topic, d.source_url
+       FROM item_topics it
+       LEFT JOIN datasets d ON d.name = it.dataset
+       WHERE it.item_id IN (${placeholders})`
     )
     .all(...ids) as unknown as {
     item_id: number;
@@ -36,14 +32,14 @@ export const fetch_topics_by_item = (
 const GET_TOP_LEVELS_SQL = `
   SELECT
     ch.top_level,
-    COUNT(DISTINCT a.id) AS article_count,
-    COUNT(DISTINCT CASE WHEN ua.like =  1 THEN a.id END) AS liked,
-    COUNT(DISTINCT CASE WHEN ua.like = -1 THEN a.id END) AS disliked
+    COUNT(DISTINCT i.id) AS article_count,
+    COUNT(DISTINCT CASE WHEN ui.like =  1 THEN i.id END) AS liked,
+    COUNT(DISTINCT CASE WHEN ui.like = -1 THEN i.id END) AS disliked
   FROM category_hierarchy ch
   JOIN categories c ON c.name = ch.category_name
-  JOIN article_categories ac ON ac.category_id = c.id
-  JOIN articles a ON a.id = ac.article_id
-  LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
+  JOIN item_categories ic ON ic.category_id = c.id
+  JOIN items i ON i.id = ic.item_id AND i.type = 'article'
+  LEFT JOIN user_items ui ON i.id = ui.item_id AND ui.user_id = $user_id
   GROUP BY ch.top_level
   ORDER BY ch.top_level
 `;
@@ -52,14 +48,14 @@ const GET_CATEGORIES_SQL = `
   SELECT
     ch.category_name AS topic,
     ch.top_level,
-    COUNT(a.id) AS article_count,
-    COUNT(CASE WHEN ua.like =  1 THEN 1 END) AS liked,
-    COUNT(CASE WHEN ua.like = -1 THEN 1 END) AS disliked
+    COUNT(i.id) AS article_count,
+    COUNT(CASE WHEN ui.like =  1 THEN 1 END) AS liked,
+    COUNT(CASE WHEN ui.like = -1 THEN 1 END) AS disliked
   FROM category_hierarchy ch
   JOIN categories c ON c.name = ch.category_name
-  JOIN article_categories ac ON ac.category_id = c.id
-  JOIN articles a ON a.id = ac.article_id
-  LEFT JOIN user_articles ua ON a.id = ua.article_id AND ua.user_id = $user_id
+  JOIN item_categories ic ON ic.category_id = c.id
+  JOIN items i ON i.id = ic.item_id AND i.type = 'article'
+  LEFT JOIN user_items ui ON i.id = ui.item_id AND ui.user_id = $user_id
   GROUP BY ch.category_name
   ORDER BY ch.top_level, ch.category_name
 `;

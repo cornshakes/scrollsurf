@@ -196,26 +196,45 @@ describe('migrate — real history', () => {
 
     const tables = table_names(db);
     for (const expected of [
+      'items',
       'articles',
+      'pictures',
+      'item_topics',
+      'item_categories',
       'categories',
-      'article_categories',
-      'article_topics',
       'datasets',
       'category_hierarchy',
-      'pictures',
-      'picture_topics',
       'users',
-      'user_articles',
-      'user_pictures',
+      'user_items',
       'user_clicks',
     ]) {
       expect(tables).toContain(expected);
     }
 
+    for (const removed of [
+      'user_articles',
+      'user_pictures',
+      'article_topics',
+      'picture_topics',
+      'article_categories',
+    ]) {
+      expect(tables).not.toContain(removed);
+    }
+
     expect(has_object(db, 'idx_users_last_active')).toBe(true);
     expect(has_object(db, 'idx_user_clicks_user')).toBe(true);
-    expect(column_names(db, 'pictures')).toContain('caption');
+    expect(has_object(db, 'idx_item_topics_item')).toBe(true);
+    expect(has_object(db, 'idx_items_type')).toBe(true);
+    expect(has_object(db, 'idx_user_items_user')).toBe(true);
+    expect(has_object(db, 'feed_items')).toBe(false);
     expect(has_object(db, 'user_settings')).toBe(false);
+
+    // articles and pictures are now detail tables keyed by item_id
+    expect(column_names(db, 'articles')).toContain('item_id');
+    expect(column_names(db, 'articles')).not.toContain('id');
+    expect(column_names(db, 'pictures')).toContain('item_id');
+    expect(column_names(db, 'pictures')).toContain('caption');
+    expect(column_names(db, 'pictures')).not.toContain('id');
   });
 
   test('converges a legacy prod DB (user_version 0, no caption, has user_settings)', () => {
@@ -273,9 +292,14 @@ describe('migrate — real history', () => {
     expect(get_user_version(db)).toBe(migrations.length);
     expect(column_names(db, 'pictures')).toContain('caption');
     expect(has_object(db, 'user_settings')).toBe(false);
+    expect(has_object(db, 'feed_items')).toBe(false);
 
     const row = db
-      .prepare('SELECT title, caption FROM pictures WHERE url = ?')
+      .prepare(
+        `SELECT i.title, p.caption
+         FROM items i JOIN pictures p ON p.item_id = i.id
+         WHERE i.url = ?`
+      )
       .get('https://example.com/legacy') as { title: string; caption: string };
     expect(row.title).toBe('Legacy');
     expect(row.caption).toBe('');
@@ -289,32 +313,39 @@ describe('migrate — real history', () => {
     expect(get_user_version(db)).toBe(version_after_first);
   });
 
-  test('version 4 creates the feed_items view', () => {
+  test('version 5 creates items supertype and drops feed_items view', () => {
     migrate(db);
 
-    expect(has_object(db, 'feed_items')).toBe(true);
-    const view_row = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'view' AND name = 'feed_items'")
-      .get() as { name: string } | undefined;
-    expect(view_row).toBeDefined();
+    expect(has_object(db, 'items')).toBe(true);
+    expect(has_object(db, 'user_items')).toBe(true);
+    expect(has_object(db, 'item_topics')).toBe(true);
+    expect(has_object(db, 'item_categories')).toBe(true);
+    expect(has_object(db, 'feed_items')).toBe(false);
   });
 
-  test('version 4 view returns both article and picture types', () => {
+  test('version 5: items table holds both article and picture rows', () => {
     migrate(db);
 
-    db.prepare('INSERT INTO articles (title, extract, url) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'article',
       'Test Article',
-      'Extract',
       'https://example.com/article'
     );
+    const art_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare('INSERT INTO articles (item_id, extract) VALUES (?, ?)').run(art_id, 'Extract');
 
-    db.prepare('INSERT INTO pictures (title, url, image_url) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'picture',
       'Test Picture',
-      'https://example.com/picture',
+      'https://example.com/picture'
+    );
+    const pic_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare('INSERT INTO pictures (item_id, image_url) VALUES (?, ?)').run(
+      pic_id,
       'https://example.com/picture.jpg'
     );
 
-    const rows = db.prepare('SELECT type, id FROM feed_items').all() as {
+    const rows = db.prepare('SELECT type, id FROM items').all() as {
       type: string;
       id: number;
     }[];
@@ -324,13 +355,124 @@ describe('migrate — real history', () => {
     expect(types).toEqual(['article', 'picture']);
   });
 
-  test('version 4 upgrades cleanly from version 3', () => {
-    stamp_version(db, 3);
+  test('version 5 applies cleanly on top of a fully migrated v4 database', () => {
+    const v4_migrations = migrations.filter((m) => m.version <= 4);
+    migrate(db, v4_migrations);
+    expect(get_user_version(db)).toBe(4);
 
-    make_recording_list();
     migrate(db);
 
     expect(get_user_version(db)).toBe(migrations.length);
-    expect(has_object(db, 'feed_items')).toBe(true);
+    expect(has_object(db, 'items')).toBe(true);
+    expect(has_object(db, 'feed_items')).toBe(false);
+  });
+
+  test('version 5 preserves votes, clicks, content, and topics from v4 data', () => {
+    // Build a v4 schema with real data to verify the data-preservation migration.
+    const v4_migrations = migrations.filter((m) => m.version <= 4);
+    migrate(db, v4_migrations);
+    expect(get_user_version(db)).toBe(4);
+
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare('INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)').run(
+      'tok-1',
+      now,
+      now
+    );
+    const user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    db.prepare('INSERT INTO articles (title, extract, url) VALUES (?, ?, ?)').run(
+      'Article One',
+      'Extract one',
+      'https://art.one'
+    );
+    const article_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    db.prepare('INSERT INTO pictures (title, url, image_url) VALUES (?, ?, ?)').run(
+      'Picture One',
+      'https://pic.one',
+      'https://img.one'
+    );
+    const picture_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    db.prepare('INSERT INTO datasets (name) VALUES (?)').run('TestDS');
+    db.prepare('INSERT INTO article_topics (article_id, dataset, topic) VALUES (?, ?, ?)').run(
+      article_id,
+      'TestDS',
+      'TopicA'
+    );
+    db.prepare('INSERT INTO picture_topics (picture_id, dataset, topic) VALUES (?, ?, ?)').run(
+      picture_id,
+      'TestDS',
+      'TopicP'
+    );
+
+    db.prepare('INSERT INTO user_articles (user_id, article_id, like) VALUES (?, ?, ?)').run(
+      user_id,
+      article_id,
+      1
+    );
+    db.prepare('INSERT INTO user_pictures (user_id, picture_id, like) VALUES (?, ?, ?)').run(
+      user_id,
+      picture_id,
+      -1
+    );
+
+    db.prepare(
+      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(user_id, 'article', article_id, 'title', now);
+    db.prepare(
+      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(user_id, 'picture', picture_id, 'title', now);
+
+    // Apply v5
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // Resolve new global ids
+    const art_item = db.prepare('SELECT id FROM items WHERE url = ?').get('https://art.one') as {
+      id: number;
+    };
+    const pic_item = db.prepare('SELECT id FROM items WHERE url = ?').get('https://pic.one') as {
+      id: number;
+    };
+    expect(art_item).toBeDefined();
+    expect(pic_item).toBeDefined();
+
+    // Votes survive in user_items with correct global ids
+    const art_vote = db
+      .prepare('SELECT like FROM user_items WHERE user_id = ? AND item_id = ?')
+      .get(user_id, art_item.id) as { like: number };
+    expect(art_vote.like).toBe(1);
+    const pic_vote = db
+      .prepare('SELECT like FROM user_items WHERE user_id = ? AND item_id = ?')
+      .get(user_id, pic_item.id) as { like: number };
+    expect(pic_vote.like).toBe(-1);
+
+    // Clicks are remapped to global ids
+    const clicks = db.prepare('SELECT item_id FROM user_clicks WHERE user_id = ?').all(user_id) as {
+      item_id: number;
+    }[];
+    const click_ids = new Set(clicks.map((c) => c.item_id));
+    expect(click_ids.has(art_item.id)).toBe(true);
+    expect(click_ids.has(pic_item.id)).toBe(true);
+
+    // Topics survive in item_topics
+    const art_topics = db
+      .prepare('SELECT topic FROM item_topics WHERE item_id = ?')
+      .all(art_item.id) as { topic: string }[];
+    expect(art_topics.map((t) => t.topic)).toContain('TopicA');
+    const pic_topics = db
+      .prepare('SELECT topic FROM item_topics WHERE item_id = ?')
+      .all(pic_item.id) as { topic: string }[];
+    expect(pic_topics.map((t) => t.topic)).toContain('TopicP');
+
+    // Old tables are dropped
+    expect(has_object(db, 'user_articles')).toBe(false);
+    expect(has_object(db, 'user_pictures')).toBe(false);
+    expect(has_object(db, '_old_articles')).toBe(false);
+    expect(has_object(db, '_old_pictures')).toBe(false);
+    expect(has_object(db, 'article_topics')).toBe(false);
+    expect(has_object(db, 'picture_topics')).toBe(false);
   });
 });

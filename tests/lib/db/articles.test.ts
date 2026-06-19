@@ -1,9 +1,15 @@
 import { setup, insert_user, insert_article, reset_db } from '../../helpers/test-db';
 import { get_db } from '@/lib/db/connection';
-import { get_next_articles, set_article_like, get_voted_articles } from '@/lib/db/articles';
+import { get_next_feed } from '@/lib/db/feed';
+import { get_voted_articles } from '@/lib/db/articles';
+import { set_like } from '@/lib/db/votes';
+import type { Article } from '@/lib/db/types';
 
 beforeAll(setup);
 beforeEach(reset_db);
+
+const get_next_articles = (count: number, uid: number | null): Article[] =>
+  get_next_feed(count, uid).filter((r): r is Article => r.type === 'article');
 
 it('returns unseen articles', () => {
   const uid = insert_user();
@@ -21,7 +27,7 @@ it('excludes already-seen articles', () => {
   expect(get_next_articles(10, uid)).toHaveLength(0);
 });
 
-it('marks articles seen in user_articles after fetching with user_id', () => {
+it('marks articles seen in user_items after fetching with user_id', () => {
   const uid = insert_user();
   insert_article({ title: 'A', url: 'https://a', topics: [{ dataset: 'D', topic: 'T' }] });
   get_next_articles(10, uid);
@@ -63,7 +69,7 @@ it('topic names containing :: round-trip intact (regression: value is never pars
   });
 });
 
-it('set_article_like upsert: inserts then updates', () => {
+it('set_like upsert: inserts then updates', () => {
   const uid = insert_user();
   const id = insert_article({
     title: 'A',
@@ -71,10 +77,10 @@ it('set_article_like upsert: inserts then updates', () => {
     topics: [{ dataset: 'D', topic: 'T' }],
   });
 
-  set_article_like(id, 1, uid);
+  set_like(uid, id, 1);
   expect(get_voted_articles(1, uid)).toHaveLength(1);
 
-  set_article_like(id, -1, uid);
+  set_like(uid, id, -1);
   expect(get_voted_articles(1, uid)).toHaveLength(0);
   expect(get_voted_articles(-1, uid)).toHaveLength(1);
 });
@@ -91,8 +97,8 @@ it('get_voted_articles(1) returns liked articles ordered by id DESC', () => {
     url: 'https://b',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  set_article_like(id1, 1, uid);
-  set_article_like(id2, 1, uid);
+  set_like(uid, id1, 1);
+  set_like(uid, id2, 1);
   const result = get_voted_articles(1, uid);
   expect(result.map((a) => a.id)).toEqual([id2, id1]);
 });
@@ -104,7 +110,7 @@ it('get_voted_articles(-1) returns disliked articles', () => {
     url: 'https://a',
     topics: [{ dataset: 'D', topic: 'T' }],
   });
-  set_article_like(id, -1, uid);
+  set_like(uid, id, -1);
   const result = get_voted_articles(-1, uid);
   expect(result).toHaveLength(1);
   expect(result[0].id).toBe(id);
@@ -129,8 +135,8 @@ it('batch fetch: each article gets exactly its own topics and categories with no
   });
   const result = get_next_articles(10, uid);
   expect(result).toHaveLength(2);
-  const a1 = result.find((a) => a.id === id1) as (typeof result)[number];
-  const a2 = result.find((a) => a.id === id2) as (typeof result)[number];
+  const a1 = result.find((a) => a.id === id1) as Article;
+  const a2 = result.find((a) => a.id === id2) as Article;
   expect(a1.topics.map((t) => t.topic).sort()).toEqual(['T1', 'T2']);
   expect(a1.categories).toEqual(['Science']);
   expect(a2.topics.map((t) => t.topic)).toEqual(['T3']);
@@ -174,11 +180,10 @@ it('hidden categories are excluded from article results', () => {
   const hidden_id = (
     db.prepare('SELECT id FROM categories WHERE name = ?').get('Hidden') as { id: number }
   ).id;
-  const article_id = (
-    db.prepare('SELECT id FROM articles WHERE title = ?').get('A') as { id: number }
-  ).id;
-  db.prepare('INSERT INTO article_categories (article_id, category_id) VALUES (?, ?)').run(
-    article_id,
+  const item_id = (db.prepare('SELECT id FROM items WHERE title = ?').get('A') as { id: number })
+    .id;
+  db.prepare('INSERT INTO item_categories (item_id, category_id) VALUES (?, ?)').run(
+    item_id,
     hidden_id
   );
   const [article] = get_next_articles(10, uid);

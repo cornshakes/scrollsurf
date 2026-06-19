@@ -32,7 +32,7 @@ export const set_article_like = async (
   if (uid === null) {
     return;
   }
-  set_like(type, id, value, uid);
+  set_like(uid, id, value);
 };
 
 export const record_link_click = async (

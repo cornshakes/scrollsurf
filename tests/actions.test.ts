@@ -47,12 +47,12 @@ it('get_voted_wiki_articles merges articles and pictures sorted by id DESC', asy
     topics: topic,
   });
 
-  db_set_like('article', id_a3, uid, 1);
-  db_set_like('picture', id_p2, uid, 1);
+  db_set_like(uid, id_a3, 1);
+  db_set_like(uid, id_p2, 1);
 
   const result = await get_voted_wiki_articles(1);
-  // id_a3 = 3, id_p2 = 2 → sorted DESC: 3, 2
-  expect(result.map((x) => x.id)).toEqual([id_a3, id_p2]);
+  // Global ids: A1=1, A2=2, A3=3, P1=4, P2=5 → sorted DESC: 5, 3
+  expect(result.map((x) => x.id)).toEqual([id_p2, id_a3]);
 });
 
 it('get_voted_wiki_articles returns [] when user_id is null', async () => {

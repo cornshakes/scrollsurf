@@ -59,21 +59,24 @@ export const insert_article = (
     categories: [],
   };
   const merged = { ...defaults, ...data };
-  const stmt = db.prepare(
-    'INSERT INTO articles (title, extract, url, description, image_url) VALUES ($title, $extract, $url, $description, $image_url)'
-  );
-  stmt.run({
+  db.prepare('INSERT INTO items (type, title, url) VALUES ($type, $title, $url)').run({
+    $type: 'article',
     $title: merged.title,
-    $extract: merged.extract,
     $url: merged.url,
+  });
+  const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+  db.prepare(
+    'INSERT INTO articles (item_id, extract, description, image_url) VALUES ($item_id, $extract, $description, $image_url)'
+  ).run({
+    $item_id: item_id,
+    $extract: merged.extract,
     $description: merged.description,
     $image_url: merged.image_url,
   });
-  const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
   for (const t of merged.topics ?? []) {
     db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run(t.dataset);
-    db.prepare('INSERT INTO article_topics (article_id, dataset, topic) VALUES (?, ?, ?)').run(
-      id,
+    db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
+      item_id,
       t.dataset,
       t.topic
     );
@@ -83,12 +86,12 @@ export const insert_article = (
     const cat_id = (
       db.prepare('SELECT id FROM categories WHERE name = ?').get(cat) as { id: number }
     ).id;
-    db.prepare('INSERT INTO article_categories (article_id, category_id) VALUES (?, ?)').run(
-      id,
+    db.prepare('INSERT INTO item_categories (item_id, category_id) VALUES (?, ?)').run(
+      item_id,
       cat_id
     );
   }
-  return id;
+  return item_id;
 };
 
 export const insert_picture = (data: {
@@ -102,43 +105,35 @@ export const insert_picture = (data: {
   const db = get_db();
   const title = data.title ?? `Picture ${Date.now()}`;
   const url = data.url ?? `https://example.com/p/${Date.now()}`;
-  db.prepare(
-    'INSERT INTO pictures (title, url, image_url, caption, credit) VALUES ($title, $url, $image_url, $caption, $credit)'
-  ).run({
+  db.prepare('INSERT INTO items (type, title, url) VALUES ($type, $title, $url)').run({
+    $type: 'picture',
     $title: title,
     $url: url,
+  });
+  const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+  db.prepare(
+    'INSERT INTO pictures (item_id, image_url, caption, credit) VALUES ($item_id, $image_url, $caption, $credit)'
+  ).run({
+    $item_id: item_id,
     $image_url: data.image_url,
     $caption: data.caption ?? '',
     $credit: data.credit ?? null,
   });
-  const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
   for (const t of data.topics ?? []) {
     db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run(t.dataset);
-    db.prepare('INSERT INTO picture_topics (picture_id, dataset, topic) VALUES (?, ?, ?)').run(
-      id,
+    db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
+      item_id,
       t.dataset,
       t.topic
     );
   }
-  return id;
+  return item_id;
 };
 
-export const set_like = (
-  type: 'article' | 'picture',
-  item_id: number,
-  user_id: number,
-  value: -1 | 0 | 1
-) => {
+export const set_like = (user_id: number, item_id: number, value: -1 | 0 | 1) => {
   const db = get_db();
-  if (type === 'article') {
-    db.prepare(
-      `INSERT INTO user_articles (user_id, article_id, like) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, article_id) DO UPDATE SET like = excluded.like`
-    ).run(user_id, item_id, value);
-  } else {
-    db.prepare(
-      `INSERT INTO user_pictures (user_id, picture_id, like) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, picture_id) DO UPDATE SET like = excluded.like`
-    ).run(user_id, item_id, value);
-  }
+  db.prepare(
+    `INSERT INTO user_items (user_id, item_id, like) VALUES (?, ?, ?)
+     ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like`
+  ).run(user_id, item_id, value);
 };

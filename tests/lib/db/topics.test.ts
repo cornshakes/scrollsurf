@@ -59,7 +59,7 @@ it('category liked/disliked counts are per user', () => {
     categories: ['Physics'],
   });
   insert_category_hierarchy('Physics', 'Science');
-  set_like('article', id, uid, 1);
+  set_like(uid, id, 1);
 
   const tree = get_category_tree(uid);
   const science = tree.find((g) => g.top_level === 'Science');

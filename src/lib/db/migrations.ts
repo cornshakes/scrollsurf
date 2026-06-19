@@ -156,4 +156,122 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: 'unify_feed_items',
+    up: (db) => {
+      db.exec(`
+        DROP VIEW IF EXISTS feed_items;
+
+        ALTER TABLE articles RENAME TO _old_articles;
+        ALTER TABLE pictures RENAME TO _old_pictures;
+
+        CREATE TABLE items (
+          id    INTEGER PRIMARY KEY AUTOINCREMENT,
+          type  TEXT    NOT NULL,
+          title TEXT    NOT NULL,
+          url   TEXT    NOT NULL UNIQUE
+        );
+
+        INSERT INTO items (type, title, url) SELECT 'article', title, url FROM _old_articles;
+        INSERT INTO items (type, title, url) SELECT 'picture', title, url FROM _old_pictures;
+
+        CREATE TABLE articles (
+          item_id     INTEGER PRIMARY KEY REFERENCES items(id),
+          extract     TEXT NOT NULL,
+          description TEXT,
+          image_url   TEXT
+        );
+
+        CREATE TABLE pictures (
+          item_id   INTEGER PRIMARY KEY REFERENCES items(id),
+          image_url TEXT NOT NULL,
+          caption   TEXT NOT NULL DEFAULT '',
+          credit    TEXT
+        );
+
+        CREATE TABLE item_topics (
+          item_id INTEGER NOT NULL REFERENCES items(id),
+          dataset TEXT    NOT NULL,
+          topic   TEXT    NOT NULL,
+          PRIMARY KEY (item_id, dataset, topic)
+        );
+
+        CREATE TABLE item_categories (
+          item_id     INTEGER NOT NULL REFERENCES items(id),
+          category_id INTEGER NOT NULL REFERENCES categories(id),
+          PRIMARY KEY (item_id, category_id)
+        );
+
+        CREATE TABLE user_items (
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          item_id INTEGER NOT NULL REFERENCES items(id),
+          like    INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (user_id, item_id)
+        ) STRICT;
+
+        INSERT INTO articles (item_id, extract, description, image_url)
+          SELECT i.id, o.extract, o.description, o.image_url
+          FROM _old_articles o JOIN items i ON i.url = o.url;
+
+        INSERT INTO pictures (item_id, image_url, caption, credit)
+          SELECT i.id, o.image_url, o.caption, o.credit
+          FROM _old_pictures o JOIN items i ON i.url = o.url;
+
+        INSERT INTO item_topics (item_id, dataset, topic)
+          SELECT i.id, at.dataset, at.topic
+          FROM article_topics at JOIN _old_articles o ON o.id = at.article_id JOIN items i ON i.url = o.url;
+
+        INSERT INTO item_topics (item_id, dataset, topic)
+          SELECT i.id, pt.dataset, pt.topic
+          FROM picture_topics pt JOIN _old_pictures o ON o.id = pt.picture_id JOIN items i ON i.url = o.url;
+
+        INSERT INTO item_categories (item_id, category_id)
+          SELECT i.id, ac.category_id
+          FROM article_categories ac JOIN _old_articles o ON o.id = ac.article_id JOIN items i ON i.url = o.url;
+
+        INSERT INTO user_items (user_id, item_id, like)
+          SELECT ua.user_id, i.id, ua.like
+          FROM user_articles ua JOIN _old_articles o ON o.id = ua.article_id JOIN items i ON i.url = o.url;
+
+        INSERT INTO user_items (user_id, item_id, like)
+          SELECT up.user_id, i.id, up.like
+          FROM user_pictures up JOIN _old_pictures o ON o.id = up.picture_id JOIN items i ON i.url = o.url;
+
+        DELETE FROM user_clicks
+          WHERE item_type = 'article'
+            AND NOT EXISTS (SELECT 1 FROM _old_articles o WHERE o.id = user_clicks.item_id);
+
+        DELETE FROM user_clicks
+          WHERE item_type = 'picture'
+            AND NOT EXISTS (SELECT 1 FROM _old_pictures o WHERE o.id = user_clicks.item_id);
+
+        UPDATE user_clicks
+          SET item_id = (
+            SELECT i.id FROM _old_articles o JOIN items i ON i.url = o.url
+            WHERE o.id = user_clicks.item_id
+          )
+          WHERE item_type = 'article';
+
+        UPDATE user_clicks
+          SET item_id = (
+            SELECT i.id FROM _old_pictures o JOIN items i ON i.url = o.url
+            WHERE o.id = user_clicks.item_id
+          )
+          WHERE item_type = 'picture';
+
+        DROP TABLE user_articles;
+        DROP TABLE user_pictures;
+        DROP TABLE article_topics;
+        DROP TABLE picture_topics;
+        DROP TABLE article_categories;
+        DROP TABLE _old_articles;
+        DROP TABLE _old_pictures;
+
+        CREATE INDEX idx_item_topics_item ON item_topics(item_id);
+        CREATE INDEX idx_items_type ON items(type);
+        CREATE INDEX idx_user_items_user ON user_items(user_id);
+      `);
+    },
+  },
 ];

@@ -1,24 +1,18 @@
 import { type LinkType } from './types';
 import { get_db } from './connection';
-import { set_article_like } from './articles';
-import { set_picture_like } from './pictures';
 
 const RECORD_CLICK_SQL = `
   INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at)
   VALUES ($user_id, $item_type, $item_id, $link_type, $link_label, $created_at)
 `;
 
-export const set_like = (
-  type: 'article' | 'picture',
-  id: number,
-  value: -1 | 0 | 1,
-  user_id: number
-) => {
-  if (type === 'article') {
-    set_article_like(id, value, user_id);
-  } else {
-    set_picture_like(id, value, user_id);
-  }
+const SET_LIKE_SQL = `
+  INSERT INTO user_items (user_id, item_id, like) VALUES ($user_id, $item_id, $like)
+  ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like
+`;
+
+export const set_like = (user_id: number, id: number, value: -1 | 0 | 1) => {
+  get_db().prepare(SET_LIKE_SQL).run({ $user_id: user_id, $item_id: id, $like: value });
 };
 
 export const record_click = (

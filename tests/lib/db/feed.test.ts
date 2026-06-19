@@ -186,7 +186,7 @@ describe('FEED_PICTURE_RATIO=1', () => {
       });
     }
     for (let i = 0; i < 20; i++) {
-      set_like('picture', x_ids[i], uid, 1);
+      set_like(uid, x_ids[i], 1);
     }
     const feed = feed_one(100, uid);
     // 180 unseen X + 200 unseen Y = 380 eligible; X affinity boost pushes X above baseline ~47

@@ -9,7 +9,7 @@ export type {
 } from './types';
 
 export { db, init_db } from './connection';
-export { get_next_articles, get_voted_articles } from './articles';
+export { get_voted_articles } from './articles';
 export { get_voted_pictures } from './pictures';
 export { get_next_feed } from './feed';
 export { get_category_tree } from './topics';

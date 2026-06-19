@@ -9,11 +9,8 @@ import { feed_affinity_ctes, AFFINITY_STRENGTH, AFFINITY_CLAMP } from './affinit
 const PICTURE_RATIO =
   process.env.FEED_PICTURE_RATIO !== undefined ? parseFloat(process.env.FEED_PICTURE_RATIO) : 0.1;
 
-const MARK_SEEN_ARTICLE_SQL =
-  'INSERT OR IGNORE INTO user_articles (user_id, article_id) VALUES ($user_id, $article_id)';
-
-const MARK_SEEN_PICTURE_SQL =
-  'INSERT OR IGNORE INTO user_pictures (user_id, picture_id) VALUES ($user_id, $picture_id)';
+const MARK_SEEN_SQL =
+  'INSERT OR IGNORE INTO user_items (user_id, item_id) VALUES ($user_id, $item_id)';
 
 // $ratio = 0 -> WHERE excludes pictures; $ratio = 1 -> excludes articles.
 // type_share / pool_size normalizes so expected picture share = $ratio regardless
@@ -23,7 +20,7 @@ const FEED_GET_NEXT_SQL = `
   SELECT p.type, p.id
   FROM eligible_pool p
   JOIN pool_size ps ON ps.type = p.type
-  LEFT JOIN item_affinity ia ON ia.item_type = p.type AND ia.item_id = p.id
+  LEFT JOIN item_affinity ia ON ia.item_id = p.id
   WHERE (p.type = 'picture' AND $ratio > 0)
      OR (p.type = 'article' AND $ratio < 1)
   ORDER BY
@@ -49,15 +46,10 @@ export const get_next_feed = (count: number, user_id: number | null): FeedItem[]
   const pictures = new Map(fetch_pictures_by_ids(picture_ids, user_id).map((x) => [x.id, x]));
 
   if (user_id !== null) {
-    const mark_article = db.prepare(MARK_SEEN_ARTICLE_SQL);
-    const mark_picture = db.prepare(MARK_SEEN_PICTURE_SQL);
+    const mark_seen = db.prepare(MARK_SEEN_SQL);
     db.exec('BEGIN');
     for (const r of rows) {
-      if (r.type === 'article') {
-        mark_article.run({ $user_id: user_id, $article_id: r.id });
-      } else {
-        mark_picture.run({ $user_id: user_id, $picture_id: r.id });
-      }
+      mark_seen.run({ $user_id: user_id, $item_id: r.id });
     }
     db.exec('COMMIT');
   }
