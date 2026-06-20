@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ThumbUpIcon from '@mui/icons-material/ThumbUp';
-import ThumbDownIcon from '@mui/icons-material/ThumbDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Picture, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
@@ -49,27 +50,30 @@ export const PictureCard = ({
       data-item-title={picture.title}
       sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
     >
-      <Link
-        href={picture.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        data-testid="link-title"
-        onClick={() => track('title', picture.title)}
-      >
-        <Box
-          component="img"
-          src={picture.image_url}
-          loading="lazy"
-          sx={{
-            display: 'block',
-            width: '100%',
-            maxHeight: 480,
-            objectFit: 'contain',
-            borderRadius: 1,
-            mb: 2,
-          }}
-        />
-      </Link>
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <Paper elevation={3} sx={{ borderRadius: 2, p: 2, display: 'inline-block' }}>
+          <Link
+            href={picture.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="link-title"
+            onClick={() => track('title', picture.title)}
+          >
+            <Box
+              component="img"
+              src={picture.image_url}
+              loading="lazy"
+              sx={{
+                display: 'block',
+                maxWidth: '100%',
+                maxHeight: 480,
+                width: 'auto',
+                height: 'auto',
+              }}
+            />
+          </Link>
+        </Paper>
+      </Box>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {picture.caption && (
@@ -113,7 +117,7 @@ export const PictureCard = ({
             aria-pressed={like === 1}
             data-testid="vote-up"
           >
-            <ThumbUpIcon fontSize="small" />
+            <ArrowUpwardIcon fontSize="small" />
           </IconButton>
           <IconButton
             onClick={() => vote(-1)}
@@ -123,7 +127,7 @@ export const PictureCard = ({
             aria-pressed={like === -1}
             data-testid="vote-down"
           >
-            <ThumbDownIcon fontSize="small" />
+            <ArrowDownwardIcon fontSize="small" />
           </IconButton>
         </Box>
       </Box>

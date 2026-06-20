@@ -5,8 +5,8 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ThumbUpIcon from '@mui/icons-material/ThumbUp';
-import ThumbDownIcon from '@mui/icons-material/ThumbDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Article, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
@@ -52,7 +52,7 @@ export const ArticleCard = ({
         aria-pressed={like === 1}
         data-testid="vote-up"
       >
-        <ThumbUpIcon fontSize="small" />
+        <ArrowUpwardIcon fontSize="small" />
       </IconButton>
       <IconButton
         onClick={() => vote(-1)}
@@ -62,7 +62,7 @@ export const ArticleCard = ({
         aria-pressed={like === -1}
         data-testid="vote-down"
       >
-        <ThumbDownIcon fontSize="small" />
+        <ArrowDownwardIcon fontSize="small" />
       </IconButton>
     </Box>
   );

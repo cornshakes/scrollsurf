@@ -6,11 +6,26 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ThumbUpIcon from '@mui/icons-material/ThumbUp';
-import ThumbDownIcon from '@mui/icons-material/ThumbDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Quote, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
+
+// Incoming-message bubble colors, tuned to read like Signal/WhatsApp in either
+// scheme. The page uses `colorSchemeSelector: 'media'`, so dark-mode overrides
+// go through `theme.applyStyles('dark', …)` rather than `palette.mode`.
+const BUBBLE_LIGHT = '#e7e7ea';
+const BUBBLE_DARK = '#2b2b2d';
+
+const author_initials = (author: string) =>
+  author
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase();
 
 export const QuoteCard = ({
   quote,
@@ -45,33 +60,40 @@ export const QuoteCard = ({
       data-testid="feed-card"
       data-card-type="quote"
       data-item-title={quote.title}
-      sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
+      sx={{
+        maxWidth: 680,
+        mx: 'auto',
+        px: { xs: 2, sm: 4 },
+        py: 4,
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          <Link
-            href={quote.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            underline="hover"
-            color="inherit"
-            data-testid="link-title"
-            onClick={() => track('title', quote.title)}
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+        {/* Sender avatar — left, like an incoming message */}
+        <Avatar
+          src={quote.author_image ?? undefined}
+          alt={quote.author}
+          sx={{ width: 40, height: 40, flexShrink: 0, mt: 0.25 }}
+        >
+          {author_initials(quote.author)}
+        </Avatar>
+
+        {/* Sender name + message bubble */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              fontWeight: 600,
+              color: 'primary.main',
+              mb: 0.25,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
           >
-            <Typography variant="body1" sx={{ fontStyle: 'italic', textAlign: 'center', mb: 1 }}>
-              {quote.title}
-            </Typography>
-          </Link>
-          {quote.author_image && (
-            <Avatar
-              src={quote.author_image}
-              alt={quote.author}
-              sx={{ width: 56, height: 56, mx: 'auto', mb: 1 }}
-            />
-          )}
-          {quote.author_url ? (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-              —{' '}
+            {quote.author_url ? (
               <Link
                 href={quote.author_url}
                 target="_blank"
@@ -83,13 +105,59 @@ export const QuoteCard = ({
               >
                 {quote.author}
               </Link>
-            </Typography>
-          ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-              — {quote.author}
-            </Typography>
-          )}
+            ) : (
+              quote.author
+            )}
+          </Typography>
+
+          <Box
+            sx={(theme) => ({
+              position: 'relative',
+              display: 'inline-block',
+              width: 'fit-content',
+              maxWidth: '100%',
+              px: 1.5,
+              py: 0.75,
+              borderRadius: 2,
+              borderTopLeftRadius: 0,
+              bgcolor: BUBBLE_LIGHT,
+              // Little tail tucked against the avatar at the top-left corner.
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: -7,
+                width: 0,
+                height: 0,
+                borderStyle: 'solid',
+                borderWidth: '0 7px 8px 0',
+                borderColor: `transparent ${BUBBLE_LIGHT} transparent transparent`,
+              },
+              ...theme.applyStyles('dark', {
+                bgcolor: BUBBLE_DARK,
+                '&::before': {
+                  borderColor: `transparent ${BUBBLE_DARK} transparent transparent`,
+                },
+              }),
+            })}
+          >
+            <Link
+              href={quote.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="none"
+              color="inherit"
+              data-testid="link-title"
+              onClick={() => track('title', quote.title)}
+            >
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {quote.title}
+              </Typography>
+            </Link>
+          </Box>
         </Box>
+
+        {/* Vote buttons — kept top-right, matching the other cards */}
         <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
           <IconButton
             onClick={() => vote(1)}
@@ -99,7 +167,7 @@ export const QuoteCard = ({
             aria-pressed={like === 1}
             data-testid="vote-up"
           >
-            <ThumbUpIcon fontSize="small" />
+            <ArrowUpwardIcon fontSize="small" />
           </IconButton>
           <IconButton
             onClick={() => vote(-1)}
@@ -109,7 +177,7 @@ export const QuoteCard = ({
             aria-pressed={like === -1}
             data-testid="vote-down"
           >
-            <ThumbDownIcon fontSize="small" />
+            <ArrowDownwardIcon fontSize="small" />
           </IconButton>
         </Box>
       </Box>

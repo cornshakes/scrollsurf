@@ -7,8 +7,8 @@ import useScrollTrigger from '@mui/material/useScrollTrigger';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ThumbUpIcon from '@mui/icons-material/ThumbUp';
-import ThumbDownIcon from '@mui/icons-material/ThumbDown';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -38,16 +38,26 @@ const VIEWS = (Object.keys(VIEW_LABELS) as View[]).filter(
   (v) => v !== 'categories' || CATEGORIES_ENABLED
 );
 
-// The floating menu icon reflects the current view: a thumbs-up/down on the
-// voted feeds, and the normal menu icon everywhere else.
+// The floating menu icon is always the logo. On voted views a tiny badge arrow
+// is overlaid at the bottom-right corner to indicate the active filter.
 const renderViewIcon = (v: View) => {
-  if (v === 'liked') {
-    return <ThumbUpIcon sx={{ fontSize: 32 }} />;
-  }
-  if (v === 'disliked') {
-    return <ThumbDownIcon sx={{ fontSize: 32 }} />;
-  }
-  return <Image src="/menu-icon.png" alt="" width={32} height={32} />;
+  const badge =
+    v === 'liked' ? (
+      <ArrowUpwardIcon
+        sx={{ fontSize: 16, position: 'absolute', bottom: -3, right: -3, color: 'success.main' }}
+      />
+    ) : v === 'disliked' ? (
+      <ArrowDownwardIcon
+        sx={{ fontSize: 16, position: 'absolute', bottom: -3, right: -3, color: 'error.main' }}
+      />
+    ) : null;
+
+  return (
+    <Box sx={{ position: 'relative', width: 32, height: 32 }}>
+      <Image src="/menu-icon.png" alt="" width={32} height={32} />
+      {badge}
+    </Box>
+  );
 };
 
 const WikiArticles = () => {
