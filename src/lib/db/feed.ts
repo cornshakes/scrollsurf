@@ -10,9 +10,9 @@ import { groupBy, keyBy } from 'es-toolkit';
 // feed is its share ÷ Σshares, independent of pool sizes. A share of 0 (or a type
 // absent from this map) hard-excludes that type via the `type_where` clause below.
 export const TYPE_SHARES = {
-  article: 0.85,
+  article: 0.82,
   picture: 0.1,
-  quote: 0.05,
+  quote: 0.08,
 };
 
 const included_types = Object.keys(TYPE_SHARES);
