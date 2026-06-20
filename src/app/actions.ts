@@ -46,7 +46,7 @@ export const get_voted_feed_items = async (vote: -1 | 1): Promise<FeedItem[]> =>
   if (uid === null) {
     return [];
   }
-  return get_voted_items(vote, uid).sort((a, b) => b.id - a.id);
+  return get_voted_items(vote, uid);
 };
 
 export const get_wiki_category_tree = async (): Promise<CategoryTree> => {

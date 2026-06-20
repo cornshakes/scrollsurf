@@ -46,6 +46,27 @@ describe('save_vote', () => {
     expect(row.like).toBe(0);
   });
 
+  it('stamps updated_at and refreshes it on re-vote', () => {
+    const uid = insert_user();
+    const id = insert_article({ url: 'https://a' });
+
+    const now_spy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000 * 1000);
+    save_vote(uid, id, 1);
+    const first = get_db()
+      .prepare('SELECT updated_at FROM user_items WHERE user_id = ? AND item_id = ?')
+      .get(uid, id) as { updated_at: number };
+    expect(first.updated_at).toBe(1_000_000);
+
+    now_spy.mockReturnValue(1_000_050 * 1000);
+    save_vote(uid, id, -1);
+    const second = get_db()
+      .prepare('SELECT updated_at FROM user_items WHERE user_id = ? AND item_id = ?')
+      .get(uid, id) as { updated_at: number };
+    expect(second.updated_at).toBe(1_000_050);
+
+    now_spy.mockRestore();
+  });
+
   it('votes are scoped per user', () => {
     const user_a = insert_user();
     const user_b = insert_user();
@@ -90,6 +111,24 @@ describe('get_voted_items', () => {
     const result = get_voted_items(1, uid);
     expect(result.map((item) => item.id)).toEqual([quote_id, picture_id, article_id]);
     expect(result.map((item) => item.type)).toEqual(['quote', 'picture', 'article']);
+  });
+
+  it('orders by most-recently-voted first regardless of item id', () => {
+    const uid = insert_user();
+    const first = insert_article({ url: 'https://first' });
+    const second = insert_article({ url: 'https://second' });
+    const third = insert_article({ url: 'https://third' });
+
+    // Vote out of id order, with advancing timestamps a second apart.
+    const now_spy = jest.spyOn(Date, 'now').mockReturnValue(2_000_000 * 1000);
+    save_vote(uid, second, 1);
+    now_spy.mockReturnValue(2_000_001 * 1000);
+    save_vote(uid, first, 1);
+    now_spy.mockReturnValue(2_000_002 * 1000);
+    save_vote(uid, third, 1);
+    now_spy.mockRestore();
+
+    expect(get_voted_items(1, uid).map((item) => item.id)).toEqual([third, first, second]);
   });
 
   it('returns an empty array when the user has voted on nothing', () => {

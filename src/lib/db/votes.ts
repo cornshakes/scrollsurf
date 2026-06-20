@@ -9,7 +9,7 @@ export const get_voted_items = (vote: -1 | 1, user_id: number): FeedItem[] => {
       FROM items i
       JOIN user_items ui ON ui.item_id = i.id
       WHERE ui.like = $like AND ui.user_id = $user_id
-      ORDER BY i.id DESC`
+      ORDER BY ui.updated_at DESC, i.id DESC`
     )
     .all({ $like: vote, $user_id: user_id }) as unknown as {
     type: 'article' | 'picture' | 'quote';
@@ -22,10 +22,18 @@ export const get_voted_items = (vote: -1 | 1, user_id: number): FeedItem[] => {
 export const save_vote = (user_id: number, id: number, value: -1 | 0 | 1) => {
   get_db()
     .prepare(
-      `INSERT INTO user_items (user_id, item_id, like) VALUES ($user_id, $item_id, $like)
-      ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like`
+      `INSERT INTO user_items (user_id, item_id, like, updated_at)
+      VALUES ($user_id, $item_id, $like, $updated_at)
+      ON CONFLICT(user_id, item_id) DO UPDATE SET
+        like = excluded.like,
+        updated_at = excluded.updated_at`
     )
-    .run({ $user_id: user_id, $item_id: id, $like: value });
+    .run({
+      $user_id: user_id,
+      $item_id: id,
+      $like: value,
+      $updated_at: Math.floor(Date.now() / 1000),
+    });
 };
 
 export const record_click = (
