@@ -1,17 +1,14 @@
-// PICTURE_RATIO is read at module load time. This test file relies on
-// FEED_PICTURE_RATIO being unset (defaulting to 0.1) in the Jest environment.
-// To test a different ratio, use jest.resetModules() + dynamic import in a
-// separate describe block with FEED_PICTURE_RATIO set before the import.
-import { type FeedItem } from '@/lib/db/types';
+import { range } from 'es-toolkit';
 import {
   setup,
   insert_user,
   insert_article,
   insert_picture,
   reset_db,
-  set_like,
+  insert_quote,
 } from '../../helpers/test-db';
-import { get_next_feed } from '@/lib/db/feed';
+import { get_next_feed, TYPE_SHARES } from '@/lib/db/feed';
+import { save_vote } from '@/lib/db';
 
 beforeAll(setup);
 beforeEach(reset_db);
@@ -34,139 +31,117 @@ const make_pictures = (n: number) => {
   }
 };
 
-// --- DETERMINISTIC BOUNDARY TESTS ---
-
-it('pool smaller than count returns whole pool without duplicates', () => {
-  make_articles(3);
-  make_pictures(1);
-  const feed = get_next_feed(10, null);
-  expect(feed).toHaveLength(4);
-  const keys = feed.map((x) => `${x.type}-${x.id}`);
-  expect(new Set(keys).size).toBe(4);
-});
-
-it('only articles in pool returns all articles', () => {
-  make_articles(5);
-  const feed = get_next_feed(10, null);
-  expect(feed).toHaveLength(5);
-  expect(feed.every((x) => x.type === 'article')).toBe(true);
-});
-
-it('only pictures in pool returns all pictures', () => {
-  make_pictures(5);
-  const feed = get_next_feed(10, null);
-  expect(feed).toHaveLength(5);
-  expect(feed.every((x) => x.type === 'picture')).toBe(true);
-});
-
-it('result length is as defined in count', () => {
-  make_articles(50);
-  make_pictures(50);
-  const feed = get_next_feed(10, null);
-  expect(feed.length).toEqual(10);
-});
-
-it('logged-in user: second call excludes items seen in first call', () => {
-  const uid = insert_user();
-  make_articles(5);
-  make_pictures(5);
-  get_next_feed(10, uid);
-  const second = get_next_feed(10, uid);
-  expect(second).toHaveLength(0);
-});
-
-it('null user: nothing marked seen', () => {
-  make_articles(5);
-  make_pictures(5);
-  get_next_feed(10, null);
-  const second = get_next_feed(10, null);
-  expect(second).toHaveLength(10);
-});
-
-it('items are fully hydrated with plain object literals', () => {
-  insert_article({ url: 'https://hydr.article', topics: topic, categories: ['Science'] });
-  insert_picture({ image_url: 'https://hydr.img', url: 'https://hydr.picture', topics: topic });
-  const feed = get_next_feed(5, null);
-  expect(feed.length).toBeGreaterThan(0);
-  for (const item of feed) {
-    expect(Object.getPrototypeOf(item)).toBe(Object.prototype);
-    expect(item.topics.length).toBeGreaterThan(0);
-    if (item.type === 'article') {
-      expect(Array.isArray(item.categories)).toBe(true);
-    }
+const make_quotes = (n: number) => {
+  for (let i = 0; i < n; i++) {
+    insert_quote({
+      text: `${i} little ducks go round and round`,
+      url: `https://test.quote/${i}`,
+      author: 'Dan Brown',
+      author_url: `https://wiki.author/${i}`,
+      author_image: `https://wiki.author.image/${i}`,
+    });
   }
-});
+};
 
-// --- STATISTICAL RATIO TEST ---
-
-// Pool: 500 articles + 100 pictures; null user (no mark-seen) → independent draws.
-// 50 × 20 = 1000 items; expected pics ≈ 100 (10%); sd ≈ 9.5; 3σ bounds [71, 129].
-it('picture share is near FEED_PICTURE_RATIO=0.1 (statistical)', () => {
-  for (let i = 0; i < 500; i++) insert_article({ url: `https://stat.a/${i}`, topics: topic });
-  for (let i = 0; i < 100; i++) {
-    insert_picture({ image_url: 'x', url: `https://stat.p/${i}`, topics: topic });
-  }
-  let pic_count = 0;
-  for (let i = 0; i < 50; i++) {
-    pic_count += get_next_feed(20, null).filter((x) => x.type === 'picture').length;
-  }
-  // statistical: measured mean ≈ 100, sd ≈ 9.5; [71, 129] is 3σ non-flaky
-  expect(pic_count).toBeGreaterThan(71);
-  expect(pic_count).toBeLessThan(129);
-}, 30000);
-
-// --- RATIO BOUNDARY TESTS ---
-
-// Each describe uses beforeEach (not beforeAll) to import a fresh module instance
-// per test, ensuring the new connection module always opens the post-reset_db file.
-
-describe('FEED_PICTURE_RATIO=0', () => {
-  let feed_zero: (count: number, user_id: number | null) => FeedItem[];
-
-  beforeEach(async () => {
-    process.env.FEED_PICTURE_RATIO = '0';
-    jest.resetModules();
-    const m = await import('@/lib/db/feed');
-    feed_zero = m.get_next_feed;
-    delete process.env.FEED_PICTURE_RATIO;
+describe('get_next_feed(): Without User', () => {
+  it('pool smaller than count returns whole pool without duplicates', () => {
+    make_articles(3);
+    make_pictures(1);
+    make_quotes(1);
+    const feed = get_next_feed(10, null);
+    expect(feed).toHaveLength(5);
+    const keys = feed.map((x) => `${x.type}-${x.id}`);
+    expect(new Set(keys).size).toBe(5);
   });
 
-  afterEach(() => {
-    jest.resetModules();
-  });
-
-  it('every item is an article even when pictures exist', () => {
+  it('only articles in pool returns all articles', () => {
     make_articles(5);
-    make_pictures(5);
-    const feed = feed_zero(10, null);
+    const feed = get_next_feed(10, null);
     expect(feed).toHaveLength(5);
     expect(feed.every((x) => x.type === 'article')).toBe(true);
   });
-});
 
-describe('FEED_PICTURE_RATIO=1', () => {
-  let feed_one: (count: number, user_id: number | null) => FeedItem[];
-
-  beforeEach(async () => {
-    process.env.FEED_PICTURE_RATIO = '1';
-    jest.resetModules();
-    const m = await import('@/lib/db/feed');
-    feed_one = m.get_next_feed;
-    delete process.env.FEED_PICTURE_RATIO;
-  });
-
-  afterEach(() => {
-    jest.resetModules();
-  });
-
-  it('every item is a picture even when articles exist', () => {
-    make_articles(5);
+  it('only pictures in pool returns all pictures', () => {
     make_pictures(5);
-    const feed = feed_one(10, null);
+    const feed = get_next_feed(10, null);
     expect(feed).toHaveLength(5);
     expect(feed.every((x) => x.type === 'picture')).toBe(true);
   });
 
+  it('only quotes in pool returns all quotes', () => {
+    make_quotes(5);
+    const feed = get_next_feed(10, null);
+    expect(feed).toHaveLength(5);
+    expect(feed.every((x) => x.type === 'quote')).toBe(true);
+  });
+
+  it('result length is as defined in count', () => {
+    make_articles(50);
+    make_pictures(50);
+    make_quotes(50);
+    const feed = get_next_feed(10, null);
+    expect(feed.length).toEqual(10);
+  });
+
+  it('result length stays the same on repeated calls', () => {
+    make_articles(5);
+    make_pictures(5);
+    make_quotes(5);
+    get_next_feed(10, null);
+    const second = get_next_feed(10, null);
+    expect(second).toHaveLength(10);
+  });
+
+  it('items are fully hydrated with plain object literals', () => {
+    insert_article({ url: 'https://hydr.article', topics: topic, categories: ['Science'] });
+    insert_picture({ image_url: 'https://hydr.img', url: 'https://hydr.picture', topics: topic });
+    insert_quote({ text: 'Q', url: 'https://q', author: 'Me' });
+    const feed = get_next_feed(5, null);
+    expect(feed.length).toBe(3);
+    for (const item of feed) {
+      expect(Object.getPrototypeOf(item)).toBe(Object.prototype);
+      expect(item.topics.length).toBeGreaterThan(0);
+      if (item.type === 'article') {
+        expect(Array.isArray(item.categories)).toBe(true);
+      }
+    }
+  });
+
+  it('item shares match the configured type shares (statistical-ish)', () => {
+    make_articles(1000);
+    make_pictures(1000);
+    make_quotes(1000);
+
+    const _2000_items = range(100).flatMap(() => get_next_feed(20, null));
+
+    const exp_articles = TYPE_SHARES.article * 2000;
+    const article_count = _2000_items.filter((i) => i.type === 'article').length;
+    expect(article_count).toBeWithin(exp_articles * 0.85, exp_articles * 1.15);
+
+    const exp_pictures = TYPE_SHARES.picture * 2000;
+    const picture_count = _2000_items.filter((i) => i.type === 'picture').length;
+    expect(picture_count).toBeWithin(exp_pictures * 0.85, exp_pictures * 1.15);
+
+    const exp_quotes = TYPE_SHARES.quote * 2000;
+    const quote_count = _2000_items.filter((i) => i.type === 'quote').length;
+    expect(quote_count).toBeWithin(exp_quotes * 0.85, exp_quotes * 1.15);
+  });
+});
+
+describe('get_next_feed(): With User', () => {
+  it('second call excludes items seen in first call', () => {
+    const uid = insert_user();
+    make_articles(5);
+    make_pictures(5);
+    make_quotes(5);
+    get_next_feed(10, uid);
+    const second = get_next_feed(10, uid);
+    expect(second).toHaveLength(5);
+  });
+
+  // --- AFFINITY TEST ---
+
+  // Pool is pictures-only (no articles/quotes inserted), so every draw is a picture.
   // statistical: measured mean ≈ 82, sd ≈ 5; threshold > 65 is non-flaky
   it('liked picture topic is over-represented among pictures drawn (statistical)', () => {
     const uid = insert_user();
@@ -186,9 +161,9 @@ describe('FEED_PICTURE_RATIO=1', () => {
       });
     }
     for (let i = 0; i < 20; i++) {
-      set_like(uid, x_ids[i], 1);
+      save_vote(uid, x_ids[i], 1);
     }
-    const feed = feed_one(100, uid);
+    const feed = get_next_feed(100, uid);
     // 180 unseen X + 200 unseen Y = 380 eligible; X affinity boost pushes X above baseline ~47
     const x_count = feed.filter(
       (f) => f.type === 'picture' && f.topics.some((t) => t.topic === 'X')

@@ -29,7 +29,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | Command | What it does |
 |---|---|
 | `npm run check` | Type-check + lint (`tsc --noEmit && eslint`) |
-| `npm run lint-fix` | Auto-format and fix (`eslint --fix`) — run after `check` passes |
+| `npm run check-fix` | Type-check + lint-fix / autoformat (`tsc --noEmit && eslint --fix`) |
 | `download-*` | Download datasets | 
 | `categorize` | Categorize datasets |
 | `npm test` | Jest unit tests (`test:watch`, `test:coverage` also available) |
@@ -57,9 +57,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - `datasets/featured_articles.db` — [Wikipedia Featured articles](https://en.wikipedia.org/wiki/Wikipedia:Featured_articles). Built by `npm run download-featured-articles`.
   - `datasets/featured_pictures.db` — [Wikipedia Featured pictures](https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures). Built by `npm run download-featured-pictures`. **Uses the picture schema** (`pictures`/`picture_topics`) — not the article schema.
   - `datasets/commons_featured_pictures.db` — [Wikimedia Commons Featured pictures](https://commons.wikimedia.org/wiki/Commons:Featured_pictures). Built by `npm run download-commons-featured-pictures`. Also the picture schema.
+  - `datasets/quotes.db` — [Wikiquote Quote of the Day](https://en.wikiquote.org/wiki/Wikiquote:QOTD_by_month) entries. Built by `npm run download-quotes`. **Uses the quote schema** (`quotes`/`quote_topics`) — not the article schema.
   - `datasets/categories.db` — Wikipedia category hierarchy mapped to top-level categories. Built by `npm run categorize`.
 
-On startup, `src/instrumentation.ts` (`register`, Node runtime only) calls `init_db()`, then imports the available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-datasets.ts`), then runs `cleanup_inactive_users()`. Picture datasets go through `import_pictures_dataset`, article datasets through `import_articles_dataset`, categories through `import_categories`. Each import is wrapped in try/catch — a missing or broken reference DB just warns and is skipped.
+On startup, `src/instrumentation.ts` (`register`, Node runtime only) calls `init_db()`, then imports the available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-datasets.ts`), then runs `cleanup_inactive_users()`. Picture datasets go through `import_pictures_dataset`, article datasets through `import_articles_dataset`, quotes through `import_quotes_dataset`, categories through `import_categories`. Each import is wrapped in try/catch — a missing or broken reference DB just warns and is skipped.
 
 ## Data pipeline
 
@@ -69,8 +70,8 @@ npm run download-* → datasets/<name>.db → instrumentation.ts (on startup) �
 
 Each download script ends by fetching item **content** (extract/caption, description, image, categories) in batches, then storing it in its reference DB. They differ only in how they discover URLs first (vital uses the quality-class category API; unusual extracts the bold-wrapped `'''[[…]]'''` links from the section subpages; etc.). Shared helpers live in `scripts/lib/`:
 
-- `dataset.ts` / `pictures-dataset.ts` — the two-phase discover→batch-download orchestration for articles vs pictures.
-- `wiki.ts` / `commons.ts` — Wikipedia and Wikimedia Commons API clients.
+- `dataset.ts` / `pictures-dataset.ts` / `quotes-dataset.ts` — the three-phase discover→batch-download orchestration for articles, pictures, and quotes.
+- `wiki.ts` / `commons.ts` / `wikiquote.ts` — Wikipedia, Wikimedia Commons, and Wikiquote API clients.
 - `mediawiki.ts` — the shared serial MediaWiki client (serial pacing, `maxlag`, exponential backoff, gzip) — where API etiquette is enforced.
 
 All download scripts are resumable: already-downloaded items are skipped. **Datasets are download-once, no backfill** — if a download bug ships bad data, fix the bug, delete the reference DB, and redownload; never add repair/migration machinery to the pipeline.
@@ -91,10 +92,10 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 
 ## Schema (runtime `scrollsurf.db`)
 
-- Content: `articles`, `pictures`, `categories`, `article_categories`, `article_topics`, `picture_topics`.
+- Content: `items` (unified supertype), `articles`, `pictures`, `quotes`, `item_topics`, `item_categories`, `categories`.
 - Metadata: `datasets`, `category_hierarchy`.
-- Users (STRICT tables): `users`, `user_articles`/`user_pictures` (`like` −1/0/1), `user_clicks` (append-only engagement log).
-- `feed_items` — a VIEW unifying articles + pictures at the identity level (`type, id`) for feed selection.
+- Users (STRICT tables): `users`, `user_items` (`like` −1/0/1), `user_clicks` (append-only engagement log).
+- `feed_items` — a VIEW unifying articles + pictures + quotes at the identity level (`type, id`) for feed selection.
 
 (Columns are authoritative in `src/lib/db/migrations.ts`.)
 
@@ -108,6 +109,7 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 - **Featured** — topics from Wikipedia Featured articles page sections.
 - **Pictures** — gallery section headings from `Wikipedia:Featured pictures`.
 - **Commons** — section headings from `Commons:Featured pictures`.
+- **Quotes** — one topic `'Quote of the Day'` per quote from Wikiquote QOTD entries.
 
 The dataset grouping is why topic names may safely collide across datasets (multiple datasets can have a History/Technology). An item may have several topics. Per-dataset `source_url` lives in each reference DB's `metadata` key/value table and is copied into `scrollsurf.db`'s `datasets` table on import, so each card's dataset chip can link to its source page.
 
@@ -117,19 +119,19 @@ Article categories are mapped to 34 Wikipedia top-level categories (Society, Geo
 
 **Do not attempt top-down BFS from top-level categories** — the Wikipedia category graph fans out exponentially (depth 3 ≈ 900K nodes, depth 4 ≈ 27M), making it completely impractical. The walk-up approach is the only viable API-based option. The script is resumable and respects API etiquette. 
 
-## Pictures vs articles
+## Items: articles, pictures, quotes
 
-Pictures and articles use **fully separate schemas** end-to-end:
+All three types use **fully separate schemas** end-to-end:
 
-| Concern | Articles | Pictures |
-|---|---|---|
-| Reference DB schema | `articles`, `article_topics`, `article_categories` | `pictures`, `picture_topics` |
-| Runtime tables | `articles`, `user_articles`, `article_topics` | `pictures`, `user_pictures`, `picture_topics` |
-| Importer | `import_articles_dataset` | `import_pictures_dataset` |
-| Download pipeline | `scripts/lib/dataset.ts` / `DiscoveredArticle` | `scripts/lib/pictures-dataset.ts` / `DiscoveredPicture` |
-| TS type | `Article` (`type: 'article'`) | `Picture` (`type: 'picture'`) |
+| Concern | Articles | Pictures | Quotes |
+|---|---|---|---|
+| Reference DB schema | `articles`, `article_topics`, `article_categories` | `pictures`, `picture_topics` | `quotes` (no categories) |
+| Runtime detail table | `articles` | `pictures` | `quotes` |
+| Importer | `import_articles_dataset` | `import_pictures_dataset` | `import_quotes_dataset` |
+| Download pipeline | `scripts/lib/dataset.ts` / `DiscoveredArticle` | `scripts/lib/pictures-dataset.ts` / `DiscoveredPicture` | `scripts/lib/quotes-dataset.ts` / fixed topics at import |
+| TS type | `Article` (`type: 'article'`) | `Picture` (`type: 'picture'`) | `Quote` (`type: 'quote'`) |
 
-The feed returns `FeedItem = Article | Picture`. The `feed_items` view unifies the two only at the identity level (`type, id`) for selection; the fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection. **Always switch on `.type` when handling feed items.**
+The feed returns `FeedItem = Article | Picture | Quote`. The `feed_items` view unifies all three only at the identity level (`type, id`) for selection; the fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection. **Always switch on `.type` when handling feed items.**
 
 ## Feed selection
 
@@ -139,10 +141,10 @@ The feed returns `FeedItem = Article | Picture`. The `feed_items` view unifies t
 weight = exp(AFFINITY_STRENGTH · clamped_affinity) · type_share / pool_size
 ```
 
-- `type_share` is `FEED_PICTURE_RATIO` for pictures and `1 − FEED_PICTURE_RATIO` for articles, and `pool_size` is the count of eligible items of that type — so the expected picture fraction equals the ratio, independent of pool sizes. `FEED_PICTURE_RATIO=0` hard-excludes pictures (via `WHERE`); `FEED_PICTURE_RATIO=1` hard-excludes articles.
+- `type_share` is the per-type share from the fixed `TYPE_SHARES` map in `feed.ts`, and `pool_size` is the count of eligible items of that type — so the expected fraction of each type equals its share ÷ Σshares, independent of actual pool sizes. A type with share 0 or absent from the map is hard-excluded (via `WHERE`).
 - Per-item affinity is the **average** of its topics' affinities. Per-topic affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. Dislikes downweight topics but never hard-exclude items.
 
-Neutral users, anonymous users (`$user_id` is NULL → empty affinity CTEs → affinity 0 everywhere), and `FEED_AFFINITY_STRENGTH=0` all reduce to exactly uniform random through the same query — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
+Neutral users and anonymous users (`$user_id` is NULL → empty affinity CTEs → affinity 0 everywhere) reduce to exactly uniform random through the same query — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
 
 ## Users, cookies & consent
 
@@ -155,7 +157,7 @@ Neutral users, anonymous users (`$user_id` is NULL → empty affinity CTEs → a
 All client↔DB traffic goes through server actions in `src/app/actions.ts` (no REST routes). Each resolves the user via `current_user_id()` and returns plain-object-mapped rows:
 
 - `get_next_wiki_articles(count)` → `get_next_feed`
-- `set_article_like(type, id, value)` → `set_like`
+- `vote_feed_item(id, value)` → `save_vote`
 - `record_link_click(type, id, link_type, label)` → `record_click`
 - `get_voted_wiki_articles(vote)` — merged liked/disliked articles + pictures
 - `get_wiki_category_tree()` — dev-only (returns `[]` otherwise)
@@ -169,8 +171,6 @@ Component map (all client components except the root layout/page): `App` (theme 
 |---|---|---|
 | `SCROLLSURF_DATA_DIR` | (required) | Root dir for `scrollsurf.db` + `datasets/` |
 | `WIKIPEDIA_USER_AGENT` | (required for downloads) | App name, version, contact email for the MediaWiki client |
-| `FEED_PICTURE_RATIO=N` | `0.1` | Expected picture fraction (0–1); `0` → no pictures, `1` → no articles |
-| `FEED_AFFINITY_STRENGTH=N` | `2.0` | Strength of topic-affinity weighting; `0` = pure random |
 | `USER_INACTIVITY_DAYS=N` | `14` | Days of inactivity before a user is cleaned up / cookie expires |
 | `COMMIT_ID` | `dev` | Surfaced to the client as `NEXT_PUBLIC_COMMIT_ID` |
 

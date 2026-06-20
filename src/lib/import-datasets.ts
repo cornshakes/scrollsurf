@@ -102,6 +102,41 @@ export const import_pictures_dataset = (filename: string) => {
   }
 };
 
+export const import_quotes_dataset = (filename: string) => {
+  const ref_path = dataset_path(filename);
+  if (!existsSync(ref_path)) {
+    return;
+  }
+
+  db.exec(`ATTACH '${ref_path}' AS ref`);
+  try {
+    db.exec(
+      `INSERT OR IGNORE INTO main.items (type, title, url)
+       SELECT 'quote', text, url FROM ref.quotes`
+    );
+    db.exec(
+      `INSERT OR IGNORE INTO main.quotes (item_id, author, author_url, author_image)
+       SELECT i.id, q.author, q.author_url, q.author_image
+       FROM ref.quotes q
+       JOIN main.items i ON i.url = q.url`
+    );
+    db.exec(
+      `INSERT OR IGNORE INTO main.item_topics (item_id, dataset, topic)
+       SELECT i.id, 'Quotes', 'Quote of the Day'
+       FROM main.items i
+       WHERE i.type = 'quote' AND NOT EXISTS (
+         SELECT 1 FROM main.item_topics it WHERE it.item_id = i.id AND it.dataset = 'Quotes'
+       )`
+    );
+    db.exec(
+      `INSERT OR REPLACE INTO main.datasets (name, source_url)
+       SELECT 'Quotes', value FROM ref.metadata WHERE key = 'source_url'`
+    );
+  } finally {
+    db.exec('DETACH ref');
+  }
+};
+
 export const import_categories = () => {
   const ref_path = dataset_path('categories.db');
   if (!existsSync(ref_path)) {

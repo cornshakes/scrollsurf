@@ -1,4 +1,5 @@
-import { setup, insert_user, insert_article, set_like, reset_db } from '../../helpers/test-db';
+import { save_vote } from '@/lib/db';
+import { setup, insert_user, insert_article, reset_db } from '../../helpers/test-db';
 import { db } from '@/lib/db/connection';
 import { get_category_tree } from '@/lib/db/topics';
 
@@ -6,8 +7,6 @@ beforeAll(setup);
 beforeEach(reset_db);
 
 const topic = (dataset: string, t: string) => ({ dataset, topic: t });
-
-// ── get_category_tree ────────────────────────────────────────────────────────
 
 const insert_category_hierarchy = (category_name: string, top_level: string) => {
   db.prepare(
@@ -59,7 +58,7 @@ it('category liked/disliked counts are per user', () => {
     categories: ['Physics'],
   });
   insert_category_hierarchy('Physics', 'Science');
-  set_like(uid, id, 1);
+  save_vote(uid, id, 1);
 
   const tree = get_category_tree(uid);
   const science = tree.find((g) => g.top_level === 'Science');

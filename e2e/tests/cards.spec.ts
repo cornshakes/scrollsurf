@@ -31,4 +31,10 @@ test.describe('Cards', () => {
     await scroll_to_load_all(page);
     await screenshot_card(page, 'Chae Yong-sin', 'picture-long-credit');
   });
+
+  test('quote card', async ({ page }) => {
+    await load_page(page, true);
+    await scroll_to_load_all(page);
+    await screenshot_card(page, 'Movement will cease', 'quote-card');
+  });
 });

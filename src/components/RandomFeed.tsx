@@ -5,9 +5,10 @@ import { useInView } from 'react-intersection-observer';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
-import { get_next_wiki_articles } from '@/app/actions';
+import { get_next_feed_items } from '@/app/actions';
 import { ArticleCard } from './ArticleCard';
 import { PictureCard } from './PictureCard';
+import { QuoteCard } from './QuoteCard';
 import { useFeed } from './FeedContext';
 
 const PAGE_SIZE = 10;
@@ -19,12 +20,12 @@ export const RandomFeed = () => {
 
   const fetchNext = useCallback(() => {
     startTransition(async () => {
-      const batch = await get_next_wiki_articles(PAGE_SIZE);
+      const batch = await get_next_feed_items(PAGE_SIZE);
       // without a cookie, the same feed items might show up multiple times.
       // we filter.
       setItems((prev) => {
-        const seen = new Set(prev.map(({ type, id }) => `${type}-${id}`));
-        return [...prev, ...batch.filter(({ type, id }) => !seen.has(`${type}-${id}`))];
+        const seen = new Set(prev.map(({ id }) => id));
+        return [...prev, ...batch.filter(({ id }) => !seen.has(id))];
       });
     });
   }, [setItems]);
@@ -50,13 +51,15 @@ export const RandomFeed = () => {
       >
         Discover Wikipedia articles, pictures, topics and categories from curated datasets.
       </Typography>
-      {items.map((item) =>
-        item.type === 'picture' ? (
-          <PictureCard key={`picture-${item.id}`} picture={item} />
-        ) : (
-          <ArticleCard key={`article-${item.id}`} article={item} />
-        )
-      )}
+      {items.map((item) => {
+        if (item.type === 'picture') {
+          return <PictureCard key={item.id} picture={item} />;
+        } else if (item.type === 'quote') {
+          return <QuoteCard key={item.id} quote={item} />;
+        } else {
+          return <ArticleCard key={item.id} article={item} />;
+        }
+      })}
       <Box
         ref={ref}
         data-testid="feed-sentinel"

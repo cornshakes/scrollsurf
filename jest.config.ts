@@ -9,6 +9,7 @@ const config: Config = {
   roots: ['<rootDir>/tests'],
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.next/', '<rootDir>/e2e/'],
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+  setupFilesAfterEnv: ['jest-extended/all'],
   collectCoverageFrom: [
     'src/lib/db/**/*.ts',
     'src/lib/user.ts',

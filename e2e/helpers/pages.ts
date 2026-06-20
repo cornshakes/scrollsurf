@@ -48,7 +48,10 @@ const mock_images = async (page: Page) => {
       '<rect width="400" height="200" fill="#c0c0c0"/>' +
       '</svg>'
   );
-  await page.route('**/*.{jpg,jpeg,png,gif,webp}', (route) =>
+  // Match the image extension whether the URL ends there or carries a query
+  // string — quote author thumbnails come from the pageimages API with trailing
+  // `?utm_source=…` tracking params that a `*.jpg` glob would miss.
+  await page.route(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg })
   );
 };
@@ -119,11 +122,11 @@ const remove_other_cards = async (page: Page, hasText: string) => {
 export const scroll_to_load_all = async (page: Page) => {
   for (let i = 0; i < 2; i++) {
     await page.getByTestId('feed-sentinel').scrollIntoViewIfNeeded();
-    if ((await page.getByTestId('feed-card').count()) === 12) {
+    if ((await page.getByTestId('feed-card').count()) === 14) {
       return;
     }
   }
-  await expect(page.getByTestId('feed-card')).toHaveCount(12);
+  await expect(page.getByTestId('feed-card')).toHaveCount(14);
 };
 
 export const switch_view = async (page: Page, view: View) => {

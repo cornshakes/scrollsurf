@@ -273,3 +273,9 @@ I manually reworked most of the Integration testing. Finally, no more maxDiffPix
 
 # Nothing big here
 I just changed the scripts slightly, the bigger changes are over in [my new repo](https://github.com/cornshakes/home-automation) which is about using claude to write code in this one.
+
+# Session limit change
+I think the session limit was reduced quite a lot recently (prob because of the fable desaster). This and the automation now make me reach my session limit quickly - First, the planning takes 15-20% instead of ~5%, then the bots eat until there is nothing left - which is good, I want to use my tokens. It's just.. now I want more tokens.
+
+# Backend / Frontend split
+Today, after a long workflow run, I still wanted to make lots of changes and used 2 sessions - one backend, one frontend, complementing each other. As always, the goal is to keep context small.

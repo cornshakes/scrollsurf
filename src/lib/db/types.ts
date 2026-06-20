@@ -28,7 +28,15 @@ export interface Picture extends BaseFeedItem {
   topics: Topic[];
 }
 
-export type FeedItem = Article | Picture;
+export interface Quote extends BaseFeedItem {
+  type: 'quote';
+  author: string;
+  author_url: string | null;
+  author_image: string | null;
+  topics: Topic[];
+}
+
+export type FeedItem = Article | Picture | Quote;
 
 export interface TopicStat {
   topic: string;

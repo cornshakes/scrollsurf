@@ -130,10 +130,36 @@ export const insert_picture = (data: {
   return item_id;
 };
 
-export const set_like = (user_id: number, item_id: number, value: -1 | 0 | 1) => {
+export const insert_quote = (data: {
+  text?: string;
+  url?: string;
+  author: string;
+  author_url?: string | null;
+  author_image?: string | null;
+}): number => {
   const db = get_db();
+  const title = data.text ?? `Quote ${Date.now()}`;
+  const url = data.url ?? `https://en.wikiquote.org/wiki/test/${Date.now()}`;
+  db.prepare('INSERT INTO items (type, title, url) VALUES ($type, $title, $url)').run({
+    $type: 'quote',
+    $title: title,
+    $url: url,
+  });
+  const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
   db.prepare(
-    `INSERT INTO user_items (user_id, item_id, like) VALUES (?, ?, ?)
-     ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like`
-  ).run(user_id, item_id, value);
+    `INSERT INTO quotes (item_id, author, author_url, author_image)
+     VALUES ($item_id, $author, $author_url, $author_image)`
+  ).run({
+    $item_id: item_id,
+    $author: data.author,
+    $author_url: data.author_url ?? null,
+    $author_image: data.author_image ?? null,
+  });
+  db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run('Quotes');
+  db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
+    item_id,
+    'Quotes',
+    'Quote of the Day'
+  );
+  return item_id;
 };

@@ -199,6 +199,7 @@ describe('migrate — real history', () => {
       'items',
       'articles',
       'pictures',
+      'quotes',
       'item_topics',
       'item_categories',
       'categories',
@@ -235,6 +236,9 @@ describe('migrate — real history', () => {
     expect(column_names(db, 'pictures')).toContain('item_id');
     expect(column_names(db, 'pictures')).toContain('caption');
     expect(column_names(db, 'pictures')).not.toContain('id');
+
+    // quotes detail table carries the author page thumbnail (migration 7)
+    expect(column_names(db, 'quotes')).toContain('author_image');
   });
 
   test('converges a legacy prod DB (user_version 0, no caption, has user_settings)', () => {

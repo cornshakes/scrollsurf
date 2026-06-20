@@ -35,6 +35,49 @@ const pictures = {
 
 const e2e_db_path = path.join('e2e', 'fixtures', 'scrollsurf-e2e-test.db');
 
+const seed_quotes = (e2e_db: DatabaseSync) => {
+  const quotes_data = [
+    {
+      text: 'Movement will cease before we are weary of being useful.',
+      url: 'https://en.wikiquote.org/wiki/Wikiquote:Quote_of_the_day/April_15,_2024',
+      author: 'Leonardo da Vinci',
+      author_url: 'https://en.wikiquote.org/wiki/Leonardo_da_Vinci',
+      author_image:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Leonardo_da_Vinci_-_presumed_self-portrait_-_WGA12798.jpg/250px-Leonardo_da_Vinci_-_presumed_self-portrait_-_WGA12798.jpg?utm_source=en.wikiquote.org&utm_campaign=api&utm_content=thumbnail',
+    },
+    {
+      text: 'It is at night that faith in light is admirable.',
+      url: 'https://en.wikiquote.org/wiki/Wikiquote:Quote_of_the_day/April_1,_2024',
+      author: 'Edmond Rostand',
+      author_url: 'https://en.wikiquote.org/wiki/Edmond_Rostand',
+      author_image:
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Edmond_Rostand.jpg/250px-Edmond_Rostand.jpg?utm_source=en.wikiquote.org&utm_campaign=api&utm_content=thumbnail',
+    },
+  ];
+
+  e2e_db.exec(
+    `INSERT OR REPLACE INTO datasets (name, source_url) VALUES ('Quotes', 'https://en.wikiquote.org/wiki/Wikiquote:QOTD_by_month')`
+  );
+
+  for (const quote of quotes_data) {
+    const item = e2e_db
+      .prepare('INSERT OR IGNORE INTO items (type, title, url) VALUES (?, ?, ?) RETURNING id')
+      .get('quote', quote.text, quote.url) as { id: number } | undefined;
+
+    if (item) {
+      e2e_db
+        .prepare(
+          'INSERT OR IGNORE INTO quotes (item_id, author, author_url, author_image) VALUES (?, ?, ?, ?)'
+        )
+        .run(item.id, quote.author, quote.author_url, quote.author_image);
+
+      e2e_db
+        .prepare('INSERT OR IGNORE INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)')
+        .run(item.id, 'Quotes', 'Quote of the Day');
+    }
+  }
+};
+
 const import_feed_items = async (e2e_db: DatabaseSync) => {
   e2e_db.exec('CREATE TEMP TABLE wanted_urls (url TEXT PRIMARY KEY)');
   const urls = [...Object.values(articles).flat(), ...Object.values(pictures).flat()];
@@ -157,6 +200,7 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
   for (const filename of Object.keys(pictures)) {
     import_pictures(filename);
   }
+  seed_quotes(e2e_db);
 
   const count = (table: string) =>
     (e2e_db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
@@ -164,7 +208,7 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
   // eslint-disable-next-line no-console
   console.log(
     `Imported into ${e2e_db_path}:` +
-      `${count('items')} items, ${count('articles')} articles, ${count('pictures')} pictures, ` +
+      `${count('items')} items, ${count('articles')} articles, ${count('pictures')} pictures, ${count('quotes')} quotes, ` +
       `${count('datasets')} datasets, ${count('item_topics')} item_topics, ${count('item_categories')} item_categories`
   );
 };
@@ -175,6 +219,10 @@ const init_db = async () => {
   const item_count = db.prepare('select 1 from items limit 1').get();
   if (!item_count) {
     await import_feed_items(db);
+  }
+  const quote_count = db.prepare('select 1 from quotes limit 1').get();
+  if (!quote_count) {
+    seed_quotes(db);
   }
   db.close();
 };

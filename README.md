@@ -78,8 +78,6 @@ Unseen articles are then drawn with weights based on the average affinity of the
 
 Without any votes (or without the consent cookie) the feed is random.
 
-The weighting strength can be adjusted using the `FEED_AFFINITY_STRENGTH` env var (`0` = random).
-
 ### Example
 
 Say you've scrolled for a while and your history per topic looks like this:
@@ -134,9 +132,9 @@ LIMIT $limit
 
 The `ORDER BY` line is the whole sampling trick ([Efraimidis–Spirakis](https://en.wikipedia.org/wiki/Reservoir_sampling#Weighted_random_sampling)): every candidate row draws its own uniform random number, the weight stretches it, and taking the smallest `n` keys is mathematically the same as drawing `n` items without replacement with probability proportional to weight. So the "randomness" and the "weighting" live in the same expression — there's no second pass, no shuffle in TS.
 
-For anonymous users `$user_id` is `NULL`, which matches nothing in the CTEs, so every article falls back to affinity `0` → weight `1` → plain uniform random, through the exact same query.
+For anonymous users `$user_id` is `NULL`, which matches nothing in the CTEs, so every item falls back to affinity `0` → weight `1` → plain uniform random, through the exact same query.
 
-Pictures run the same query against their own tables (`user_pictures`, `picture_topics`). The only thing TypeScript does afterwards is interleave the two result lists at `FEED_PICTURE_RATIO` in `src/lib/db/feed.ts` — two queries per feed page, total.
+Pictures and quotes run through the same unified query. The weight term includes a per-type share factor (the fixed `TYPE_SHARES` map in `feed.ts`), so each type's expected fraction equals its share ÷ Σshares, independent of actual pool sizes. One query per feed page returns all three types, with per-type payload columns fetched after selection.
 
 ## Future inspiration 
 

@@ -1,11 +1,4 @@
-import {
-  setup,
-  insert_user,
-  insert_article,
-  insert_picture,
-  set_like as db_set_like,
-  reset_db,
-} from './helpers/test-db';
+import { setup, insert_user, insert_article, insert_picture, reset_db } from './helpers/test-db';
 
 // Mock user and headers before importing the actions module
 jest.mock('@/lib/user', () => ({ current_user_id: jest.fn() }));
@@ -17,11 +10,8 @@ jest.mock('next/headers', () => ({
 }));
 
 import { current_user_id } from '@/lib/user';
-import {
-  get_voted_wiki_articles,
-  set_article_like as action_set_like,
-  get_next_wiki_articles,
-} from '@/app/actions';
+import { get_voted_feed_items, vote_feed_item, get_next_feed_items } from '@/app/actions';
+import { save_vote } from '@/lib/db';
 
 const mock_uid = current_user_id as jest.Mock;
 const topic = [{ dataset: 'D', topic: 'T' }];
@@ -32,7 +22,7 @@ beforeEach(() => {
   mock_uid.mockReset();
 });
 
-it('get_voted_wiki_articles merges articles and pictures sorted by id DESC', async () => {
+it('get_voted_feed_items merges articles, pictures, and quotes sorted by id DESC', async () => {
   const uid = insert_user();
   mock_uid.mockResolvedValue(uid);
 
@@ -47,46 +37,46 @@ it('get_voted_wiki_articles merges articles and pictures sorted by id DESC', asy
     topics: topic,
   });
 
-  db_set_like(uid, id_a3, 1);
-  db_set_like(uid, id_p2, 1);
+  save_vote(uid, id_a3, 1);
+  save_vote(uid, id_p2, 1);
 
-  const result = await get_voted_wiki_articles(1);
+  const result = await get_voted_feed_items(1);
   // Global ids: A1=1, A2=2, A3=3, P1=4, P2=5 → sorted DESC: 5, 3
   expect(result.map((x) => x.id)).toEqual([id_p2, id_a3]);
 });
 
-it('get_voted_wiki_articles returns [] when user_id is null', async () => {
+it('get_voted_feed_items returns [] when user_id is null', async () => {
   mock_uid.mockResolvedValue(null);
-  expect(await get_voted_wiki_articles(1)).toEqual([]);
+  expect(await get_voted_feed_items(1)).toEqual([]);
 });
 
-it('set_article_like returns early without writing when user_id is null', async () => {
+it('vote_feed_item returns early without writing when user_id is null', async () => {
   mock_uid.mockResolvedValue(null);
   const id = insert_article({ title: 'A', url: 'https://a', topics: topic });
-  await action_set_like('article', id, 1);
+  await vote_feed_item(id, 1);
 
   // No like row should have been written — voted list is empty
   const uid = insert_user();
   mock_uid.mockResolvedValue(uid);
-  expect(await get_voted_wiki_articles(1)).toHaveLength(0);
+  expect(await get_voted_feed_items(1)).toHaveLength(0);
 });
 
-it('get_next_wiki_articles returns feed items for authenticated user', async () => {
+it('get_next_feed_items returns feed items for authenticated user', async () => {
   const uid = insert_user();
   mock_uid.mockResolvedValue(uid);
 
   insert_article({ title: 'A', url: 'https://a', topics: topic });
   insert_article({ title: 'B', url: 'https://b', topics: topic });
 
-  const result = await get_next_wiki_articles(10);
+  const result = await get_next_feed_items(10);
   expect(result.length).toBeGreaterThanOrEqual(1);
 });
 
-it('get_next_wiki_articles works for unauthenticated user (null uid)', async () => {
+it('get_next_feed_items works for unauthenticated user (null uid)', async () => {
   mock_uid.mockResolvedValue(null);
 
   insert_article({ title: 'A', url: 'https://a', topics: topic });
 
-  const result = await get_next_wiki_articles(10);
+  const result = await get_next_feed_items(10);
   expect(result).toHaveLength(1);
 });

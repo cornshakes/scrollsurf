@@ -3,40 +3,33 @@
 import { cookies } from 'next/headers';
 import {
   get_next_feed,
-  set_like,
+  save_vote,
   record_click,
-  get_voted_articles,
-  get_voted_pictures,
+  get_voted_items,
   get_category_tree,
   get_or_create_user,
   type FeedItem,
-  type Article,
-  type Picture,
   type CategoryTree,
   type LinkType,
 } from '@/lib/db';
 import { current_user_id } from '@/lib/user';
 import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
 
-export const get_next_wiki_articles = async (count: number): Promise<FeedItem[]> => {
+export const get_next_feed_items = async (count: number): Promise<FeedItem[]> => {
   const uid = await current_user_id();
   return get_next_feed(count, uid);
 };
 
-export const set_article_like = async (
-  type: 'article' | 'picture',
-  id: number,
-  value: -1 | 0 | 1
-) => {
+export const vote_feed_item = async (id: number, value: -1 | 0 | 1) => {
   const uid = await current_user_id();
   if (uid === null) {
     return;
   }
-  set_like(uid, id, value);
+  save_vote(uid, id, value);
 };
 
 export const record_link_click = async (
-  type: 'article' | 'picture',
+  type: 'article' | 'picture' | 'quote',
   id: number,
   link_type: LinkType,
   link_label?: string
@@ -48,14 +41,12 @@ export const record_link_click = async (
   record_click(type, id, link_type, link_label ?? null, uid);
 };
 
-export const get_voted_wiki_articles = async (vote: -1 | 1): Promise<FeedItem[]> => {
+export const get_voted_feed_items = async (vote: -1 | 1): Promise<FeedItem[]> => {
   const uid = await current_user_id();
   if (uid === null) {
     return [];
   }
-  const articles: Article[] = get_voted_articles(vote, uid);
-  const pictures: Picture[] = get_voted_pictures(vote, uid);
-  return [...articles, ...pictures].sort((a, b) => b.id - a.id);
+  return get_voted_items(vote, uid).sort((a, b) => b.id - a.id);
 };
 
 export const get_wiki_category_tree = async (): Promise<CategoryTree> => {

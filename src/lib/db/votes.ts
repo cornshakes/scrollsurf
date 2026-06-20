@@ -1,29 +1,45 @@
-import { type LinkType } from './types';
+import { type LinkType, type FeedItem } from './types';
 import { get_db } from './connection';
+import { hydrate_feed_items } from './feed';
 
-const RECORD_CLICK_SQL = `
-  INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at)
-  VALUES ($user_id, $item_type, $item_id, $link_type, $link_label, $created_at)
-`;
+export const get_voted_items = (vote: -1 | 1, user_id: number): FeedItem[] => {
+  const rows = get_db()
+    .prepare(
+      `SELECT i.type, i.id
+      FROM items i
+      JOIN user_items ui ON ui.item_id = i.id
+      WHERE ui.like = $like AND ui.user_id = $user_id
+      ORDER BY i.id DESC`
+    )
+    .all({ $like: vote, $user_id: user_id }) as unknown as {
+    type: 'article' | 'picture' | 'quote';
+    id: number;
+  }[];
 
-const SET_LIKE_SQL = `
-  INSERT INTO user_items (user_id, item_id, like) VALUES ($user_id, $item_id, $like)
-  ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like
-`;
+  return hydrate_feed_items(rows, user_id);
+};
 
-export const set_like = (user_id: number, id: number, value: -1 | 0 | 1) => {
-  get_db().prepare(SET_LIKE_SQL).run({ $user_id: user_id, $item_id: id, $like: value });
+export const save_vote = (user_id: number, id: number, value: -1 | 0 | 1) => {
+  get_db()
+    .prepare(
+      `INSERT INTO user_items (user_id, item_id, like) VALUES ($user_id, $item_id, $like)
+      ON CONFLICT(user_id, item_id) DO UPDATE SET like = excluded.like`
+    )
+    .run({ $user_id: user_id, $item_id: id, $like: value });
 };
 
 export const record_click = (
-  item_type: 'article' | 'picture',
+  item_type: 'article' | 'picture' | 'quote',
   item_id: number,
   link_type: LinkType,
   link_label: string | null,
   user_id: number
 ) => {
   get_db()
-    .prepare(RECORD_CLICK_SQL)
+    .prepare(
+      `INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at)
+      VALUES ($user_id, $item_type, $item_id, $link_type, $link_label, $created_at)`
+    )
     .run({
       $user_id: user_id,
       $item_type: item_type,

@@ -274,4 +274,24 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: 'add_quotes_table',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE quotes (
+          item_id    INTEGER PRIMARY KEY REFERENCES items(id),
+          author     TEXT NOT NULL,
+          author_url TEXT
+        );
+      `);
+    },
+  },
+  {
+    version: 7,
+    name: 'add_quotes_author_image',
+    up: (db) => {
+      db.exec('ALTER TABLE quotes ADD COLUMN author_image TEXT');
+    },
+  },
 ];

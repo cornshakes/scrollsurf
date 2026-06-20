@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 
 interface ClickRow {
-  item_type: 'article' | 'picture';
+  item_type: 'article' | 'picture' | 'quote';
   item_id: number;
   link_type: 'title' | 'by' | 'category' | 'topic' | 'dataset';
   link_label: string | null;

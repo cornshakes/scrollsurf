@@ -3,9 +3,7 @@ export const W_CLICK = 0.5;
 export const W_DISLIKE = 1.0;
 export const AFFINITY_SMOOTHING = 5.0;
 export const AFFINITY_CLAMP = 2.0;
-
-const _parsed_strength = parseFloat(process.env.FEED_AFFINITY_STRENGTH ?? '');
-export const AFFINITY_STRENGTH = isNaN(_parsed_strength) ? 2.0 : _parsed_strength;
+export const AFFINITY_STRENGTH = 2.0;
 
 // WITH-clause producing:
 //   item_affinity (item_id, affinity) — single arm, type-agnostic

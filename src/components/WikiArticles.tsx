@@ -133,7 +133,7 @@ const WikiArticles = () => {
       </Drawer>
 
       <Box
-        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
+        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overflowAnchor: 'none' }}
         data-testid="feed-scroll"
         ref={(node: HTMLDivElement | null) => {
           scroll_nodeRef.current = node;

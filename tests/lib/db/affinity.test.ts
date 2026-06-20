@@ -4,10 +4,9 @@ import {
   insert_user,
   insert_article,
   insert_picture,
-  set_like,
 } from '../../helpers/test-db';
 import { get_next_feed } from '@/lib/db/feed';
-import { record_click } from '@/lib/db/votes';
+import { record_click, save_vote } from '@/lib/db/votes';
 import type { Article, FeedItem, Picture } from '@/lib/db/types';
 
 beforeAll(setup);
@@ -31,7 +30,7 @@ it('liked topic is over-represented in fetch (statistical)', () => {
     insert_article({ url: `https://a.t1.y/${i}`, topics: [TOPIC_Y] });
   }
   for (let i = 0; i < 20; i++) {
-    set_like(uid, x_ids[i], 1);
+    save_vote(uid, x_ids[i], 1);
   }
   const result = get_articles(100, uid);
   const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
@@ -47,7 +46,7 @@ it('disliked topic is under-represented and never fully excluded (statistical + 
     y_ids.push(insert_article({ url: `https://a.t2.y/${i}`, topics: [TOPIC_Y] }));
   }
   for (let i = 0; i < 20; i++) {
-    set_like(uid, y_ids[i], -1);
+    save_vote(uid, y_ids[i], -1);
   }
   const result = get_articles(100, uid);
   const y_count = result.filter((a) => a.topics.some((t) => t.topic === 'Y')).length;
@@ -61,7 +60,7 @@ it('disliked topic is under-represented and never fully excluded (statistical + 
   }
   const lone = insert_article({ url: 'https://a.det/lone', topics: [TOPIC_Y] });
   for (const id of disliked) {
-    set_like(uid2, id, -1);
+    save_vote(uid2, id, -1);
   }
   const all = get_articles(5000, uid2);
   expect(all.some((a) => a.id === lone)).toBe(true);
@@ -76,7 +75,7 @@ it('clicks alone boost a topic (statistical)', () => {
     insert_article({ url: `https://a.t3.y/${i}`, topics: [TOPIC_Y] });
   }
   for (let i = 0; i < 20; i++) {
-    set_like(uid, x_ids[i], 0);
+    save_vote(uid, x_ids[i], 0);
     record_click('article', x_ids[i], 'title', null, uid);
   }
   const result = get_articles(100, uid);
@@ -98,7 +97,7 @@ it('anonymous user gets all articles and nothing is marked seen', () => {
   for (let i = 0; i < 10; i++) {
     const id = insert_article({ url: `https://a.t5/${i}`, topics: [{ dataset: 'D', topic: 'T' }] });
     if (i < 5) {
-      set_like(other, id, 1);
+      save_vote(other, id, 1);
     }
   }
   const r1 = get_articles(20, null);
@@ -117,7 +116,7 @@ it('likes from user A do not skew user B feed (statistical)', () => {
     insert_article({ url: `https://a.t6.y/${i}`, topics: [TOPIC_Y] });
   }
   for (let i = 0; i < 20; i++) {
-    set_like(uid_a, x_ids[i], 1);
+    save_vote(uid_a, x_ids[i], 1);
   }
   const result = get_articles(100, uid_b);
   const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
@@ -136,7 +135,7 @@ it('pictures: liked topic is over-represented in fetch (statistical)', () => {
     insert_picture({ url: `https://p.t7.y/${i}`, image_url: 'https://img/y', topics: [TOPIC_Y] });
   }
   for (let i = 0; i < 20; i++) {
-    set_like(uid, x_ids[i], 1);
+    save_vote(uid, x_ids[i], 1);
   }
   const x_id_set = new Set(x_ids);
   const result = get_pictures(100, uid);
@@ -171,7 +170,7 @@ describe('AFFINITY_STRENGTH=0', () => {
     // deterministic: all 380 unseen articles returned even with likes present
     const uid_a = insert_user();
     for (let i = 0; i < 20; i++) {
-      set_like(uid_a, x_ids[i], 1);
+      save_vote(uid_a, x_ids[i], 1);
     }
     const all = feed_zero(5000, uid_a).filter((r): r is Article => r.type === 'article');
     expect(all).toHaveLength(380);
@@ -179,7 +178,7 @@ describe('AFFINITY_STRENGTH=0', () => {
     // statistical: near-50/50 X/Y despite 20 liked X articles
     const uid_b = insert_user();
     for (let i = 0; i < 20; i++) {
-      set_like(uid_b, x_ids[i], 1);
+      save_vote(uid_b, x_ids[i], 1);
     }
     const result = feed_zero(100, uid_b).filter((r): r is Article => r.type === 'article');
     const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;

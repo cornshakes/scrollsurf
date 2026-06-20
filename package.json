@@ -27,6 +27,7 @@
     "download-featured-articles": "tsx --env-file=scripts/.env scripts/datasets/download-featured-articles.ts",
     "download-featured-pictures": "tsx --env-file=scripts/.env scripts/datasets/download-featured-pictures.ts",
     "download-commons-featured-pictures": "tsx --env-file=scripts/.env scripts/datasets/download-commons-featured-pictures.ts",
+    "download-quotes": "tsx --env-file=scripts/.env scripts/datasets/download-quotes.ts",
     "categorize": "tsx --env-file=scripts/.env scripts/categorize.ts"
   },
   "dependencies": {
@@ -48,6 +49,7 @@
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
+    "cheerio": "^1.2.0",
     "entities": "^4",
     "es-toolkit": "^1",
     "eslint": "^9",
@@ -58,6 +60,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jest": "^30.4.2",
+    "jest-extended": "^7.0.0",
     "ky": "^1",
     "prettier": "^3.8.3",
     "ts-node": "^10.9.2",

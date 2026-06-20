@@ -7,7 +7,7 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import ThumbDownIcon from '@mui/icons-material/ThumbDown';
-import { set_article_like, record_link_click } from '@/app/actions';
+import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Article, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { CardTags } from './CardTags';
@@ -29,7 +29,7 @@ export const ArticleCard = ({
     }
     const next = like === value ? 0 : value;
     setLike(next);
-    set_article_like('article', article.id, next);
+    vote_feed_item(article.id, next);
     onVoteChange?.('article', article.id, next);
   };
 
