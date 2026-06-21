@@ -5,7 +5,7 @@ Prefer const arrow functions over `function`.
 Always use curly braces for if/else/loop blocks, even if there is only a single statement.
 Don't use one-letter variable names, be more clear.
 
-After type-check passes, always run `npm run lint-fix` — it applies Prettier (configured in `package.json`, enforced through `eslint-plugin-prettier`) and fixes lint.
+After type-check passes, always run `npm run check-fix` — it applies Prettier (configured in `package.json`, enforced through `eslint-plugin-prettier`) and fixes lint.
 
 # This is NOT the Next.js you know
 

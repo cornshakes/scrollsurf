@@ -28,7 +28,9 @@ export const CardTags = ({
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) { return; }
+    if (!el) {
+      return;
+    }
     set_has_overflow(el.scrollHeight > el.clientHeight);
   }, [topics, categories]);
 
