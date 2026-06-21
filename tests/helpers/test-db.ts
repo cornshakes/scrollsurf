@@ -136,6 +136,7 @@ export const insert_quote = (data: {
   author: string;
   author_url?: string | null;
   author_image?: string | null;
+  quote_year?: string | null;
 }): number => {
   const db = get_db();
   const title = data.text ?? `Quote ${Date.now()}`;
@@ -147,13 +148,14 @@ export const insert_quote = (data: {
   });
   const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
   db.prepare(
-    `INSERT INTO quotes (item_id, author, author_url, author_image)
-     VALUES ($item_id, $author, $author_url, $author_image)`
+    `INSERT INTO quotes (item_id, author, author_url, author_image, quote_year)
+     VALUES ($item_id, $author, $author_url, $author_image, $quote_year)`
   ).run({
     $item_id: item_id,
     $author: data.author,
     $author_url: data.author_url ?? null,
     $author_image: data.author_image ?? null,
+    $quote_year: data.quote_year ?? null,
   });
   db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run('Quotes');
   db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(

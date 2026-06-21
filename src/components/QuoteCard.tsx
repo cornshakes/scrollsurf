@@ -79,37 +79,8 @@ export const QuoteCard = ({
           {author_initials(quote.author)}
         </Avatar>
 
-        {/* Sender name + message bubble */}
+        {/* Message bubble with the quote and an inline attribution */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'block',
-              fontWeight: 600,
-              color: 'primary.main',
-              mb: 0.25,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {quote.author_url ? (
-              <Link
-                href={quote.author_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                underline="hover"
-                color="inherit"
-                data-testid="link-by"
-                onClick={() => track('by', quote.author)}
-              >
-                {quote.author}
-              </Link>
-            ) : (
-              quote.author
-            )}
-          </Typography>
-
           <Box
             sx={(theme) => ({
               position: 'relative',
@@ -141,6 +112,45 @@ export const QuoteCard = ({
               }),
             })}
           >
+            {/* Sender name — first line inside the bubble, with the quote year
+                tucked into the top-right corner */}
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.25 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontWeight: 600,
+                  color: 'primary.main',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {quote.author_url ? (
+                  <Link
+                    href={quote.author_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    underline="hover"
+                    color="inherit"
+                    data-testid="link-by"
+                    onClick={() => track('by', quote.author)}
+                  >
+                    {quote.author}
+                  </Link>
+                ) : (
+                  quote.author
+                )}
+              </Typography>
+
+              {quote.quote_year && (
+                <Typography variant="caption" sx={{ flexShrink: 0, color: 'text.secondary' }}>
+                  {quote.quote_year}
+                </Typography>
+              )}
+            </Box>
+
             <Link
               href={quote.url}
               target="_blank"

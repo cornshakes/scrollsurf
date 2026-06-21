@@ -239,6 +239,8 @@ describe('migrate — real history', () => {
 
     // quotes detail table carries the author page thumbnail (migration 7)
     expect(column_names(db, 'quotes')).toContain('author_image');
+    // ...and the quote's year (migration 9)
+    expect(column_names(db, 'quotes')).toContain('quote_year');
   });
 
   test('converges a legacy prod DB (user_version 0, no caption, has user_settings)', () => {
@@ -307,6 +309,18 @@ describe('migrate — real history', () => {
       .get('https://example.com/legacy') as { title: string; caption: string };
     expect(row.title).toBe('Legacy');
     expect(row.caption).toBe('');
+  });
+
+  test('version 9 adds quote_year on top of a fully migrated v8 database', () => {
+    const v8_migrations = migrations.filter((m) => m.version <= 8);
+    migrate(db, v8_migrations);
+    expect(get_user_version(db)).toBe(8);
+    expect(column_names(db, 'quotes')).not.toContain('quote_year');
+
+    migrate(db);
+
+    expect(get_user_version(db)).toBe(migrations.length);
+    expect(column_names(db, 'quotes')).toContain('quote_year');
   });
 
   test('is idempotent — running twice changes nothing and does not throw', () => {

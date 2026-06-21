@@ -9,6 +9,10 @@ export interface DiscoveredQuote {
   text: string;
   author: string;
   author_url: string | null;
+  qotd_date: string | null;
+  // Work/theme page the quote is attributed to on its QOTD entry (the "in ~ … ~"
+  // link), used to date quotes that aren't listed on the author's own page.
+  source_url: string | null;
 }
 
 export const open_quotes_db = (filename: string): DatabaseSync => {
@@ -23,13 +27,18 @@ export const open_quotes_db = (filename: string): DatabaseSync => {
       url          TEXT NOT NULL UNIQUE,
       author       TEXT NOT NULL,
       author_url   TEXT,
-      author_image TEXT
+      author_image TEXT,
+      quote_year   TEXT,
+      qotd_date    TEXT,
+      source_url   TEXT
     );
     CREATE TABLE IF NOT EXISTS discovered_quotes (
       url        TEXT NOT NULL PRIMARY KEY,
       text       TEXT NOT NULL,
       author     TEXT NOT NULL,
-      author_url TEXT
+      author_url TEXT,
+      qotd_date  TEXT,
+      source_url TEXT
     );
     CREATE TABLE IF NOT EXISTS discovered_months (
       page TEXT NOT NULL PRIMARY KEY,
@@ -40,6 +49,17 @@ export const open_quotes_db = (filename: string): DatabaseSync => {
     CREATE TABLE IF NOT EXISTS author_images (
       author_url TEXT NOT NULL PRIMARY KEY,
       image      TEXT
+    );
+    -- Author pages whose section headers have been parsed for quote times. A row
+    -- means the page was looked up, so re-runs skip it (the page is the unit of
+    -- work — one fetch dates all of that author's quotes).
+    CREATE TABLE IF NOT EXISTS author_times_done (
+      author_url TEXT NOT NULL PRIMARY KEY
+    );
+    -- Source/work pages (e.g. "A Christmas Carol") parsed to date the quotes that
+    -- the author page didn't. Same resumability contract as author_times_done.
+    CREATE TABLE IF NOT EXISTS source_times_done (
+      source_url TEXT NOT NULL PRIMARY KEY
     );
   `);
 
@@ -82,18 +102,25 @@ export const mark_month_done = (db: DatabaseSync, page: string): void => {
 
 export const insert_discovered_quotes = (db: DatabaseSync, quotes: DiscoveredQuote[]): void => {
   const insert = db.prepare(
-    'INSERT OR IGNORE INTO discovered_quotes (url, text, author, author_url) VALUES (?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO discovered_quotes (url, text, author, author_url, qotd_date, source_url) VALUES (?, ?, ?, ?, ?, ?)'
   );
   db.exec('BEGIN');
   for (const q of quotes) {
-    insert.run(q.url, q.text, q.author, q.author_url ?? null);
+    insert.run(
+      q.url,
+      q.text,
+      q.author,
+      q.author_url ?? null,
+      q.qotd_date ?? null,
+      q.source_url ?? null
+    );
   }
   db.exec('COMMIT');
 };
 
 export const finalize_quotes = (db: DatabaseSync): void => {
   db.exec(
-    'INSERT OR IGNORE INTO quotes (text, url, author, author_url) SELECT text, url, author, author_url FROM discovered_quotes'
+    'INSERT OR IGNORE INTO quotes (text, url, author, author_url, qotd_date, source_url) SELECT text, url, author, author_url, qotd_date, source_url FROM discovered_quotes'
   );
 };
 
@@ -138,4 +165,91 @@ export const apply_author_images = (db: DatabaseSync): void => {
      WHERE author_image IS NULL
        AND author_url IN (SELECT author_url FROM author_images)`
   );
+};
+
+export interface AuthorQuote {
+  url: string;
+  text: string;
+}
+
+// Distinct author pages not yet parsed for quote times (absent from
+// author_times_done). Drives the resumable time-extraction phase.
+export const get_author_urls_needing_times = (db: DatabaseSync): string[] => {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT author_url FROM quotes
+       WHERE author_url IS NOT NULL
+         AND author_url NOT IN (SELECT author_url FROM author_times_done)
+       ORDER BY author_url`
+    )
+    .all() as unknown as { author_url: string }[];
+  return rows.map((row) => row.author_url);
+};
+
+// The (url, text) of every quote by one author, so the caller can match each
+// against the parsed section headers of that author's page.
+export const get_quotes_for_author = (db: DatabaseSync, author_url: string): AuthorQuote[] => {
+  return db
+    .prepare('SELECT url, text FROM quotes WHERE author_url = ?')
+    .all(author_url) as unknown as AuthorQuote[];
+};
+
+// Persist one author's matched quote times and mark the page as parsed (even
+// when no quotes matched, so it is not re-fetched next run).
+export const apply_quote_times = (
+  db: DatabaseSync,
+  author_url: string,
+  times: Array<{ url: string; quote_year: string }>
+): void => {
+  const update = db.prepare('UPDATE quotes SET quote_year = ? WHERE url = ?');
+  const mark = db.prepare('INSERT OR IGNORE INTO author_times_done (author_url) VALUES (?)');
+  db.exec('BEGIN');
+  for (const entry of times) {
+    update.run(entry.quote_year, entry.url);
+  }
+  mark.run(author_url);
+  db.exec('COMMIT');
+};
+
+// Distinct source/work pages still worth fetching: those attached to at least one
+// still-undated quote and not yet parsed. Quotes already dated by the author phase
+// need no work-page lookup, so this naturally shrinks as coverage grows.
+export const get_source_urls_needing_times = (db: DatabaseSync): string[] => {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT source_url FROM quotes
+       WHERE source_url IS NOT NULL
+         AND quote_year IS NULL
+         AND source_url NOT IN (SELECT source_url FROM source_times_done)
+       ORDER BY source_url`
+    )
+    .all() as unknown as { source_url: string }[];
+  return rows.map((row) => row.source_url);
+};
+
+// The still-undated quotes attributed to one source/work page, to match against
+// that page's section headers.
+export const get_undated_quotes_for_source = (
+  db: DatabaseSync,
+  source_url: string
+): AuthorQuote[] => {
+  return db
+    .prepare('SELECT url, text FROM quotes WHERE source_url = ? AND quote_year IS NULL')
+    .all(source_url) as unknown as AuthorQuote[];
+};
+
+// Persist matched times from one source/work page and mark it parsed.
+export const apply_source_times = (
+  db: DatabaseSync,
+  source_url: string,
+  times: Array<{ url: string; quote_year: string }>
+): void => {
+  const update = db.prepare('UPDATE quotes SET quote_year = ? WHERE url = ?');
+  const mark = db.prepare('INSERT OR IGNORE INTO source_times_done (source_url) VALUES (?)');
+  db.exec('BEGIN');
+  for (const entry of times) {
+    update.run(entry.quote_year, entry.url);
+  }
+  mark.run(source_url);
+  db.exec('COMMIT');
 };

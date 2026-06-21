@@ -33,6 +33,7 @@ export interface Quote extends BaseFeedItem {
   author: string;
   author_url: string | null;
   author_image: string | null;
+  quote_year: string | null;
   topics: Topic[];
 }
 

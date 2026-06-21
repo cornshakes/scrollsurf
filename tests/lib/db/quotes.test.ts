@@ -35,6 +35,7 @@ it('fetch_quotes_by_ids returns correct fields for an unseen quote', () => {
     author: 'Shakespeare',
     author_url: 'https://en.wikiquote.org/wiki/Shakespeare',
     author_image: 'https://upload.wikimedia.org/shakespeare.jpg',
+    quote_year: '1502',
   });
   const result = fetch_quotes_by_ids([id], null);
   expect(result).toHaveLength(1);
@@ -44,6 +45,7 @@ it('fetch_quotes_by_ids returns correct fields for an unseen quote', () => {
   expect(result[0].author_image).toBe('https://upload.wikimedia.org/shakespeare.jpg');
   expect(result[0].type).toBe('quote');
   expect(result[0].like).toBe(0);
+  expect(result[0].quote_year).toBe('1502');
 });
 
 it('fetch_quotes_by_ids reflects like value for a voted quote', () => {

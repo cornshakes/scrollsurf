@@ -13,6 +13,7 @@ const row_to_quote = (r: QuoteDbRow, topics: Topic[]): Quote => ({
   author: r.author,
   author_url: r.author_url,
   author_image: r.author_image,
+  quote_year: r.quote_year,
   topics,
 });
 
@@ -23,7 +24,7 @@ export const fetch_quotes_by_ids = (ids: number[], user_id: number | null): Quot
   const placeholders = ids.map(() => '?').join(', ');
   const rows = get_db()
     .prepare(
-      `SELECT i.id, i.title, i.url, q.author, q.author_url, q.author_image,
+      `SELECT i.id, i.title, i.url, q.author, q.author_url, q.author_image, q.quote_year,
               COALESCE(ui.like, 0) AS like
        FROM items i
        JOIN quotes q ON q.item_id = i.id

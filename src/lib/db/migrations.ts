@@ -301,4 +301,11 @@ export const migrations: readonly migration[] = [
       db.exec('ALTER TABLE user_items ADD COLUMN updated_at INTEGER');
     },
   },
+  {
+    version: 9,
+    name: 'add_quotes_quote_year',
+    up: (db) => {
+      db.exec('ALTER TABLE quotes ADD COLUMN quote_year TEXT');
+    },
+  },
 ];

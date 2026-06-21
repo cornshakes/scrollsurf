@@ -115,10 +115,13 @@ export const import_quotes_dataset = (filename: string) => {
        SELECT 'quote', text, url FROM ref.quotes`
     );
     db.exec(
-      `INSERT OR IGNORE INTO main.quotes (item_id, author, author_url, author_image)
-       SELECT i.id, q.author, q.author_url, q.author_image
+      `INSERT INTO main.quotes (item_id, author, author_url, author_image, quote_year)
+       SELECT i.id, q.author, q.author_url, q.author_image, q.quote_year
        FROM ref.quotes q
-       JOIN main.items i ON i.url = q.url`
+       JOIN main.items i ON i.url = q.url
+       ON CONFLICT(item_id) DO UPDATE SET
+         author = excluded.author,
+         quote_year = COALESCE(excluded.quote_year, main.quotes.quote_year)`
     );
     db.exec(
       `INSERT OR IGNORE INTO main.item_topics (item_id, dataset, topic)

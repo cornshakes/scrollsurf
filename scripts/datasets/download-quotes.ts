@@ -10,6 +10,12 @@ import {
   get_author_urls_needing_images,
   record_author_images,
   apply_author_images,
+  get_author_urls_needing_times,
+  get_quotes_for_author,
+  apply_quote_times,
+  get_source_urls_needing_times,
+  get_undated_quotes_for_source,
+  apply_source_times,
   type DiscoveredQuote,
   type AuthorImage,
 } from '../lib/quotes-dataset';
@@ -18,10 +24,9 @@ import { create_mediawiki_api } from '../lib/mediawiki';
 export const wikiquote_api = create_mediawiki_api('https://en.wikiquote.org/w/api.php');
 
 const WIKIQUOTE_BASE = 'https://en.wikiquote.org';
-const DEFAULT_YEAR_COUNT = 3;
 
 const current_year = new Date().getFullYear();
-const YEAR_MIN = current_year - DEFAULT_YEAR_COUNT + 1;
+const YEAR_MIN = 2013;
 const YEAR_MAX = current_year;
 
 // Author-image fetch: pageimages allows 50 titles per request, so batch and size
@@ -34,6 +39,36 @@ const AUTHOR_THUMB_SIZE = 200;
 // "discussion"/"history" links use other URL shapes, so this exact pattern picks
 // out the single "view" link per day.
 const DAY_ARCHIVE_HREF = /^\/wiki\/Wikiquote:Quote_of_the_day\/[A-Za-z]+_\d{1,2},_\d{4}$/;
+
+const MONTH_NUMBERS: Record<string, string> = {
+  january: '01',
+  february: '02',
+  march: '03',
+  april: '04',
+  may: '05',
+  june: '06',
+  july: '07',
+  august: '08',
+  september: '09',
+  october: '10',
+  november: '11',
+  december: '12',
+};
+
+// The day-archive URL ends in "Month D, YYYY" (the day this quote was Quote of
+// the Day). Parse it into an ISO date string, or null if the tail is unexpected.
+const qotd_date_from_url = (day_url: string): string | null => {
+  const tail = decodeURIComponent(day_url).split('/').pop() ?? '';
+  const match = tail.replace(/_/g, ' ').match(/^([A-Za-z]+) (\d{1,2}), (\d{4})$/);
+  if (!match) {
+    return null;
+  }
+  const month = MONTH_NUMBERS[match[1].toLowerCase()];
+  if (!month) {
+    return null;
+  }
+  return `${match[3]}-${month}-${match[2].padStart(2, '0')}`;
+};
 
 // Fetch monthly QOTD subpage titles from the index page.
 // Filters to titles matching "Wikiquote:Quote of the day/Month YYYY" in [YEAR_MIN, YEAR_MAX].
@@ -81,7 +116,7 @@ const fetch_month_pages = async (): Promise<string[]> => {
 // quote table is immediately followed by a <p> holding a "view" link to the
 // day-archive page; that link is the reliable per-day anchor and supplies the
 // canonical URL (the natural key for items.url). Two table layouts are handled:
-// the current `cquote` template (2026+) and the legacy `~ Name ~` form (≤2025).
+// the current `cquote` template (2026+) and the legacy `~ Name ~` form (2013–2025).
 const parse_month_html = (html: string): DiscoveredQuote[] => {
   const $ = cheerio.load(html);
   // <br> is a real line break in quote text — turn each into a space so adjacent
@@ -115,37 +150,60 @@ const parse_month_html = (html: string): DiscoveredQuote[] => {
       return;
     }
 
-    // cquote layout (current): author in a trailing <cite>; quote in the centre
+    // cquote layout (2026+): attribution in a trailing <cite>; quote in the centre
     // cell between the two decorative quote-mark cells of the cquote table (which
-    // may be the day table itself or nested inside it). Legacy layout (≤2025):
-    // author in a `~ Name ~` cell, quote in the table row directly above it.
-    let author = table.find('cite a[href^="/wiki/"]').first();
+    // may be the day table itself or nested inside it). Legacy layout (2013–2025):
+    // attribution in a `~ Author ~ in ~ Work ~` cell, quote in the row above it.
+    let attribution = table.find('cite').first();
     const cquote = table.is('table.cquote') ? table : table.find('table.cquote').first();
     let quote = cquote.find('tr').first().children('td').eq(1);
-    if (!author.length) {
+    if (!attribution.find('a[href^="/wiki/"]').length) {
       const tilde_cell = table
         .find('td')
         .filter((_position, cell) => /^\s*~/.test($(cell).text()))
         .first();
-      author = tilde_cell.find('a[href^="/wiki/"]').first();
+      attribution = tilde_cell;
       quote = tilde_cell.closest('tr').prevAll('tr').first();
     }
+    const author = attribution.find('a[href^="/wiki/"]').first();
     if (!author.length || !quote.length) {
       return;
     }
 
     const author_name = author.text().trim();
-    const text = clean_quote(quote.text());
+    // Some day entries embed a decorative or author thumbnail inside the quote
+    // cell; a broken-media embed renders its target ("File:Andrei Tarkovsky.jpg")
+    // as literal text. Strip file embeds from a clone so neither the stored quote
+    // nor the later first-words match is polluted by the filename.
+    const quote_text = quote.clone();
+    quote_text.find('[typeof~="mw:File"], a[href^="/wiki/File:"], img').remove();
+    const text = clean_quote(quote_text.text());
     if (!text || text.length < 5 || !author_name) {
       return;
     }
+
+    const author_href = author.attr('href') ?? '';
+    // The work/theme page the quote is attributed to: the attribution container's
+    // next wiki link after the author (the entity after "in ~ … ~"). Incidental
+    // word-links in the quote body sit in a different cell, so the container's
+    // links are just [author, work]. The page fragment points at a section, not a
+    // page, so drop it.
+    const source_href = attribution
+      .find('a[href^="/wiki/"]')
+      .toArray()
+      .map((anchor) => $(anchor).attr('href') ?? '')
+      .find((href) => href && !href.startsWith('/wiki/File:') && href !== author_href);
 
     seen_urls.add(day_url);
     results.push({
       url: day_url,
       text,
       author: author_name,
-      author_url: WIKIQUOTE_BASE + (author.attr('href') ?? ''),
+      author_url: WIKIQUOTE_BASE + author_href,
+      qotd_date: qotd_date_from_url(day_url),
+      source_url: source_href
+        ? WIKIQUOTE_BASE + decodeURIComponent(source_href).split('#')[0]
+        : null,
     });
   });
 
@@ -174,8 +232,10 @@ const fetch_month_quotes = async (page: string): Promise<DiscoveredQuote[]> => {
   return parse_month_html(data.parse?.text ?? '');
 };
 
-const title_from_author_url = (url: string): string =>
-  decodeURIComponent(url.replace(`${WIKIQUOTE_BASE}/wiki/`, '')).replace(/_/g, ' ');
+// The MediaWiki page title for a /wiki/ URL. Any `#section` fragment is dropped —
+// it points at a section within the page, not a separate page to fetch.
+const title_from_wiki_url = (url: string): string =>
+  decodeURIComponent(url.replace(`${WIKIQUOTE_BASE}/wiki/`, '').split('#')[0]).replace(/_/g, ' ');
 
 const chunk = <T>(items: T[], size: number): T[][] => {
   const batches: T[][] = [];
@@ -197,7 +257,7 @@ const fetch_author_images = async (author_urls: string[]): Promise<AuthorImage[]
     process.stdout.write(`\r  batch ${index + 1}/${batches.length}                    `);
     const params = new URLSearchParams({
       action: 'query',
-      titles: batch.map(title_from_author_url).join('|'),
+      titles: batch.map(title_from_wiki_url).join('|'),
       prop: 'pageimages',
       piprop: 'thumbnail',
       pithumbsize: String(AUTHOR_THUMB_SIZE),
@@ -246,11 +306,292 @@ const fetch_author_images = async (author_urls: string[]): Promise<AuthorImage[]
     }
 
     for (const author_url of batch) {
-      const resolved = resolve_title(title_from_author_url(author_url));
+      const resolved = resolve_title(title_from_wiki_url(author_url));
       results.push({ author_url, image: thumb_by_title.get(resolved) ?? null });
     }
   }
 
+  return results;
+};
+
+// A quote's text reduced to a comparison key: lowercased, stripped of everything
+// but ASCII letters/digits. Both the QOTD-stored text and the author-page list
+// item are reduced the same way, so punctuation, accents, and whitespace
+// differences between the two renderings drop out of the match.
+const match_key = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Minimum normalized length for a quote to be matched — guards against short
+// fragments colliding across different quotes.
+const MIN_MATCH_LEN = 12;
+// Prefix length used as the needle; long enough to be unique, short enough to
+// survive a trailing-word difference between the two renderings.
+const MATCH_PREFIX_LEN = 40;
+
+// The needle used to locate a stored quote within a page's text. QOTD entries
+// frequently abridge a quote with an ellipsis ("In the life of each of us … there
+// is a place remote and islanded"), so a fixed prefix of the whole quote can
+// straddle the elided gap and never appear verbatim on the source page. Splitting
+// on the ellipsis and keying on the longest unbroken segment yields the most
+// reliable, most specific anchor; it is still capped at MATCH_PREFIX_LEN to
+// survive a trailing-word difference. Returns null when no segment is long enough
+// to match safely.
+const match_needle = (text: string): string | null => {
+  const longest_segment = text
+    .split(/…|\.\.\./)
+    .map(match_key)
+    .reduce((longest, segment) => (segment.length > longest.length ? segment : longest), '');
+  return longest_segment.length >= MIN_MATCH_LEN
+    ? longest_segment.slice(0, MATCH_PREFIX_LEN)
+    : null;
+};
+
+// Short opening-prefix length (~the first few words) used to locate a quote on a
+// work page. Work pages reproduce a quote with occasional transcription
+// differences past the opening — Four Quartets renders "wholy" for "wholly" — so
+// a long needle (match_needle) straddles such a difference and fails to match.
+// The opening few words are stable enough to anchor on, and the section header
+// above the match supplies the year.
+const SOURCE_PREFIX_LEN = 18;
+const source_needle = (text: string): string | null => {
+  const key = match_key(text);
+  return key.length >= MIN_MATCH_LEN ? key.slice(0, SOURCE_PREFIX_LEN) : null;
+};
+
+// Pull an approximate date out of a section header. Author pages group quotes
+// under year ("1933") or decade ("1920s") headers, and work-title subsections
+// carry the year in parentheses ("Mein Weltbild (1931)"). Return the last such
+// token (the parenthesized publication year wins over any year in the title),
+// or null when the header carries no year.
+const time_from_heading = (heading: string): string | null => {
+  const year_re = /\b(1[0-9]{3}|20[0-9]{2})(s)?\b/g;
+  let match: RegExpExecArray | null;
+  let last: string | null = null;
+  while ((match = year_re.exec(heading)) !== null) {
+    last = match[1] + (match[2] ?? '');
+  }
+  return last;
+};
+
+// Walk the heading stack from the deepest level up, returning the first date a
+// header yields — so a quote under "Quotes › 1930s › My Credo (1932)" dates to
+// 1932, falling back to the decade if the subsection header has no year.
+const time_from_stack = (stack: Record<number, string | null>): string | null => {
+  for (let level = 4; level >= 2; level--) {
+    const heading = stack[level];
+    if (heading) {
+      const time = time_from_heading(heading);
+      if (time) {
+        return time;
+      }
+    }
+  }
+  return null;
+};
+
+// Fallback date for a quote whose section header carries no year: the earliest
+// year cited in its nested source/attribution sub-bullets (e.g. "Interview in
+// Forbes (1 November 1974)" → 1974). The earliest year is the best proxy for
+// when the quote originated, since reprints and collected editions cite later
+// years. `nested_text` is the concatenated text of the <li>'s own nested lists
+// only — never its lead line, so a year inside the quote itself is ignored.
+const time_from_source = (nested_text: string): string | null => {
+  const year_re = /\b(1[0-9]{3}|20[0-9]{2})\b/g;
+  let match: RegExpExecArray | null;
+  let earliest: number | null = null;
+  while ((match = year_re.exec(nested_text)) !== null) {
+    const year = parseInt(match[0], 10);
+    if (earliest === null || year < earliest) {
+      earliest = year;
+    }
+  }
+  return earliest === null ? null : String(earliest);
+};
+
+// Parse an author page's rendered HTML into (match_key → quote_year) pairs. Walk
+// the content root's children in document order, tracking the current h2/h3/h4
+// header at each level. Each top-level <li> in a quote list is dated by the
+// header stack above it, falling back to the earliest year in its own source
+// sub-bullets. List items that yield no date either way are skipped.
+const parse_author_times = (html: string): Map<string, string> => {
+  const $ = cheerio.load(html);
+  // <br> is a real line break in quote text — keep word boundaries when flattened.
+  $('br').replaceWith(' ');
+
+  const times = new Map<string, string>();
+  const stack: Record<number, string | null> = { 2: null, 3: null, 4: null };
+
+  $('.mw-parser-output')
+    .first()
+    .children()
+    .each((_index, element) => {
+      const node = $(element);
+      const class_name = node.attr('class') ?? '';
+
+      if (class_name.includes('mw-heading')) {
+        const header = node.children('h2, h3, h4').first();
+        const tag = (header.prop('tagName') ?? '').toLowerCase();
+        const level = tag === 'h2' ? 2 : tag === 'h3' ? 3 : tag === 'h4' ? 4 : null;
+        if (level) {
+          stack[level] = header.text();
+          for (let deeper = level + 1; deeper <= 4; deeper++) {
+            stack[deeper] = null;
+          }
+        }
+        return;
+      }
+
+      const header_time = time_from_stack(stack);
+
+      if (element.tagName === 'ul') {
+        node.children('li').each((_position, item) => {
+          // Prefer the section-header year; otherwise fall back to the earliest
+          // year cited in this <li>'s own nested source bullets.
+          const time = header_time ?? time_from_source($(item).children('ul, ol, dl').text());
+          if (!time) {
+            return;
+          }
+          // Key on the whole <li>, nested translations and source citations
+          // included: a QOTD entry often stores a translation that appears as a
+          // sub-bullet here, and the match is a substring test, so the broader
+          // text only widens recall. All sub-bullets share the entry's date.
+          const key = match_key($(item).text());
+          if (key.length >= MIN_MATCH_LEN && !times.has(key)) {
+            times.set(key, time);
+          }
+        });
+        return;
+      }
+
+      // Play dialogue, poems, and indented passages render as <p> or <dl> blocks
+      // rather than list items (e.g. Samuel Beckett's "Waiting for Godot (1952) ›
+      // Act II"). They carry no nested source bullets to fall back on, so date the
+      // whole block only when its section header supplies a year.
+      if ((element.tagName === 'p' || element.tagName === 'dl') && header_time) {
+        const key = match_key(node.text());
+        if (key.length >= MIN_MATCH_LEN && !times.has(key)) {
+          times.set(key, header_time);
+        }
+      }
+    });
+
+  return times;
+};
+
+// Fetch one Wikiquote page (an author page or a work/theme page) and extract a
+// quote_year for each given quote by matching it against the page's section
+// headers / source bullets.
+const fetch_quote_times_from_page = async (
+  page_url: string,
+  quotes: { url: string; text: string }[]
+): Promise<{ url: string; quote_year: string }[]> => {
+  const page = title_from_wiki_url(page_url);
+  const params = new URLSearchParams({
+    action: 'parse',
+    page,
+    prop: 'text',
+    // Links are often redirects (e.g. "Ellen Page" → "Elliot Page"); follow them
+    // so the parsed page is the one that actually carries the quotes.
+    redirects: '1',
+    format: 'json',
+    formatversion: '2',
+  });
+
+  const data = (await wikiquote_api(params)) as {
+    parse?: { text: string };
+    error?: { code: string; info: string };
+  };
+  if (data.error) {
+    throw new Error(`API error for "${page}": ${data.error.code} — ${data.error.info}`);
+  }
+
+  const times_by_key = parse_author_times(data.parse?.text ?? '');
+  const results: { url: string; quote_year: string }[] = [];
+  for (const quote of quotes) {
+    const needle = match_needle(quote.text);
+    if (!needle) {
+      continue;
+    }
+    for (const [page_key, time] of times_by_key) {
+      if (page_key.includes(needle)) {
+        results.push({ url: quote.url, quote_year: time });
+        break;
+      }
+    }
+  }
+  return results;
+};
+
+// Date the quotes attributed to one source/work page. Two work shapes occur:
+// per-section works whose headers carry their own year (Four Quartets: "East Coker
+// (1940)", "Little Gidding (1942)"), and single-year works organized by chapter
+// (A Christmas Carol, "Staves" with one publication year in the lead). A quote is
+// dated by the section header above its match when that header carries a year,
+// otherwise by the work's single lead-paragraph year. Matching uses a short opening
+// needle, since works reproduce a quote with occasional transcription differences
+// past the opening. Only quotes whose text actually appears on the page are dated,
+// guarding against an attribution that linked a person rather than a work.
+const fetch_source_quote_times = async (
+  source_url: string,
+  quotes: { url: string; text: string }[]
+): Promise<{ url: string; quote_year: string }[]> => {
+  const page = title_from_wiki_url(source_url);
+  const params = new URLSearchParams({
+    action: 'parse',
+    page,
+    prop: 'text',
+    redirects: '1',
+    format: 'json',
+    formatversion: '2',
+  });
+
+  const data = (await wikiquote_api(params)) as {
+    parse?: { text: string; title: string };
+    error?: { code: string; info: string };
+  };
+  if (data.error) {
+    throw new Error(`API error for "${page}": ${data.error.code} — ${data.error.info}`);
+  }
+
+  const html = data.parse?.text ?? '';
+  const $ = cheerio.load(html);
+  $('br').replaceWith(' ');
+
+  // Per-section years, keyed on each list item's text (same as author pages).
+  const times_by_key = parse_author_times(html);
+
+  // Lead paragraph → publication year fallback for chapter-organized works whose
+  // section headers carry no year: prefer a year inside the first parenthetical
+  // (the title's "(1922)"); otherwise the earliest year anywhere in the lead.
+  const lead = $('.mw-parser-output')
+    .first()
+    .children('p')
+    .filter((_index, paragraph) => $(paragraph).text().trim().length > 20)
+    .first()
+    .text();
+  const paren_year = lead
+    .match(/\(([^)]*\b(?:1[0-9]{3}|20[0-9]{2})\b[^)]*)\)/)?.[1]
+    .match(/\b(1[0-9]{3}|20[0-9]{2})\b/)?.[0];
+  const lead_years = [...lead.matchAll(/\b(1[0-9]{3}|20[0-9]{2})\b/g)].map((match) =>
+    Number(match[0])
+  );
+  const lead_year = paren_year ?? (lead_years.length ? String(Math.min(...lead_years)) : null);
+
+  const page_key = match_key($('.mw-parser-output').first().text());
+  const results: { url: string; quote_year: string }[] = [];
+  for (const quote of quotes) {
+    const needle = source_needle(quote.text);
+    if (!needle) {
+      continue;
+    }
+    // Prefer the year from the section header above the match; fall back to the
+    // work's single lead year when the quote is on the page but its section is
+    // undated.
+    const section_year = [...times_by_key].find(([page_text]) => page_text.includes(needle))?.[1];
+    const year = section_year ?? (page_key.includes(needle) ? lead_year : null);
+    if (year) {
+      results.push({ url: quote.url, quote_year: year });
+    }
+  }
   return results;
 };
 
@@ -318,14 +659,72 @@ const run = async (): Promise<void> => {
     process.stdout.write('Phase 3: Author images already fetched.\n');
   }
 
+  // Phase 4: Date each quote from its author page's section headers (resumable
+  // via author_times_done — one parse per author covers all of their quotes).
+  const authors_for_times = get_author_urls_needing_times(db);
+  if (authors_for_times.length > 0) {
+    process.stdout.write(
+      `Phase 4: Extracting quote times from ${authors_for_times.length} author pages...\n`
+    );
+    let dated = 0;
+    for (const [index, author_url] of authors_for_times.entries()) {
+      process.stdout.write(`\r  ${index + 1}/${authors_for_times.length}                    `);
+      const quotes = get_quotes_for_author(db, author_url);
+      let times: { url: string; quote_year: string }[];
+      try {
+        times = await fetch_quote_times_from_page(author_url, quotes);
+      } catch (err) {
+        process.stdout.write(`\n  Error fetching times for "${author_url}": ${err}\n`);
+        continue;
+      }
+      apply_quote_times(db, author_url, times);
+      dated += times.length;
+    }
+    process.stdout.write(`\n  Dated ${dated} quotes.\n`);
+  } else {
+    process.stdout.write('Phase 4: Quote times already extracted.\n');
+  }
+
+  // Phase 5: Date the still-undated quotes from their source/work page (e.g. "A
+  // Christmas Carol") — the quotes QOTD attributes to a work the author page
+  // doesn't list. Resumable via source_times_done; source pages dedupe heavily.
+  const sources_for_times = get_source_urls_needing_times(db);
+  if (sources_for_times.length > 0) {
+    process.stdout.write(
+      `Phase 5: Extracting quote times from ${sources_for_times.length} source pages...\n`
+    );
+    let dated = 0;
+    for (const [index, source_url] of sources_for_times.entries()) {
+      process.stdout.write(`\r  ${index + 1}/${sources_for_times.length}                    `);
+      const quotes = get_undated_quotes_for_source(db, source_url);
+      let times: { url: string; quote_year: string }[];
+      try {
+        times = await fetch_source_quote_times(source_url, quotes);
+      } catch (err) {
+        process.stdout.write(`\n  Error fetching times for "${source_url}": ${err}\n`);
+        continue;
+      }
+      apply_source_times(db, source_url, times);
+      dated += times.length;
+    }
+    process.stdout.write(`\n  Dated ${dated} quotes.\n`);
+  } else {
+    process.stdout.write('Phase 5: Source-page times already extracted.\n');
+  }
+
   const total = (db.prepare('SELECT COUNT(*) AS n FROM quotes').get() as { n: number }).n;
   const with_image = (
     db.prepare('SELECT COUNT(*) AS n FROM quotes WHERE author_image IS NOT NULL').get() as {
       n: number;
     }
   ).n;
+  const with_time = (
+    db.prepare('SELECT COUNT(*) AS n FROM quotes WHERE quote_year IS NOT NULL').get() as {
+      n: number;
+    }
+  ).n;
   process.stdout.write(
-    `Total quotes in DB: ${total} (${with_image} with an author image).\nDone.\n`
+    `Total quotes in DB: ${total} (${with_image} with an author image, ${with_time} dated).\nDone.\n`
   );
 };
 

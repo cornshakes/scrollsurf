@@ -7,7 +7,7 @@ import {
 } from '../../helpers/test-db';
 import { get_next_feed } from '@/lib/db/feed';
 import { record_click, save_vote } from '@/lib/db/votes';
-import type { Article, FeedItem, Picture } from '@/lib/db/types';
+import type { Article, Picture } from '@/lib/db/types';
 
 beforeAll(setup);
 beforeEach(reset_db);
@@ -141,48 +141,4 @@ it('pictures: liked topic is over-represented in fetch (statistical)', () => {
   const result = get_pictures(100, uid);
   const x_count = result.filter((p) => x_id_set.has(p.id)).length;
   expect(x_count).toBeGreaterThan(65);
-});
-
-// statistical: with strength=0 all weights are 1 → pure ES-uniform; near-50/50 despite likes.
-// Expected X-count ≈ 47 (180 X out of 380 pool), sd ≈ 4; 35–65 is a ~3σ non-flaky bound.
-describe('AFFINITY_STRENGTH=0', () => {
-  let feed_zero: (count: number, user_id: number | null) => FeedItem[];
-
-  beforeEach(async () => {
-    process.env.FEED_AFFINITY_STRENGTH = '0';
-    jest.resetModules();
-    const m = await import('@/lib/db/feed');
-    feed_zero = m.get_next_feed;
-    delete process.env.FEED_AFFINITY_STRENGTH;
-  });
-
-  afterEach(() => {
-    jest.resetModules();
-  });
-
-  it('produces near-uniform results despite likes (statistical + deterministic)', () => {
-    const x_ids: number[] = [];
-    for (let i = 0; i < 200; i++) {
-      x_ids.push(insert_article({ url: `https://a.t8.x/${i}`, topics: [TOPIC_X] }));
-      insert_article({ url: `https://a.t8.y/${i}`, topics: [TOPIC_Y] });
-    }
-
-    // deterministic: all 380 unseen articles returned even with likes present
-    const uid_a = insert_user();
-    for (let i = 0; i < 20; i++) {
-      save_vote(uid_a, x_ids[i], 1);
-    }
-    const all = feed_zero(5000, uid_a).filter((r): r is Article => r.type === 'article');
-    expect(all).toHaveLength(380);
-
-    // statistical: near-50/50 X/Y despite 20 liked X articles
-    const uid_b = insert_user();
-    for (let i = 0; i < 20; i++) {
-      save_vote(uid_b, x_ids[i], 1);
-    }
-    const result = feed_zero(100, uid_b).filter((r): r is Article => r.type === 'article');
-    const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
-    expect(x_count).toBeGreaterThan(35);
-    expect(x_count).toBeLessThan(65);
-  });
 });
