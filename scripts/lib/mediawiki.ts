@@ -4,9 +4,43 @@
 // loop that wiki.ts and commons.ts used to each carry now lives here once.
 
 import ky, { type AfterResponseHook } from 'ky';
+import Keyv from 'keyv';
+import KeyvSqlite from '@keyv/sqlite';
+import fs from 'node:fs';
+import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const REQUEST_DELAY_MS = 500;
+
+// Persistent on-disk cache of API responses, keyed by endpoint + query params.
+// A cache hit skips both the network request and the serial-pacing delay, so
+// re-runs (and rebuilds after deleting a reference DB) avoid re-fetching data we
+// already have — exactly what API:Etiquette's "don't re-fetch cached data" asks
+// for. Delete scripts/.cache/ to force a fresh fetch.
+const cache_dir = path.join(process.cwd(), 'scripts', '.cache');
+fs.mkdirSync(cache_dir, { recursive: true });
+const response_cache = new Keyv<unknown>({
+  store: new KeyvSqlite(`sqlite://${path.join(cache_dir, 'mediawiki.db')}`),
+  namespace: 'mediawiki',
+});
+// A failing cache should degrade to plain network requests, never crash a
+// download, so surface store errors as warnings instead of unhandled rejections.
+response_cache.on('error', (error) => console.warn('[mediawiki] response cache error:', error));
+
+// Stable cache key for a request: the endpoint plus its query params in sorted
+// order, excluding maxlag (a server-load throttle that doesn't change the
+// logical query). URLSearchParams iteration order would otherwise be insertion
+// order, which varies between call sites building the same query.
+const cache_key_for = (api_url: string, params: URLSearchParams): string => {
+  const entries = [...params.entries()].filter(([key]) => key !== 'maxlag').sort();
+  return `${api_url}?${new URLSearchParams(entries).toString()}`;
+};
+
+// MediaWiki reports query-level failures as an `error` field on an HTTP 200 body
+// (callers like fetch_wikitext throw on it). Those must never be cached, or a
+// transient failure would be served indefinitely.
+const is_error_response = (data: unknown): boolean =>
+  typeof data === 'object' && data !== null && 'error' in data;
 
 // Per API:Etiquette the User-Agent must identify the app and a contact, so it
 // carries an email — kept out of source and read from the env instead. Fail
@@ -68,9 +102,18 @@ export const create_mediawiki_api = (api_url: string) => {
   });
 
   return async (params: URLSearchParams): Promise<unknown> => {
+    const cache_key = cache_key_for(api_url, params);
+    const cached = await response_cache.get(cache_key);
+    if (cached !== undefined) {
+      return cached; // hit: no request, so no serial-pacing delay needed
+    }
+
     params.set('maxlag', '5');
     const data = await client.post(api_url, { body: params }).json();
     await sleep(REQUEST_DELAY_MS); // API-etiquette serial pacing
+    if (!is_error_response(data)) {
+      await response_cache.set(cache_key, data);
+    }
     return data;
   };
 };

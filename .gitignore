@@ -6,6 +6,9 @@ scrollsurf.db-wal
 /datasets/*.db
 /datasets/*.db-journal
 
+# MediaWiki API response cache (download scripts)
+/scripts/.cache/
+
 # dependencies
 /node_modules
 /.pnp

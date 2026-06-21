@@ -176,6 +176,9 @@ Component map (all client components except the root layout/page): `App` (theme 
 
 ## Wikipedia API etiquette
 
+> [!IMPORTANT]
+> **Every** MediaWiki call (Wikipedia, Wikiquote, Wikimedia Commons) MUST go through `create_mediawiki_api` from `scripts/lib/mediawiki.ts`. This includes throwaway probe / smoke / one-off debugging scripts — **no exceptions, never raw `fetch` against `api.php`.** Raw `fetch` bypasses all etiquette and gets rate-limited (the API returns non-JSON "You are making too many requests" pages). In any `scripts/` file: `import { create_mediawiki_api } from './lib/mediawiki'` (or `'../lib/mediawiki'`) and run with `tsx --env-file=scripts/.env` so `WIKIPEDIA_USER_AGENT` is set (the client throws without it).
+
 All etiquette is enforced in `scripts/lib/mediawiki.ts` per [API:Etiquette](https://www.mediawiki.org/wiki/API:Etiquette) and the [Wikimedia API Usage Guidelines](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_API_Usage_Guidelines) — serial requests only (batch titles with `|`), descriptive `User-Agent`, `maxlag`, backoff on `429`/`503`, gzip, `format=json`, no re-fetching cached data. Route all MediaWiki calls through it; don't bypass it.
 
 ## Testing
