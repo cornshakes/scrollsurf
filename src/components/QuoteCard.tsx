@@ -5,12 +5,10 @@ import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Quote, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
+import { VoteButtons } from './VoteButtons';
 
 // Incoming-message bubble colors, tuned to read like Signal/WhatsApp in either
 // scheme. The page uses `colorSchemeSelector: 'media'`, so dark-mode overrides
@@ -166,30 +164,10 @@ export const QuoteCard = ({
             </Link>
           </Box>
         </Box>
-
-        {/* Vote buttons — kept top-right, matching the other cards */}
-        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <IconButton
-            onClick={() => vote(1)}
-            color={like === 1 ? 'primary' : 'default'}
-            size="small"
-            aria-label="Like"
-            aria-pressed={like === 1}
-            data-testid="vote-up"
-          >
-            <ArrowUpwardIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            onClick={() => vote(-1)}
-            color={like === -1 ? 'error' : 'default'}
-            size="small"
-            aria-label="Dislike"
-            aria-pressed={like === -1}
-            data-testid="vote-down"
-          >
-            <ArrowDownwardIcon fontSize="small" />
-          </IconButton>
-        </Box>
+      </Box>
+      {/* Vote control — bottom left, below the message bubble */}
+      <Box sx={{ display: 'flex', mt: 2 }}>
+        <VoteButtons like={like} onVote={vote} />
       </Box>
     </Box>
   );

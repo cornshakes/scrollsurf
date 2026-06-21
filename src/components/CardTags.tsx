@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useLayoutEffect, Fragment } from 'react';
+import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
@@ -15,11 +16,14 @@ export const CardTags = ({
   topics,
   categories,
   onTrack,
+  leading,
   sx,
 }: {
   topics: Topic[];
   categories?: string[];
   onTrack: (link_type: LinkType, link_label: string) => void;
+  // Rendered as the first element of the chip row (e.g. the vote control).
+  leading?: ReactNode;
   sx?: SxProps;
 }) => {
   const [expanded, set_expanded] = useState(false);
@@ -34,7 +38,7 @@ export const CardTags = ({
     set_has_overflow(el.scrollHeight > el.clientHeight);
   }, [topics, categories]);
 
-  if (topics.length === 0 && (!categories || categories.length === 0)) {
+  if (!leading && topics.length === 0 && (!categories || categories.length === 0)) {
     return null;
   }
 
@@ -51,6 +55,7 @@ export const CardTags = ({
           ...(expanded ? {} : { maxHeight: TWO_ROWS_HEIGHT }),
         }}
       >
+        {leading}
         {topics.map(({ dataset, topic, dataset_url }) => {
           const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
           return (

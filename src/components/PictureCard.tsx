@@ -5,13 +5,11 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Picture, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { CardTags } from './CardTags';
+import { VoteButtons } from './VoteButtons';
 
 export const PictureCard = ({
   picture,
@@ -48,7 +46,14 @@ export const PictureCard = ({
       data-testid="feed-card"
       data-card-type="picture"
       data-item-title={picture.title}
-      sx={{ maxWidth: 680, mx: 'auto', px: 4, py: 4, borderBottom: 1, borderColor: 'divider' }}
+      sx={{
+        maxWidth: 680,
+        mx: 'auto',
+        px: { xs: 2, sm: 4 },
+        py: 4,
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
         <Paper elevation={3} sx={{ borderRadius: 2, p: 2, display: 'inline-block' }}>
@@ -74,9 +79,18 @@ export const PictureCard = ({
           </Link>
         </Paper>
       </Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {picture.caption && (
+      <Box sx={{ minWidth: 0, overflow: 'hidden', textAlign: 'center' }}>
+        {picture.caption && (
+          // The caption links to the original too (same as the image), but keeps
+          // its plain italic caption look — no underline, inherited color.
+          <Link
+            href={picture.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="none"
+            color="inherit"
+            onClick={() => track('title', picture.title)}
+          >
             <Typography
               variant="body2"
               color="text.secondary"
@@ -90,48 +104,31 @@ export const PictureCard = ({
             >
               {picture.caption}
             </Typography>
-          )}
-          {picture.credit && (
-            <Typography variant="body2" color="text.secondary" noWrap>
-              by{' '}
-              <Link
-                href={`https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                underline="hover"
-                color="inherit"
-                data-testid="link-by"
-                onClick={() => track('by', picture.credit ?? '')}
-              >
-                {picture.credit}
-              </Link>
-            </Typography>
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-          <IconButton
-            onClick={() => vote(1)}
-            color={like === 1 ? 'primary' : 'default'}
-            size="small"
-            aria-label="Like"
-            aria-pressed={like === 1}
-            data-testid="vote-up"
-          >
-            <ArrowUpwardIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            onClick={() => vote(-1)}
-            color={like === -1 ? 'error' : 'default'}
-            size="small"
-            aria-label="Dislike"
-            aria-pressed={like === -1}
-            data-testid="vote-down"
-          >
-            <ArrowDownwardIcon fontSize="small" />
-          </IconButton>
-        </Box>
+          </Link>
+        )}
+        {picture.credit && (
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 1 }}>
+            by{' '}
+            <Link
+              href={`https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+              color="inherit"
+              data-testid="link-by"
+              onClick={() => track('by', picture.credit ?? '')}
+            >
+              {picture.credit}
+            </Link>
+          </Typography>
+        )}
       </Box>
-      <CardTags topics={picture.topics} onTrack={track} sx={{ mt: 2 }} />
+      <CardTags
+        topics={picture.topics}
+        onTrack={track}
+        leading={<VoteButtons like={like} onVote={vote} />}
+        sx={{ mt: 2 }}
+      />
     </Box>
   );
 };

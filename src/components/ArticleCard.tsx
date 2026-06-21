@@ -4,13 +4,11 @@ import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { vote_feed_item, record_link_click } from '@/app/actions';
 import type { Article, LinkType } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { CardTags } from './CardTags';
+import { VoteButtons } from './VoteButtons';
 
 export const ArticleCard = ({
   article,
@@ -42,33 +40,6 @@ export const ArticleCard = ({
     record_link_click('article', article.id, link_type, link_label);
   };
 
-  const vote_buttons = (
-    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-      <IconButton
-        onClick={() => vote(1)}
-        color={like === 1 ? 'primary' : 'default'}
-        size="small"
-        aria-label="Like"
-        aria-pressed={like === 1}
-        data-testid="vote-up"
-      >
-        <ArrowUpwardIcon fontSize="small" />
-      </IconButton>
-      <IconButton
-        onClick={() => vote(-1)}
-        color={like === -1 ? 'error' : 'default'}
-        size="small"
-        aria-label="Dislike"
-        aria-pressed={like === -1}
-        data-testid="vote-down"
-      >
-        <ArrowDownwardIcon fontSize="small" />
-      </IconButton>
-    </Box>
-  );
-
-  const has_tags = article.categories.length > 0 || article.topics.length > 0;
-
   return (
     <Box
       data-testid="feed-card"
@@ -92,49 +63,39 @@ export const ArticleCard = ({
           />
         )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="h5" component="h2">
-                <Link
-                  href={article.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="hover"
-                  data-testid="link-title"
-                  onClick={() => track('title', article.title)}
-                >
-                  {article.title}
-                </Link>
-              </Typography>
-              {article.description && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {article.description}
-                </Typography>
-              )}
-            </Box>
-            {/* Vote buttons — desktop only (sm+) */}
-            <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5, flexShrink: 0 }}>
-              {vote_buttons}
-            </Box>
-          </Box>
-          {/* Vote buttons — mobile only (xs) */}
-          <Box sx={{ display: { xs: 'flex', sm: 'none' }, mt: 0.5 }}>{vote_buttons}</Box>
+          <Typography variant="h5" component="h2">
+            <Link
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+              data-testid="link-title"
+              onClick={() => track('title', article.title)}
+            >
+              {article.title}
+            </Link>
+          </Typography>
+          {article.description && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {article.description}
+            </Typography>
+          )}
         </Box>
       </Box>
       {article.extract && (
         <Typography
           variant="body1"
           sx={{
-            mb: has_tags ? 2 : 0,
+            mb: 2,
             display: '-webkit-box',
             WebkitLineClamp: 5,
             WebkitBoxOrient: 'vertical',
@@ -144,7 +105,12 @@ export const ArticleCard = ({
           {article.extract}
         </Typography>
       )}
-      <CardTags topics={article.topics} categories={article.categories} onTrack={track} />
+      <CardTags
+        topics={article.topics}
+        categories={article.categories}
+        onTrack={track}
+        leading={<VoteButtons like={like} onVote={vote} />}
+      />
     </Box>
   );
 };
