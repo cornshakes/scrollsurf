@@ -128,6 +128,14 @@ const WikiArticles = () => {
           ))}
           <Divider />
           <ListItem disablePadding>
+            <ListItemButton component={NextLink} href="/about" onClick={() => setDrawerOpen(false)}>
+              <ListItemText
+                primary="About"
+                slotProps={{ primary: { variant: 'body2', color: 'text.secondary' } }}
+              />
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
             <ListItemButton
               component={NextLink}
               href="/privacy"

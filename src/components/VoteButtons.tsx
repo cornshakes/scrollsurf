@@ -33,7 +33,8 @@ export const VoteButtons = ({
     transition: (theme) =>
       theme.transitions.create(['background-color', 'color'], { duration: 120 }),
     '&:hover': {
-      bgcolor: (theme) => alpha(theme.palette[tint].main, active ? 0.22 : 0.08),
+      bgcolor: (theme) =>
+        active ? alpha(theme.palette[tint].main, 0.22) : alpha(theme.palette.text.primary, 0.06),
     },
   });
 

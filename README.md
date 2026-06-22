@@ -17,6 +17,8 @@ Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike the
 
 - [Wikimedia Featured pictures](https://commons.wikimedia.org/wiki/Commons:Featured_pictures)
 
+- [Wikiquote Quote of the Day](https://en.wikiquote.org/wiki/Wikiquote:QOTD_by_month)
+
 ## Getting Started
 
 ```bash
@@ -34,6 +36,7 @@ npm run download-good-articles
 npm run download-featured-articles
 npm run download-featured-pictures
 npm run download-commons-featured-pictures
+npm run download-quotes
 ```
 
 Then, you can categorize the articles by running
@@ -58,10 +61,9 @@ That database is created from the downloaded datasets using the test:e2e:create-
 It is committed so that you don't have to download all datasets before being able to run e2e tests.
 
 ```bash
-npm run test:e2e:create_db  # creates e2e test db, you don't have to do this
-npm run test:e2e:setup      # downloads chromium for playwright
 npm run test:e2e            # run all integration tests (seeds DB automatically)
-npm run test:e2e:ui         # same, but with Playwright's interactive UI
+npm run playwright-ui       # same, but with Playwright's interactive UI
+npm run test:e2e:update     # updates screenshots
 ```
 
 ## Clicks, Likes & Dislikes
