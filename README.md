@@ -54,18 +54,6 @@ npm run dev
 
 and go to [http://localhost:3000](http://localhost:3000)
 
-## Integration Testing
-
-All e2e tests run against a small example database (`e2e/.data/`).
-That database is created from the downloaded datasets using the test:e2e:create-db script.
-It is committed so that you don't have to download all datasets before being able to run e2e tests.
-
-```bash
-npm run test:e2e            # run all integration tests (seeds DB automatically)
-npm run playwright-ui       # same, but with Playwright's interactive UI
-npm run test:e2e:update     # updates screenshots
-```
-
 ## Clicks, Likes & Dislikes
 
 The feed is random, but influenced by user activity. Three signals are tracked **per topic** (e.g. Vital → History):
@@ -93,7 +81,7 @@ Say you've scrolled for a while and your history per topic looks like this:
 
 The `+ 5` in the denominator is the smoothing: the lone Arts like only gets a third of the affinity of the six History likes, even though it's a 100% like rate.
 
-Each unseen article then gets a weight of `exp(2 · affinity)` (the `2` is `FEED_AFFINITY_STRENGTH`):
+Each topic's affinity is clamped to ±2 (`AFFINITY_CLAMP`) so no single topic can run away. Each unseen article then gets a weight of `exp(2 · affinity)` (the `2` is `AFFINITY_STRENGTH`):
 
 | Article tagged | Mean affinity | Weight |
 |---|---|---|
@@ -107,36 +95,60 @@ The weight is the article's relative chance per feed slot: a History article is 
 
 ### The SQL behind it
 
-There are no per-topic queries and no mixing of result sets in TypeScript — the whole draw happens inside **one SELECT** per item type. The statement is assembled from shared SQL fragments in `src/lib/db/affinity.ts` (the constants from the example are baked into the string; only `$user_id` and `$limit` are bound at query time) and chains three CTEs before the actual selection:
+There are no per-topic queries and no mixing of result sets in TypeScript — the whole draw happens inside **one SELECT** over all three item types. Items (articles, pictures, quotes) share a unified `items` supertype and a single `item_topics` table, so the selection is type-agnostic; per-type payload columns are fetched afterwards. The statement is assembled from shared SQL fragments in `src/lib/db/affinity.ts` (the constants from the example are baked into the string; only `$user_id` and `$limit` are bound at query time) and chains a handful of CTEs (`src/lib/db/affinity.ts`) before the actual selection (`src/lib/db/feed.ts`):
 
 ```sql
 WITH clicked AS (              -- distinct items you clicked links on
-  SELECT DISTINCT item_id FROM user_clicks WHERE user_id = $user_id ...
+  SELECT DISTINCT item_id FROM user_clicks WHERE user_id = $user_id
 ),
 topic_affinity AS (            -- the first table from the example:
   SELECT dataset, topic,       -- one GROUP BY over your seen items
-         (likes + 0.5*clicks - dislikes) / (seen + 5) AS affinity
-  FROM user_articles JOIN article_topics ... LEFT JOIN clicked ...
+         (1.0*likes + 0.5*clicks - 1.0*dislikes) / (seen + 5) AS affinity
+  FROM user_items JOIN item_topics ... LEFT JOIN clicked ...
   WHERE user_id = $user_id
   GROUP BY dataset, topic
 ),
 item_affinity AS (             -- the second table: AVG over each item's topics
-  SELECT article_id AS item_id, AVG(COALESCE(affinity, 0)) AS affinity
-  FROM article_topics LEFT JOIN topic_affinity ...
-  GROUP BY article_id
+  SELECT item_id, AVG(COALESCE(affinity, 0)) AS affinity
+  FROM item_topics LEFT JOIN topic_affinity ...
+  GROUP BY item_id
+),
+eligible_pool AS (             -- unseen items that have at least one topic
+  SELECT type, id FROM items WHERE <unseen by $user_id> AND <has a topic>
+),
+pool_size AS (                 -- count of eligible items per type
+  SELECT type, COUNT(*) AS n FROM eligible_pool GROUP BY type
 )
-SELECT a.* FROM articles a
-LEFT JOIN item_affinity ia ON ia.item_id = a.id
-WHERE <unseen, dataset enabled>
-ORDER BY -ln(random_0_to_1) / exp(2 * ia.affinity)   -- the weighted draw
+SELECT p.type, p.id
+FROM eligible_pool p
+JOIN pool_size ps ON ps.type = p.type
+LEFT JOIN item_affinity ia ON ia.item_id = p.id
+WHERE p.type IN ('article', 'picture', 'quote')
+ORDER BY
+  -ln(random_0_to_1)
+  / ( exp(2 * clamp(ia.affinity, -2, 2))     -- affinity weight
+      * type_share                            -- TYPE_SHARES[p.type]
+      / max(ps.n, 1) )                        -- ÷ pool size of that type
 LIMIT $limit
 ```
 
 The `ORDER BY` line is the whole sampling trick ([Efraimidis–Spirakis](https://en.wikipedia.org/wiki/Reservoir_sampling#Weighted_random_sampling)): every candidate row draws its own uniform random number, the weight stretches it, and taking the smallest `n` keys is mathematically the same as drawing `n` items without replacement with probability proportional to weight. So the "randomness" and the "weighting" live in the same expression — there's no second pass, no shuffle in TS.
 
-For anonymous users `$user_id` is `NULL`, which matches nothing in the CTEs, so every item falls back to affinity `0` → weight `1` → plain uniform random, through the exact same query.
+The weight has two factors. The first is the affinity term from the example (clamped to ±2). The second is a per-type share: `type_share / pool_size`, where `type_share` is the fixed `TYPE_SHARES` map in `feed.ts` (article 0.82, picture 0.1, quote 0.08) and `pool_size` is the count of eligible items of that type. Dividing by pool size makes each type's expected fraction equal its share ÷ Σshares, independent of how many items each pool actually holds. A type with share 0, or absent from the map, is hard-excluded by the `WHERE` clause.
 
-Pictures and quotes run through the same unified query. The weight term includes a per-type share factor (the fixed `TYPE_SHARES` map in `feed.ts`), so each type's expected fraction equals its share ÷ Σshares, independent of actual pool sizes. One query per feed page returns all three types, with per-type payload columns fetched after selection.
+For anonymous (and brand-new) users `$user_id` is `NULL`, which matches nothing in the signal CTEs, so every item falls back to affinity `0` → uniform within each type, through the exact same query. The selected `(type, id)` rows are then hydrated into full `Article` / `Picture` / `Quote` payloads per type.
+
+## Integration Testing
+
+All e2e tests run against a small example database (`e2e/.data/`).
+That database is created from the downloaded datasets using the test:e2e:create-db script.
+It is committed so that you don't have to download all datasets before being able to run e2e tests.
+
+```bash
+npm run test:e2e            # run all integration tests (seeds DB automatically)
+npm run playwright-ui       # same, but with Playwright's interactive UI
+npm run test:e2e:update     # updates screenshots
+```
 
 ## Future inspiration 
 
