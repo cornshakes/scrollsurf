@@ -20,7 +20,7 @@ const VITAL_TOPICS = [
 
 run_download({
   filename: 'vital_50000.db',
-  title: 'Vital Articles Level 5',
+  title: 'Vital Articles',
   source_url: 'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5',
   discover: async () => {
     const results: DiscoveredArticle[] = [];
