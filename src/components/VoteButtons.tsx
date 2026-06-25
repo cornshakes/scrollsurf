@@ -22,26 +22,25 @@ export const VoteButtons = ({
   onVote: (value: -1 | 1) => void;
   sx?: SxProps<Theme>;
 }) => {
-  const segment = (active: boolean, tint: 'success' | 'error'): SxProps<Theme> => ({
+  const segment = (active: boolean, tint: 'success' | 'secondary'): SxProps<Theme> => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
     px: 1.25,
-    color: active ? `${tint}.main` : 'text.secondary',
-    bgcolor: (theme) => (active ? alpha(theme.palette[tint].main, 0.16) : 'transparent'),
+    color: active ? `${tint}.contrastText` : 'text.secondary',
+    bgcolor: active ? `${tint}.main` : 'transparent',
     transition: (theme) =>
       theme.transitions.create(['background-color', 'color'], { duration: 120 }),
     '&:hover': {
       bgcolor: (theme) =>
-        active ? alpha(theme.palette[tint].main, 0.22) : alpha(theme.palette.text.primary, 0.06),
+        active ? theme.palette[tint].dark : alpha(theme.palette.text.primary, 0.06),
     },
   });
 
-  // Distinct grey for the borders — a touch darker in dark mode.
+  // Teal-tinted border that picks up the theme primary in both schemes.
   const border_color = (theme: Theme) => ({
-    borderColor: 'grey.300',
-    ...theme.applyStyles('dark', { borderColor: 'grey.900' }),
+    borderColor: alpha(theme.palette.primary.main, 0.35),
   });
 
   return (
@@ -76,7 +75,7 @@ export const VoteButtons = ({
         aria-label="Dislike"
         aria-pressed={like === -1}
         data-testid="vote-down"
-        sx={segment(like === -1, 'error')}
+        sx={segment(like === -1, 'secondary')}
       >
         <ArrowDownwardIcon sx={{ fontSize: 16 }} />
       </ButtonBase>
