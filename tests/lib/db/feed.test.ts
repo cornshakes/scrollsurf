@@ -100,10 +100,8 @@ describe('get_next_feed(): Without User', () => {
     expect(feed.length).toBe(3);
     for (const item of feed) {
       expect(Object.getPrototypeOf(item)).toBe(Object.prototype);
-      expect(item.topics.length).toBeGreaterThan(0);
-      if (item.type === 'article') {
-        expect(Array.isArray(item.categories)).toBe(true);
-      }
+      expect(item.links.length).toBeGreaterThan(0);
+      expect(Array.isArray(item.links)).toBe(true);
     }
   });
 
@@ -166,7 +164,7 @@ describe('get_next_feed(): With User', () => {
     const feed = get_next_feed(100, uid);
     // 180 unseen X + 200 unseen Y = 380 eligible; X affinity boost pushes X above baseline ~47
     const x_count = feed.filter(
-      (f) => f.type === 'picture' && f.topics.some((t) => t.topic === 'X')
+      (f) => f.type === 'picture' && f.links.some((l) => l.type === 'topic' && l.title === 'X')
     ).length;
     expect(x_count).toBeGreaterThan(65);
   });

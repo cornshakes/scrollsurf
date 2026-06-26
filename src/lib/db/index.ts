@@ -3,6 +3,7 @@ export type {
   Picture,
   Quote,
   FeedItem,
+  Link,
   TopicStat,
   CategoryGroup,
   CategoryTree,

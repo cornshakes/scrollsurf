@@ -9,7 +9,7 @@ beforeEach(reset_db);
 const get_next_articles = (count: number, uid: number | null): Article[] =>
   get_next_feed(count, uid).filter((row): row is Article => row.type === 'article');
 
-it('batch fetch: each article gets exactly its own topics and categories with no cross-leak', () => {
+it('batch fetch: each article gets exactly its own links with no cross-leak', () => {
   const uid = insert_user();
   const id1 = insert_article({
     title: 'A1',
@@ -30,10 +30,20 @@ it('batch fetch: each article gets exactly its own topics and categories with no
   expect(result).toHaveLength(2);
   const a1 = result.find((article) => article.id === id1) as Article;
   const a2 = result.find((article) => article.id === id2) as Article;
-  expect(a1.topics.map((t) => t.topic).sort()).toEqual(['T1', 'T2']);
-  expect(a1.categories).toEqual(['Science']);
-  expect(a2.topics.map((t) => t.topic)).toEqual(['T3']);
-  expect(a2.categories.sort()).toEqual(['Arts', 'History']);
+  const a1_topics = a1.links
+    .filter((l) => l.type === 'topic')
+    .map((l) => l.title)
+    .sort();
+  expect(a1_topics).toEqual(['T1', 'T2']);
+  const a1_categories = a1.links.filter((l) => l.type === 'category').map((l) => l.title);
+  expect(a1_categories).toEqual(['Science']);
+  const a2_topics = a2.links.filter((l) => l.type === 'topic').map((l) => l.title);
+  expect(a2_topics).toEqual(['T3']);
+  const a2_categories = a2.links
+    .filter((l) => l.type === 'category')
+    .map((l) => l.title)
+    .sort();
+  expect(a2_categories).toEqual(['Arts', 'History']);
 });
 
 it('returns all visible categories', () => {
@@ -45,8 +55,11 @@ it('returns all visible categories', () => {
     categories: ['Science', 'History'],
   });
   const [article] = get_next_articles(10, uid);
-  expect(article.categories).toHaveLength(2);
-  expect(article.categories).toEqual(expect.arrayContaining(['Science', 'History']));
+  const category_links = article.links.filter((l) => l.type === 'category');
+  expect(category_links).toHaveLength(2);
+  expect(category_links.map((l) => l.title)).toEqual(
+    expect.arrayContaining(['Science', 'History'])
+  );
 });
 
 it('topic names containing :: round-trip intact (regression: value is never parsed)', () => {
@@ -57,12 +70,11 @@ it('topic names containing :: round-trip intact (regression: value is never pars
     topics: [{ dataset: 'Vital', topic: 'Science::Physics' }],
   });
   const [article] = get_next_articles(10, uid);
-  expect(article.topics).toHaveLength(1);
-  expect(article.topics[0]).toEqual({
-    dataset: 'Vital',
-    topic: 'Science::Physics',
-    bucket: 'Science::Physics',
-    dataset_url: null,
+  const topic_link = article.links.find((l) => l.type === 'topic');
+  expect(topic_link).toEqual({
+    type: 'topic',
+    title: 'Science::Physics',
+    url: null,
   });
 });
 
@@ -86,6 +98,7 @@ it('hidden categories are excluded from article results', () => {
     hidden_id
   );
   const [article] = get_next_articles(10, uid);
-  expect(article.categories).toEqual(['Visible']);
-  expect(article.categories).not.toContain('Hidden');
+  const category_links = article.links.filter((l) => l.type === 'category').map((l) => l.title);
+  expect(category_links).toEqual(['Visible']);
+  expect(category_links).not.toContain('Hidden');
 });

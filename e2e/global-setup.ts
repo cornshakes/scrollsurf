@@ -7,6 +7,10 @@ const articles = {
   'unusual.db': [
     'https://en.wikipedia.org/wiki/Null_Island',
     'https://en.wikipedia.org/wiki/Night_of_the_Day_of_the_Dawn_of_the_Son_of_the_Bride_of_the_Return_of_the_Revenge_of_the_Terror_of_the_Attack_of_the_Evil%2C_Mutant%2C_Alien%2C_Flesh_Eating%2C_Hellbound%2C_Zombified_Living_Dead',
+    // Anglo-Zanzibar War also appears in vital_50000.db and featured_articles.db
+    // (with a distinct topic per dataset) — exercises a card with multiple
+    // dataset chips. Keep this URL in sync across all three datasets below.
+    'https://en.wikipedia.org/wiki/Anglo-Zanzibar_War',
   ],
   'good_articles.db': [
     'https://en.wikipedia.org/wiki/Yoga',
@@ -15,10 +19,12 @@ const articles = {
   'vital_50000.db': [
     'https://en.wikipedia.org/wiki/Airbus_A320_family',
     'https://en.wikipedia.org/wiki/Rescue',
+    'https://en.wikipedia.org/wiki/Anglo-Zanzibar_War',
   ],
   'featured_articles.db': [
     'https://en.wikipedia.org/wiki/Black_hole',
     'https://en.wikipedia.org/wiki/Sun',
+    'https://en.wikipedia.org/wiki/Anglo-Zanzibar_War',
   ],
 };
 

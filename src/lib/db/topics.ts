@@ -1,40 +1,5 @@
-import { type CategoryTree, type TopicStat, type CategoryGroup, type Topic } from './types';
+import { type CategoryTree, type TopicStat, type CategoryGroup } from './types';
 import { get_db } from './connection';
-
-// Batch-fetch topics for a set of items. Returns item_id -> Topic[].
-export const fetch_topics_for_items = (ids: number[]): Map<number, Topic[]> => {
-  const by_id = new Map<number, Topic[]>();
-  if (ids.length === 0) {
-    return by_id;
-  }
-  const placeholders = ids.map(() => '?').join(', ');
-  const rows = get_db()
-    .prepare(
-      `SELECT it.item_id, it.dataset, it.topic, COALESCE(tb.bucket, it.topic) AS bucket, d.source_url
-       FROM item_topics it
-       LEFT JOIN topic_buckets tb ON tb.dataset = it.dataset AND tb.topic = it.topic
-       LEFT JOIN datasets d ON d.name = it.dataset
-       WHERE it.item_id IN (${placeholders})`
-    )
-    .all(...ids) as unknown as {
-    item_id: number;
-    dataset: string;
-    topic: string;
-    bucket: string;
-    source_url: string | null;
-  }[];
-  for (const r of rows) {
-    const list = by_id.get(r.item_id) ?? [];
-    list.push({
-      dataset: r.dataset,
-      topic: r.topic,
-      bucket: r.bucket,
-      dataset_url: r.source_url ?? null,
-    });
-    by_id.set(r.item_id, list);
-  }
-  return by_id;
-};
 
 const GET_TOP_LEVELS_SQL = `
   SELECT

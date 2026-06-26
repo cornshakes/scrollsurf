@@ -124,8 +124,7 @@ export const PictureCard = ({
         )}
       </Box>
       <CardTags
-        topics={picture.topics}
-        categories={picture.categories}
+        links={picture.links}
         onTrack={track}
         leading={<VoteButtons like={like} onVote={vote} />}
         sx={{ mt: 2 }}

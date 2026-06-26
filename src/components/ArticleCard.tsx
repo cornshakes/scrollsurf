@@ -106,8 +106,7 @@ export const ArticleCard = ({
         </Typography>
       )}
       <CardTags
-        topics={article.topics}
-        categories={article.categories}
+        links={article.links}
         onTrack={track}
         leading={<VoteButtons like={like} onVote={vote} />}
       />

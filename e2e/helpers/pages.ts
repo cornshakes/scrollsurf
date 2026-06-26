@@ -122,11 +122,11 @@ const remove_other_cards = async (page: Page, hasText: string) => {
 export const scroll_to_load_all = async (page: Page) => {
   for (let i = 0; i < 2; i++) {
     await page.getByTestId('feed-sentinel').scrollIntoViewIfNeeded();
-    if ((await page.getByTestId('feed-card').count()) === 14) {
+    if ((await page.getByTestId('feed-card').count()) === 15) {
       return;
     }
   }
-  await expect(page.getByTestId('feed-card')).toHaveCount(14);
+  await expect(page.getByTestId('feed-card')).toHaveCount(15);
 };
 
 export const switch_view = async (page: Page, view: View) => {

@@ -101,7 +101,7 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 
 ## Topics
 
-`article_topics` / `picture_topics` are `(item_id, dataset, topic)`. Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
+`item_topics` is `(item_id, dataset, topic)` (the per-type `article_topics` / `picture_topics` reference-DB tables are unified into it on import). Topics are grouped two levels: **dataset → topic**. The `dataset` is set at import time (each importer hardcodes its own); reference DBs store only bare topic names, never the dataset. Current datasets:
 
 - **Vital** — sublists from Wikipedia's Level 5 vital articles (People, Geography, Arts, …).
 - **Unusual** — each article's section heading from `Wikipedia:Unusual articles` (Military, Science, Folklore, …).
@@ -112,6 +112,8 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 - **Quotes** — one topic `'Quote of the Day'` per quote from Wikiquote QOTD entries.
 
 The dataset grouping is why topic names may safely collide across datasets (multiple datasets can have a History/Technology). An item may have several topics. Per-dataset `source_url` lives in each reference DB's `metadata` key/value table and is copied into `scrollsurf.db`'s `datasets` table on import, so each card's dataset chip can link to its source page.
+
+**Buckets** are a backend-only grouping that exists purely for affinity. `topic_buckets (dataset, topic, bucket)` maps fine-grained `(dataset, topic)` pairs into coarser buckets; affinity is accumulated **per bucket**, not per `(dataset, topic)` (see Feed selection). A `(dataset, topic)` pair with no mapping falls back to being its own bucket (`dataset ∥ topic`). Buckets never reach the client — chips/links are still built from `dataset` and `topic` ([links.ts](src/lib/db/links.ts)).
 
 ## Categories
 
@@ -142,7 +144,7 @@ weight = exp(AFFINITY_STRENGTH · clamped_affinity) · type_share / pool_size
 ```
 
 - `type_share` is the per-type share from the fixed `TYPE_SHARES` map in `feed.ts`, and `pool_size` is the count of eligible items of that type — so the expected fraction of each type equals its share ÷ Σshares, independent of actual pool sizes. A type with share 0 or absent from the map is hard-excluded (via `WHERE`).
-- Per-item affinity is the **average** of its topics' affinities. Per-topic affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. Dislikes downweight topics but never hard-exclude items.
+- Per-item affinity is the **average** of its buckets' affinities. Per-bucket affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. The `item_buckets` CTE resolves each item's `(dataset, topic)` rows to buckets via `topic_buckets` (unmapped pairs fall back to `dataset ∥ topic`), so accumulation is **by bucket, not by `(dataset, topic)`**. Dislikes downweight buckets but never hard-exclude items.
 
 Neutral users and anonymous users (`$user_id` is NULL → empty affinity CTEs → affinity 0 everywhere) reduce to exactly uniform random through the same query — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
 

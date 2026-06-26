@@ -1,10 +1,10 @@
-import { type Quote, type Topic } from './types';
+import { type Quote, type Link } from './types';
 import { get_db } from './connection';
-import { fetch_topics_for_items } from './topics';
+import { fetch_links_for_items } from './links';
 
-type QuoteDbRow = Omit<Quote, 'type' | 'topics'>;
+type QuoteDbRow = Omit<Quote, 'type' | 'links'>;
 
-const row_to_quote = (r: QuoteDbRow, topics: Topic[]): Quote => ({
+const row_to_quote = (r: QuoteDbRow, links: Link[]): Quote => ({
   type: 'quote',
   id: r.id,
   title: r.title,
@@ -14,7 +14,7 @@ const row_to_quote = (r: QuoteDbRow, topics: Topic[]): Quote => ({
   author_url: r.author_url,
   author_image: r.author_image,
   quote_year: r.quote_year,
-  topics,
+  links,
 });
 
 export const fetch_quotes_by_ids = (ids: number[], user_id: number | null): Quote[] => {
@@ -32,8 +32,8 @@ export const fetch_quotes_by_ids = (ids: number[], user_id: number | null): Quot
        WHERE i.id IN (${placeholders})`
     )
     .all(user_id, ...ids) as unknown as QuoteDbRow[];
-  const topics_by_id = fetch_topics_for_items(ids);
-  const by_id = new Map(rows.map((r) => [r.id, row_to_quote(r, topics_by_id.get(r.id) ?? [])]));
+  const links_by_id = fetch_links_for_items(ids);
+  const by_id = new Map(rows.map((r) => [r.id, row_to_quote(r, links_by_id.get(r.id) ?? [])]));
   return ids.flatMap((id) => {
     const q = by_id.get(id);
     return q ? [q] : [];

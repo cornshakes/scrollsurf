@@ -34,7 +34,9 @@ it('liked topic is over-represented in fetch (statistical)', () => {
     save_vote(uid, x_ids[i], 1);
   }
   const result = get_articles(100, uid);
-  const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
+  const x_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'topic' && l.title === 'X')
+  ).length;
   expect(x_count).toBeGreaterThan(65);
 });
 
@@ -50,7 +52,9 @@ it('disliked topic is under-represented and never fully excluded (statistical + 
     save_vote(uid, y_ids[i], -1);
   }
   const result = get_articles(100, uid);
-  const y_count = result.filter((a) => a.topics.some((t) => t.topic === 'Y')).length;
+  const y_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'topic' && l.title === 'Y')
+  ).length;
   expect(y_count).toBeLessThan(35);
 
   // deterministic: single article in a heavily-disliked topic still returned at limit >= pool
@@ -80,7 +84,9 @@ it('clicks alone boost a topic (statistical)', () => {
     record_click('article', x_ids[i], 'title', null, uid);
   }
   const result = get_articles(100, uid);
-  const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
+  const x_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'topic' && l.title === 'X')
+  ).length;
   expect(x_count).toBeGreaterThan(55);
 });
 
@@ -120,7 +126,9 @@ it('likes from user A do not skew user B feed (statistical)', () => {
     save_vote(uid_a, x_ids[i], 1);
   }
   const result = get_articles(100, uid_b);
-  const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
+  const x_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'topic' && l.title === 'X')
+  ).length;
   expect(x_count).toBeGreaterThan(35);
   expect(x_count).toBeLessThan(65);
 });
@@ -139,7 +147,9 @@ it('isolation: likes on D1/History do not boost D2/History without a bucket mapp
     save_vote(uid, d1h_ids[i], 1);
   }
   const result = get_articles(100, uid);
-  const d2h_count = result.filter((a) => a.topics.some((t) => t.dataset === 'D2')).length;
+  const d2h_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'dataset' && l.title === 'D2')
+  ).length;
   // D2/History resolves to a different fallback bucket (D2␟History) — must not be boosted
   expect(d2h_count).toBeLessThan(35);
 });
@@ -160,7 +170,9 @@ it('merge: likes on D1/History boost D2/History when mapped to the same bucket (
     save_vote(uid, d1h_ids[i], 1);
   }
   const result = get_articles(100, uid);
-  const d2h_count = result.filter((a) => a.topics.some((t) => t.dataset === 'D2')).length;
+  const d2h_count = result.filter((a) =>
+    a.links.some((l) => l.type === 'dataset' && l.title === 'D2')
+  ).length;
   // D2/History shares bucket 'History' with D1/History — cross-dataset boost must be present
   expect(d2h_count).toBeGreaterThan(35);
 });

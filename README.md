@@ -56,23 +56,24 @@ and go to [http://localhost:3000](http://localhost:3000)
 
 ## Clicks, Likes & Dislikes
 
-The feed is random, but influenced by user activity. Three signals are tracked **per topic** (e.g. Vital → History):
+Different datasets come with slightly different topics per item, e.g. "Military" and "Warfare". To be able to better use topics in influencing the random feed, these topics have been manually grouped into "buckets". The `topic_buckets` table maps each `(dataset, topic)` pair to its bucket; an unmapped pair is its own bucket. The signals:
+The feed is random, but influenced by user activity. Three signals are tracked **per bucket**.
 
 - Like counts +1
 - Dislike counts −1
 - Following a link counts +0.5
 
-These are averaged over seen articles of that topic, so a topic needs a few signals before it starts to move — one stray like won't change much. 
+These are averaged over seen items of that bucket, so a bucket needs a few signals before it starts to move — one stray like won't change much. 
 
-Unseen articles are then drawn with weights based on the average affinity of their topics, i.e. liked topics show up more often, disliked topics show up less.
+Unseen items are then drawn with weights based on the average affinity of their buckets, i.e. liked buckets show up more often, disliked buckets show up less.
 
 Without any votes (or without the consent cookie) the feed is random.
 
 ### Example
 
-Say you've scrolled for a while and your history per topic looks like this:
+Say you've scrolled for a while and your history per bucket looks like this:
 
-| Topic | Seen | Likes | Dislikes | Clicks | Affinity = (likes + 0.5·clicks − dislikes) / (seen + 5) |
+| Bucket | Seen | Likes | Dislikes | Clicks | Affinity = (likes + 0.5·clicks − dislikes) / (seen + 5) |
 |---|---|---|---|---|---|
 | Vital → History | 15 | 6 | 0 | 2 | (6 + 1 − 0) / 20 = **0.35** |
 | Vital → Sports | 15 | 0 | 6 | 0 | (0 + 0 − 6) / 20 = **−0.30** |
@@ -81,17 +82,17 @@ Say you've scrolled for a while and your history per topic looks like this:
 
 The `+ 5` in the denominator is the smoothing: the lone Arts like only gets a third of the affinity of the six History likes, even though it's a 100% like rate.
 
-Each topic's affinity is clamped to ±2 (`AFFINITY_CLAMP`) so no single topic can run away. Each unseen article then gets a weight of `exp(2 · affinity)` (the `2` is `AFFINITY_STRENGTH`):
+Each bucket's affinity is clamped to ±2 (`AFFINITY_CLAMP`) so no single bucket can run away. Each unseen item then gets a weight of `exp(2 · affinity)` (the `2` is `AFFINITY_STRENGTH`):
 
-| Article tagged | Mean affinity | Weight |
+| Item tagged | Mean affinity | Weight |
 |---|---|---|
 | History | 0.35 | exp(0.70) ≈ **2.0** |
 | Sports | −0.30 | exp(−0.60) ≈ **0.55** |
 | Arts | 0.11 | exp(0.22) ≈ **1.25** |
 | History **and** Sports | (0.35 − 0.30) / 2 = 0.025 | exp(0.05) ≈ **1.05** |
-| no voted topics | 0 | exp(0) = **1.0** |
+| no voted buckets | 0 | exp(0) = **1.0** |
 
-The weight is the article's relative chance per feed slot: a History article is about twice as likely to appear as a neutral one, and about 3.7× as likely as a Sports one — but even Sports articles keep showing up at roughly half the neutral rate. An article tagged with both a liked and a disliked topic lands back near neutral, because affinities are averaged across its topics.
+The weight is the item's relative chance per feed slot: a History item is about twice as likely to appear as a neutral one, and about 3.7× as likely as a Sports one — but even Sports items keep showing up at roughly half the neutral rate. An item in both a liked and a disliked bucket lands back near neutral, because affinities are averaged across its buckets.
 
 ### The SQL behind it
 
@@ -101,16 +102,21 @@ There are no per-topic queries and no mixing of result sets in TypeScript — th
 WITH clicked AS (              -- distinct items you clicked links on
   SELECT DISTINCT item_id FROM user_clicks WHERE user_id = $user_id
 ),
-topic_affinity AS (            -- the first table from the example:
-  SELECT dataset, topic,       -- one GROUP BY over your seen items
-         (1.0*likes + 0.5*clicks - 1.0*dislikes) / (seen + 5) AS affinity
-  FROM user_items JOIN item_topics ... LEFT JOIN clicked ...
-  WHERE user_id = $user_id
-  GROUP BY dataset, topic
+item_buckets AS (             -- map each item's (dataset, topic) rows to buckets
+  SELECT DISTINCT item_id,
+         COALESCE(bucket, dataset || topic) AS bucket  -- unmapped pair → its own bucket
+  FROM item_topics LEFT JOIN topic_buckets USING (dataset, topic)
 ),
-item_affinity AS (             -- the second table: AVG over each item's topics
+bucket_affinity AS (           -- the first table from the example, grouped by bucket:
+  SELECT bucket,               -- one GROUP BY over your seen items
+         (1.0*likes + 0.5*clicks - 1.0*dislikes) / (seen + 5) AS affinity
+  FROM user_items JOIN item_buckets USING (item_id) LEFT JOIN clicked ...
+  WHERE user_id = $user_id
+  GROUP BY bucket
+),
+item_affinity AS (             -- the second table: AVG over each item's buckets
   SELECT item_id, AVG(COALESCE(affinity, 0)) AS affinity
-  FROM item_topics LEFT JOIN topic_affinity ...
+  FROM item_buckets LEFT JOIN bucket_affinity USING (bucket)
   GROUP BY item_id
 ),
 eligible_pool AS (             -- unseen items that have at least one topic

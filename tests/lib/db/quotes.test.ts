@@ -20,10 +20,12 @@ it('batch fetch: each quote gets the fixed Quotes/Quote of the Day topic with no
   expect(result).toHaveLength(2);
   const q1 = result.find((quote) => quote.id === id1) as Quote;
   const q2 = result.find((quote) => quote.id === id2) as Quote;
-  expect(q1.topics).toHaveLength(1);
-  expect(q1.topics[0]).toMatchObject({ dataset: 'Quotes', topic: 'Quote of the Day' });
-  expect(q2.topics).toHaveLength(1);
-  expect(q2.topics[0]).toMatchObject({ dataset: 'Quotes', topic: 'Quote of the Day' });
+  const q1_topics = q1.links.filter((l) => l.type === 'topic');
+  expect(q1_topics).toHaveLength(1);
+  expect(q1_topics[0].title).toBe('Quote of the Day');
+  const q2_topics = q2.links.filter((l) => l.type === 'topic');
+  expect(q2_topics).toHaveLength(1);
+  expect(q2_topics[0].title).toBe('Quote of the Day');
 });
 
 // --- quote-specific ---

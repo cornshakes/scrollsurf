@@ -20,6 +20,12 @@ test.describe('Cards', () => {
     await screenshot_card(page, 'Null Island', 'article-without-thumbnail');
   });
 
+  test('article card - multiple datasets', async ({ page }) => {
+    await load_page(page, true);
+    await scroll_to_load_all(page);
+    await screenshot_card(page, 'Anglo-Zanzibar War', 'article-multiple-datasets');
+  });
+
   test('picture card - long caption', async ({ page }) => {
     await load_page(page, true);
     await scroll_to_load_all(page);

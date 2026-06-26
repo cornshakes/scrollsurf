@@ -1,15 +1,10 @@
-import { type Article, type Topic } from './types';
+import { type Article, type Link } from './types';
 import { get_db } from './connection';
-import { fetch_topics_for_items } from './topics';
-import { fetch_visible_categories } from './categories';
+import { fetch_links_for_items } from './links';
 
-type ArticleDbRow = Omit<Article, 'type' | 'categories' | 'topics'>;
+type ArticleDbRow = Omit<Article, 'type' | 'links'>;
 
-export const row_to_article = (
-  r: ArticleDbRow,
-  topics: Topic[],
-  categories: string[]
-): Article => ({
+export const row_to_article = (r: ArticleDbRow, links: Link[]): Article => ({
   type: 'article',
   id: r.id,
   title: r.title,
@@ -18,8 +13,7 @@ export const row_to_article = (
   like: r.like,
   description: r.description,
   image_url: r.image_url,
-  categories,
-  topics,
+  links,
 });
 
 export const fetch_articles_by_ids = (ids: number[], user_id: number | null): Article[] => {
@@ -37,14 +31,8 @@ export const fetch_articles_by_ids = (ids: number[], user_id: number | null): Ar
        WHERE i.id IN (${placeholders})`
     )
     .all(user_id, ...ids) as unknown as ArticleDbRow[];
-  const topics_by_id = fetch_topics_for_items(ids);
-  const cats_by_id = fetch_visible_categories(ids);
-  const by_id = new Map(
-    rows.map((r) => [
-      r.id,
-      row_to_article(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? []),
-    ])
-  );
+  const links_by_id = fetch_links_for_items(ids);
+  const by_id = new Map(rows.map((r) => [r.id, row_to_article(r, links_by_id.get(r.id) ?? [])]));
   return ids.flatMap((id) => {
     const a = by_id.get(id);
     return a ? [a] : [];

@@ -1,8 +1,15 @@
+export interface Link {
+  title: string;
+  url: string | null;
+  type: 'dataset' | 'topic' | 'category';
+}
+
 interface BaseFeedItem {
   id: number;
   title: string;
   url: string;
   like: -1 | 0 | 1;
+  links: Link[];
 }
 
 export interface Article extends BaseFeedItem {
@@ -10,15 +17,6 @@ export interface Article extends BaseFeedItem {
   extract: string;
   description: string | null;
   image_url: string | null;
-  categories: string[];
-  topics: Topic[];
-}
-
-export interface Topic {
-  dataset: string;
-  topic: string;
-  bucket: string;
-  dataset_url: string | null;
 }
 
 export interface Picture extends BaseFeedItem {
@@ -26,8 +24,6 @@ export interface Picture extends BaseFeedItem {
   image_url: string;
   caption: string;
   credit: string | null;
-  categories: string[];
-  topics: Topic[];
 }
 
 export interface Quote extends BaseFeedItem {
@@ -36,7 +32,6 @@ export interface Quote extends BaseFeedItem {
   author_url: string | null;
   author_image: string | null;
   quote_year: string | null;
-  topics: Topic[];
 }
 
 export type FeedItem = Article | Picture | Quote;
