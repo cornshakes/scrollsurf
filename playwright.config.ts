@@ -13,13 +13,25 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3100',
     trace: 'on-first-retry',
-    colorScheme: 'light',
     actionTimeout: 1000,
   },
   projects: [
     {
-      name: 'chromium-mobile',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } },
+      name: 'mobile-light',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        colorScheme: 'light',
+      },
+      timeout: 10_000,
+    },
+    {
+      name: 'mobile-dark',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        colorScheme: 'dark',
+      },
       timeout: 10_000,
     },
   ],
