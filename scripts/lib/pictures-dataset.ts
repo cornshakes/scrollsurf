@@ -20,6 +20,7 @@ export interface DownloadPicturesOptions {
   title: string; // grouping label, e.g. 'Pictures'
   source_url: string;
   fetch_image_info?: (titles: string[]) => Promise<ImageInfo[]>;
+  fetch_categories?: (file_titles: string[]) => Promise<Map<string, string[]>>;
   discover: () => Promise<DiscoveredPicture[]>;
 }
 
@@ -41,6 +42,11 @@ const open_pictures_db = (filename: string, title: string, source_url: string) =
       url   TEXT NOT NULL,
       topic TEXT NOT NULL,
       PRIMARY KEY (url, topic)
+    );
+    CREATE TABLE IF NOT EXISTS commons_categories (
+      url  TEXT NOT NULL,
+      name TEXT NOT NULL,
+      PRIMARY KEY (url, name)
     );
     CREATE TABLE IF NOT EXISTS discovered_pictures (
       file_title TEXT NOT NULL,
@@ -135,6 +141,9 @@ export const download_pictures_dataset = async (
   const insert_topic = db.prepare(
     'INSERT OR IGNORE INTO picture_topics (url, topic) VALUES ($url, $topic)'
   );
+  const insert_category = db.prepare(
+    'INSERT OR IGNORE INTO commons_categories (url, name) VALUES ($url, $name)'
+  );
   const mark_done = db.prepare(
     'UPDATE discovered_pictures SET done = 1 WHERE file_title = $file_title'
   );
@@ -144,6 +153,11 @@ export const download_pictures_dataset = async (
   for (const batch of chunk(to_download, BATCH_SIZE)) {
     const images = await (options.fetch_image_info ?? fetch_image_content)(batch);
     const by_title = new Map(images.map((img) => [img.title, img]));
+
+    let categories_by_url: Map<string, string[]> = new Map();
+    if (options.fetch_categories) {
+      categories_by_url = await options.fetch_categories(batch);
+    }
 
     db.exec('BEGIN');
     for (const file_title of batch) {
@@ -159,6 +173,10 @@ export const download_pictures_dataset = async (
         });
         for (const topic of meta?.topics ?? []) {
           insert_topic.run({ $url: img.descriptionurl, $topic: topic });
+        }
+        const categories = categories_by_url.get(file_title) ?? [];
+        for (const category_name of categories) {
+          insert_category.run({ $url: img.descriptionurl, $name: category_name });
         }
       }
       mark_done.run({ $file_title: file_title });

@@ -1,5 +1,10 @@
 import { run_download_pictures, type DiscoveredPicture } from '../lib/pictures-dataset';
-import { commons_api, commons_fetch_wikitext, commons_fetch_image_content } from '../lib/commons';
+import {
+  commons_api,
+  commons_fetch_wikitext,
+  commons_fetch_image_content,
+  commons_fetch_categories,
+} from '../lib/commons';
 
 // Commons: namespace is namespace 4
 const COMMONS_NS = 4;
@@ -79,6 +84,7 @@ run_download_pictures({
   title: 'Wikimedia Commons Featured Pictures',
   source_url: 'https://commons.wikimedia.org/wiki/Commons:Featured_pictures',
   fetch_image_info: commons_fetch_image_content,
+  fetch_categories: commons_fetch_categories,
   discover: async () => {
     const subpages = await fetch_subpages();
     process.stdout.write(`Found ${subpages.length} gallery subpages.\n`);

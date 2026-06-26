@@ -40,7 +40,8 @@ interface CategoryMembersOptions {
 export const fetch_category_members = async (
   category: string,
   options: CategoryMembersOptions = {},
-  on_progress?: (count: number) => void
+  on_progress?: (count: number) => void,
+  api = wiki_api
 ): Promise<string[]> => {
   const titles: string[] = [];
   let cmcontinue: string | undefined;
@@ -62,7 +63,7 @@ export const fetch_category_members = async (
       params.set('cmcontinue', cmcontinue);
     }
 
-    const data = (await wiki_api(params)) as {
+    const data = (await api(params)) as {
       query: { categorymembers: { title: string }[] };
       continue?: { cmcontinue: string };
     };
@@ -79,7 +80,8 @@ export const fetch_category_members = async (
 // Fetches parent categories for up to 50 categories in one API call.
 // Returns a map from (possibly normalized) category name to its parents.
 export const fetch_category_parents_batch = async (
-  categories: string[]
+  categories: string[],
+  api = wiki_api
 ): Promise<Map<string, string[]>> => {
   const params = new URLSearchParams({
     action: 'query',
@@ -88,7 +90,7 @@ export const fetch_category_parents_batch = async (
     cllimit: '500',
     format: 'json',
   });
-  const data = (await wiki_api(params)) as {
+  const data = (await api(params)) as {
     query: {
       normalized?: { from: string; to: string }[];
       pages: Record<string, { title: string; categories?: { title: string }[] }>;

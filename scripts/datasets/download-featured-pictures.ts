@@ -1,6 +1,7 @@
 import wtf from 'wtf_wikipedia';
 import { run_download_pictures, type DiscoveredPicture } from '../lib/pictures-dataset';
 import { fetch_wikitext } from '../lib/wiki';
+import { commons_fetch_categories } from '../lib/commons';
 
 const INDEX_PAGE = 'Wikipedia:Featured pictures';
 
@@ -90,6 +91,7 @@ run_download_pictures({
   filename: 'featured_pictures.db',
   title: 'Featured Pictures',
   source_url: 'https://en.wikipedia.org/wiki/Wikipedia:Featured_pictures',
+  fetch_categories: commons_fetch_categories,
   discover: async () => {
     const index_wikitext = await fetch_wikitext(INDEX_PAGE);
     const subpage_to_section = discover_subpages(index_wikitext);

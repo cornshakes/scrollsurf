@@ -1,3 +1,4 @@
+import { chunk } from 'es-toolkit';
 import { decodeHTML } from 'entities';
 import type { ImageInfo } from './wiki';
 import { create_mediawiki_api } from './mediawiki';
@@ -54,5 +55,44 @@ export const commons_fetch_image_content = async (file_titles: string[]): Promis
       });
     }
   }
+  return results;
+};
+
+export const commons_fetch_categories = async (
+  file_titles: string[]
+): Promise<Map<string, string[]>> => {
+  const results = new Map<string, string[]>();
+
+  for (const batch of chunk(file_titles, 50)) {
+    const params = new URLSearchParams({
+      action: 'query',
+      titles: batch.join('|'),
+      prop: 'categories',
+      clshow: '!hidden',
+      cllimit: '500',
+      format: 'json',
+      formatversion: '2',
+    });
+    const data = (await commons_api(params)) as {
+      query: {
+        pages: {
+          title: string;
+          categories?: {
+            title: string;
+          }[];
+        }[];
+      };
+    };
+
+    for (const page of data.query.pages) {
+      const categories =
+        page.categories?.map((cat) => {
+          const category_name = cat.title;
+          return category_name.replace(/^Category:\s*/, '');
+        }) ?? [];
+      results.set(page.title, categories);
+    }
+  }
+
   return results;
 };

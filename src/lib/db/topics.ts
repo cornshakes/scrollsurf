@@ -38,7 +38,7 @@ const GET_TOP_LEVELS_SQL = `
   FROM category_hierarchy ch
   JOIN categories c ON c.name = ch.category_name
   JOIN item_categories ic ON ic.category_id = c.id
-  JOIN items i ON i.id = ic.item_id AND i.type = 'article'
+  JOIN items i ON i.id = ic.item_id AND i.type IN ('article', 'picture')
   LEFT JOIN user_items ui ON i.id = ui.item_id AND ui.user_id = $user_id
   GROUP BY ch.top_level
   ORDER BY ch.top_level
@@ -54,7 +54,7 @@ const GET_CATEGORIES_SQL = `
   FROM category_hierarchy ch
   JOIN categories c ON c.name = ch.category_name
   JOIN item_categories ic ON ic.category_id = c.id
-  JOIN items i ON i.id = ic.item_id AND i.type = 'article'
+  JOIN items i ON i.id = ic.item_id AND i.type IN ('article', 'picture')
   LEFT JOIN user_items ui ON i.id = ui.item_id AND ui.user_id = $user_id
   GROUP BY ch.category_name
   ORDER BY ch.top_level, ch.category_name

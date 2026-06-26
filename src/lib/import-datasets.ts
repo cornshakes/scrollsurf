@@ -94,6 +94,17 @@ export const import_pictures_dataset = (filename: string) => {
        JOIN main.items i ON i.url = rpt.url`
     );
     db.exec(
+      `INSERT OR IGNORE INTO main.categories (name)
+       SELECT DISTINCT name FROM ref.commons_categories`
+    );
+    db.exec(
+      `INSERT OR IGNORE INTO main.item_categories (item_id, category_id)
+       SELECT i.id, c.id
+       FROM ref.commons_categories rcc
+       JOIN main.items i ON i.url = rcc.url
+       JOIN main.categories c ON c.name = rcc.name`
+    );
+    db.exec(
       `INSERT OR REPLACE INTO main.datasets (name, source_url)
        VALUES ('${dataset}', (SELECT value FROM ref.metadata WHERE key = 'source_url'))`
     );
@@ -140,8 +151,8 @@ export const import_quotes_dataset = (filename: string) => {
   }
 };
 
-export const import_categories = () => {
-  const ref_path = dataset_path('categories.db');
+export const import_categories = (filename: string) => {
+  const ref_path = dataset_path(filename);
   if (!existsSync(ref_path)) {
     return;
   }

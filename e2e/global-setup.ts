@@ -186,6 +186,20 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
         JOIN main.items i ON i.url = rpt.url
       `);
       e2e_db.exec(`
+        INSERT OR IGNORE INTO main.categories (name)
+        SELECT DISTINCT rcc.name
+        FROM ref.commons_categories rcc
+        JOIN wanted_urls w ON w.url = rcc.url
+      `);
+      e2e_db.exec(`
+        INSERT OR IGNORE INTO main.item_categories (item_id, category_id)
+        SELECT i.id, c.id
+        FROM ref.commons_categories rcc
+        JOIN wanted_urls w ON w.url = rcc.url
+        JOIN main.items i ON i.url = rcc.url
+        JOIN main.categories c ON c.name = rcc.name
+      `);
+      e2e_db.exec(`
         INSERT OR REPLACE INTO main.datasets (name, source_url)
         VALUES ('${dataset}', (SELECT value FROM ref.metadata WHERE key = 'source_url'))
       `);

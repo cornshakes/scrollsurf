@@ -39,9 +39,15 @@ export const register = async () => {
   }
 
   try {
-    import_categories();
+    import_categories('categories.db');
   } catch (err) {
     console.warn('[instrumentation] failed to import categories.db:', err);
+  }
+
+  try {
+    import_categories('commons_category_hierarchy.db');
+  } catch (err) {
+    console.warn('[instrumentation] failed to import commons_category_hierarchy.db:', err);
   }
 
   try {

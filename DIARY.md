@@ -279,3 +279,7 @@ I think the session limit was reduced quite a lot recently (prob because of the 
 
 # Backend / Frontend split
 Today, after a long workflow run, I still wanted to make lots of changes and used 2 sessions - one backend, one frontend, complementing each other. As always, the goal is to keep context small.
+
+# Running my workflow again
+
+The reviewer did a lot of things right, but I still can't get it to print the first line of the review file the way it is supposed to. I'll keep trying - probably I should try an alternative to needing this first line exactly.
