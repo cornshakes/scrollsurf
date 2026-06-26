@@ -165,3 +165,12 @@ export const insert_quote = (data: {
   );
   return item_id;
 };
+
+export const insert_topic_bucket = (dataset: string, topic: string, bucket: string): void => {
+  const db = get_db();
+  db.prepare('INSERT INTO topic_buckets (dataset, topic, bucket) VALUES (?, ?, ?)').run(
+    dataset,
+    topic,
+    bucket
+  );
+};

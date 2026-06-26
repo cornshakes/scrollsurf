@@ -308,4 +308,18 @@ export const migrations: readonly migration[] = [
       db.exec('ALTER TABLE quotes ADD COLUMN quote_year TEXT');
     },
   },
+  {
+    version: 10,
+    name: 'add_topic_buckets',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE topic_buckets (
+          dataset TEXT NOT NULL,
+          topic   TEXT NOT NULL,
+          bucket  TEXT NOT NULL,
+          PRIMARY KEY (dataset, topic)
+        );
+      `);
+    },
+  },
 ];

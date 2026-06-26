@@ -32,24 +32,30 @@ export const feed_affinity_ctes = (): string => `
     FROM user_clicks
     WHERE user_id = $user_id
   ),
+  item_buckets AS MATERIALIZED (
+    SELECT DISTINCT it.item_id,
+           COALESCE(tb.bucket, it.dataset || char(31) || it.topic) AS bucket
+    FROM item_topics it
+    LEFT JOIN topic_buckets tb ON tb.dataset = it.dataset AND tb.topic = it.topic
+  ),
   topic_affinity AS MATERIALIZED (
-    SELECT it.dataset, it.topic, 
+    SELECT ib.bucket,
         (${W_LIKE}    * COUNT(CASE WHEN u.like =  1 THEN 1 END)
        + ${W_CLICK}   * COUNT(CASE WHEN c.item_id IS NOT NULL THEN 1 END)
        - ${W_DISLIKE} * COUNT(CASE WHEN u.like = -1 THEN 1 END)
        ) / (COUNT(*) + ${AFFINITY_SMOOTHING})
     AS affinity
     FROM user_items u
-    JOIN item_topics it ON it.item_id = u.item_id
+    JOIN item_buckets ib ON ib.item_id = u.item_id
     LEFT JOIN clicked c ON c.item_id = u.item_id
     WHERE u.user_id = $user_id
-    GROUP BY it.dataset, it.topic
+    GROUP BY ib.bucket
   ),
   item_affinity AS MATERIALIZED (
-    SELECT it.item_id, AVG(COALESCE(ta.affinity, 0.0)) AS affinity
-    FROM item_topics it
-    LEFT JOIN topic_affinity ta ON ta.dataset = it.dataset AND ta.topic = it.topic
-    GROUP BY it.item_id
+    SELECT ib.item_id, AVG(COALESCE(ta.affinity, 0.0)) AS affinity
+    FROM item_buckets ib
+    LEFT JOIN topic_affinity ta ON ta.bucket = ib.bucket
+    GROUP BY ib.item_id
   ),
   eligible_pool AS MATERIALIZED (
     SELECT i.type, i.id

@@ -61,6 +61,7 @@ it('topic names containing :: round-trip intact (regression: value is never pars
   expect(article.topics[0]).toEqual({
     dataset: 'Vital',
     topic: 'Science::Physics',
+    bucket: 'Science::Physics',
     dataset_url: null,
   });
 });

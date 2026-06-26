@@ -79,41 +79,49 @@ export const CardTags = ({
         }}
       >
         {leading}
-        {topics.map(({ dataset, topic, dataset_url }) => {
-          const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
-          return (
-            <Fragment key={`${dataset}::${topic}`}>
-              <Chip
-                label={dataset}
-                size="small"
-                color="primary"
-                variant="outlined"
-                component={dataset_url ? 'a' : 'div'}
-                href={dataset_url ?? undefined}
-                target={dataset_url ? '_blank' : undefined}
-                rel={dataset_url ? 'noopener noreferrer' : undefined}
-                clickable={!!dataset_url}
-                data-testid={dataset_url ? 'link-dataset' : undefined}
-                onClick={dataset_url ? () => onTrack('dataset', dataset) : undefined}
-                sx={accent_sx}
-              />
-              <Chip
-                label={topic}
-                size="small"
-                color="primary"
-                variant="outlined"
-                component={topic_url ? 'a' : 'div'}
-                href={topic_url ?? undefined}
-                target={topic_url ? '_blank' : undefined}
-                rel={topic_url ? 'noopener noreferrer' : undefined}
-                clickable={!!topic_url}
-                data-testid={topic_url ? 'link-topic' : undefined}
-                onClick={topic_url ? () => onTrack('topic', topic) : undefined}
-                sx={accent_sx}
-              />
-            </Fragment>
-          );
-        })}
+        {(() => {
+          const seen = new Set<string>();
+          return topics.flatMap(({ dataset, topic, bucket, dataset_url }) => {
+            const key = `${dataset}::${bucket}`;
+            if (seen.has(key)) {
+              return [];
+            }
+            seen.add(key);
+            const topic_url = dataset_url ? `${dataset_url}/${topic.replace(/ /g, '_')}` : null;
+            return [
+              <Fragment key={key}>
+                <Chip
+                  label={dataset}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  component={dataset_url ? 'a' : 'div'}
+                  href={dataset_url ?? undefined}
+                  target={dataset_url ? '_blank' : undefined}
+                  rel={dataset_url ? 'noopener noreferrer' : undefined}
+                  clickable={!!dataset_url}
+                  data-testid={dataset_url ? 'link-dataset' : undefined}
+                  onClick={dataset_url ? () => onTrack('dataset', dataset) : undefined}
+                  sx={accent_sx}
+                />
+                <Chip
+                  label={bucket}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  component={topic_url ? 'a' : 'div'}
+                  href={topic_url ?? undefined}
+                  target={topic_url ? '_blank' : undefined}
+                  rel={topic_url ? 'noopener noreferrer' : undefined}
+                  clickable={!!topic_url}
+                  data-testid={topic_url ? 'link-topic' : undefined}
+                  onClick={topic_url ? () => onTrack('topic', topic) : undefined}
+                  sx={accent_sx}
+                />
+              </Fragment>,
+            ];
+          });
+        })()}
         {categories?.map((cat) => (
           <Chip
             key={cat}

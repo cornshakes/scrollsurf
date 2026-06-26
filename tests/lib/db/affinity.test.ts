@@ -4,6 +4,7 @@ import {
   insert_user,
   insert_article,
   insert_picture,
+  insert_topic_bucket,
 } from '../../helpers/test-db';
 import { get_next_feed } from '@/lib/db/feed';
 import { record_click, save_vote } from '@/lib/db/votes';
@@ -122,6 +123,46 @@ it('likes from user A do not skew user B feed (statistical)', () => {
   const x_count = result.filter((a) => a.topics.some((t) => t.topic === 'X')).length;
   expect(x_count).toBeGreaterThan(35);
   expect(x_count).toBeLessThan(65);
+});
+
+// statistical: pool is 180 D1/H + 200 D2/H = 380; D1/H boosted → D1/H ~82, D2/H < 35
+it('isolation: likes on D1/History do not boost D2/History without a bucket mapping (statistical)', () => {
+  const uid = insert_user();
+  const D1H = { dataset: 'D1', topic: 'History' };
+  const D2H = { dataset: 'D2', topic: 'History' };
+  const d1h_ids: number[] = [];
+  for (let i = 0; i < 200; i++) {
+    d1h_ids.push(insert_article({ url: `https://iso.d1h/${i}`, topics: [D1H] }));
+    insert_article({ url: `https://iso.d2h/${i}`, topics: [D2H] });
+  }
+  for (let i = 0; i < 20; i++) {
+    save_vote(uid, d1h_ids[i], 1);
+  }
+  const result = get_articles(100, uid);
+  const d2h_count = result.filter((a) => a.topics.some((t) => t.dataset === 'D2')).length;
+  // D2/History resolves to a different fallback bucket (D2␟History) — must not be boosted
+  expect(d2h_count).toBeLessThan(35);
+});
+
+// statistical: both D1/H and D2/H share bucket 'History'; both boosted → D2H > 35
+it('merge: likes on D1/History boost D2/History when mapped to the same bucket (statistical)', () => {
+  const uid = insert_user();
+  const D1H = { dataset: 'D1', topic: 'History' };
+  const D2H = { dataset: 'D2', topic: 'History' };
+  insert_topic_bucket('D1', 'History', 'History');
+  insert_topic_bucket('D2', 'History', 'History');
+  const d1h_ids: number[] = [];
+  for (let i = 0; i < 200; i++) {
+    d1h_ids.push(insert_article({ url: `https://mrg.d1h/${i}`, topics: [D1H] }));
+    insert_article({ url: `https://mrg.d2h/${i}`, topics: [D2H] });
+  }
+  for (let i = 0; i < 20; i++) {
+    save_vote(uid, d1h_ids[i], 1);
+  }
+  const result = get_articles(100, uid);
+  const d2h_count = result.filter((a) => a.topics.some((t) => t.dataset === 'D2')).length;
+  // D2/History shares bucket 'History' with D1/History — cross-dataset boost must be present
+  expect(d2h_count).toBeGreaterThan(35);
 });
 
 // statistical: measured mean ≈ 82, sd ≈ 5; threshold > 65 is non-flaky

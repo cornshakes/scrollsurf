@@ -167,3 +167,21 @@ export const import_categories = (filename: string) => {
     db.exec('DETACH ref');
   }
 };
+
+export const import_topic_buckets = (filename: string) => {
+  const ref_path = dataset_path(filename);
+  if (!existsSync(ref_path)) {
+    return;
+  }
+
+  db.exec(`ATTACH '${ref_path}' AS ref`);
+  try {
+    db.exec('DELETE FROM main.topic_buckets');
+    db.exec(
+      `INSERT INTO main.topic_buckets (dataset, topic, bucket)
+       SELECT dataset, topic, bucket FROM ref.topic_buckets`
+    );
+  } finally {
+    db.exec('DETACH ref');
+  }
+};

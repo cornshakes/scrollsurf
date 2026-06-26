@@ -17,6 +17,7 @@ export interface Article extends BaseFeedItem {
 export interface Topic {
   dataset: string;
   topic: string;
+  bucket: string;
   dataset_url: string | null;
 }
 

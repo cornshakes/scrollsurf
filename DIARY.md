@@ -283,3 +283,11 @@ Today, after a long workflow run, I still wanted to make lots of changes and use
 # Running my workflow again
 
 The reviewer did a lot of things right, but I still can't get it to print the first line of the review file the way it is supposed to. I'll keep trying - probably I should try an alternative to needing this first line exactly.
+
+# Categories.
+I've dropped them previously, now I've been carrying them around for quite some time without any benefit. They add the chips to the card - not the nice ones (dataset/topic), just the useless ones (people from southern montana born in 1928).
+I spent so much time on them and they are still very much incomplete, so I can't really use them for weighting the feed because not enough pictures have categories at all. I feel like just throwing them all out could really slim this thing down in a way I like. Anyway.
+
+
+I didn't really use the unify-topics script, and the database is just one simple table, so I did the topic->bucket mapping manually in sql - it felt like the easiest thing to do after just accepting everything from the script to prepopulate it.
+That's also how I (you) might adjust it in the future - just change the topic_buckets.db, it is reimported on every startup.

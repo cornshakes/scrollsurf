@@ -29,7 +29,8 @@
     "download-commons-featured-pictures": "tsx --env-file=scripts/.env scripts/datasets/download-commons-featured-pictures.ts",
     "download-quotes": "tsx --env-file=scripts/.env scripts/datasets/download-quotes.ts",
     "categorize": "tsx --env-file=scripts/.env scripts/categorize.ts",
-    "categorize-commons": "tsx --env-file=scripts/.env scripts/categorize-commons.ts"
+    "categorize-commons": "tsx --env-file=scripts/.env scripts/categorize-commons.ts",
+    "unify-topics": "tsx scripts/unify-topics.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

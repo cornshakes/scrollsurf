@@ -11,6 +11,7 @@ export const register = async () => {
     import_pictures_dataset,
     import_quotes_dataset,
     import_categories,
+    import_topic_buckets,
   } = await import('./lib/import-datasets');
   const { cleanup_inactive_users } = await import('./lib/db');
 
@@ -48,6 +49,12 @@ export const register = async () => {
     import_categories('commons_category_hierarchy.db');
   } catch (err) {
     console.warn('[instrumentation] failed to import commons_category_hierarchy.db:', err);
+  }
+
+  try {
+    import_topic_buckets('topic_buckets.db');
+  } catch (err) {
+    console.warn('[instrumentation] failed to import topic_buckets.db:', err);
   }
 
   try {

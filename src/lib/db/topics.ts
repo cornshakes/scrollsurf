@@ -10,8 +10,9 @@ export const fetch_topics_for_items = (ids: number[]): Map<number, Topic[]> => {
   const placeholders = ids.map(() => '?').join(', ');
   const rows = get_db()
     .prepare(
-      `SELECT it.item_id, it.dataset, it.topic, d.source_url
+      `SELECT it.item_id, it.dataset, it.topic, COALESCE(tb.bucket, it.topic) AS bucket, d.source_url
        FROM item_topics it
+       LEFT JOIN topic_buckets tb ON tb.dataset = it.dataset AND tb.topic = it.topic
        LEFT JOIN datasets d ON d.name = it.dataset
        WHERE it.item_id IN (${placeholders})`
     )
@@ -19,11 +20,17 @@ export const fetch_topics_for_items = (ids: number[]): Map<number, Topic[]> => {
     item_id: number;
     dataset: string;
     topic: string;
+    bucket: string;
     source_url: string | null;
   }[];
   for (const r of rows) {
     const list = by_id.get(r.item_id) ?? [];
-    list.push({ dataset: r.dataset, topic: r.topic, dataset_url: r.source_url ?? null });
+    list.push({
+      dataset: r.dataset,
+      topic: r.topic,
+      bucket: r.bucket,
+      dataset_url: r.source_url ?? null,
+    });
     by_id.set(r.item_id, list);
   }
   return by_id;
