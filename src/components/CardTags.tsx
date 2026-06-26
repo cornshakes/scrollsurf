@@ -54,7 +54,11 @@ export const CardTags = ({
     if (!el) {
       return;
     }
-    set_has_overflow(el.scrollHeight > el.clientHeight);
+    // TWO_ROWS_HEIGHT clamps a few px into the bottom padding (to hide a partial
+    // 3rd row), so a fully-visible two-row layout already reports scrollHeight a
+    // few px over clientHeight. Only treat it as overflow when a real (chip-sized)
+    // amount is hidden, otherwise the chevron shows with nothing more to reveal.
+    set_has_overflow(el.scrollHeight - el.clientHeight > ROW_PADDING);
   }, [links]);
 
   if (!leading && links.length === 0) {
