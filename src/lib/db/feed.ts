@@ -34,6 +34,15 @@ const type_weight_expr =
     .join(' ') +
   ` ELSE 0 END`;
 
+// CASE expression: per-type affinity strength (multiplies clamped affinity inside
+// exp()). Lets quotes opt out of affinity boosting (strength 0) — see affinity.ts.
+const affinity_strength_expr =
+  `CASE p.type ` +
+  Object.entries(AFFINITY_STRENGTH)
+    .map(([type_name, strength]) => `WHEN '${type_name}' THEN ${strength}`)
+    .join(' ') +
+  ` ELSE 0 END`;
+
 const MARK_SEEN_SQL =
   'INSERT OR IGNORE INTO user_items (user_id, item_id) VALUES ($user_id, $item_id)';
 
@@ -46,7 +55,7 @@ const FEED_GET_NEXT_SQL = `
   WHERE ${type_where}
   ORDER BY
     -ln(max((RANDOM() / 9223372036854775808.0 + 1.0) / 2.0, 1e-12))
-    / ( exp(${AFFINITY_STRENGTH} * max(-${AFFINITY_CLAMP}, min(${AFFINITY_CLAMP}, COALESCE(ia.affinity, 0.0))))
+    / ( exp(${affinity_strength_expr} * max(-${AFFINITY_CLAMP}, min(${AFFINITY_CLAMP}, COALESCE(ia.affinity, 0.0))))
         * ${type_weight_expr}
         / max(ps.n, 1) )
   LIMIT $limit

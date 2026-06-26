@@ -3,7 +3,22 @@ export const W_CLICK = 0.5;
 export const W_DISLIKE = 1.0;
 export const AFFINITY_SMOOTHING = 5.0;
 export const AFFINITY_CLAMP = 2.0;
-export const AFFINITY_STRENGTH = 2.0;
+
+// Per-type strength of the affinity boost in the feed draw (multiplies the
+// clamped affinity inside exp(); see feed.ts). The type-share guarantee only
+// holds when a type's mean boost stays ~1 — true for articles/pictures, where
+// likes concentrate on specific topics and only redistribute *within* the type.
+//
+// Quotes all share the single topic 'Quote of the Day', so a like on any quote
+// raises affinity for *every* quote uniformly. That uniform boost multiplies the
+// whole quote pool and overrides the per-type share, flooding the feed. With one
+// topic there's also nothing to personalize between quotes, so quotes get
+// strength 0 — drawn purely by their type share, unaffected by likes/dislikes.
+export const AFFINITY_STRENGTH: Record<string, number> = {
+  article: 2.0,
+  picture: 2.0,
+  quote: 0.0,
+};
 
 // WITH-clause producing:
 //   item_affinity (item_id, affinity) — single arm, type-agnostic

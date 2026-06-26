@@ -170,4 +170,46 @@ describe('get_next_feed(): With User', () => {
     ).length;
     expect(x_count).toBeGreaterThan(65);
   });
+
+  // Regression / proof: quotes all share the single 'Quote of the Day' topic, so
+  // liking quotes would uniformly boost the whole quote pool and flood the feed.
+  // Quote affinity strength is 0, so likes must not influence how many quotes are
+  // drawn. Two users share the same pool: `liker` likes 100 quotes, `control`
+  // marks the same 100 seen-but-neutral (vote 0) so both have identical eligible
+  // pools — the only difference is the like signal. Their quote shares must match
+  // each other and the configured type share.
+  it('likes do not influence how many quotes are drawn', () => {
+    make_articles(1000);
+    make_pictures(1000);
+    make_quotes(1000);
+
+    const liker = insert_user();
+    const control = insert_user();
+    const quote_ids = range(100).map((index) =>
+      insert_quote({
+        text: `signal quote ${index}`,
+        url: `https://signal.quote/${index}`,
+        author: 'A',
+      })
+    );
+    for (const quote_id of quote_ids) {
+      save_vote(liker, quote_id, 1); // liked
+      save_vote(control, quote_id, 0); // seen, neutral — keeps pools identical
+    }
+
+    const draws = 50;
+    const liker_feed = range(draws).flatMap(() => get_next_feed(20, liker));
+    const control_feed = range(draws).flatMap(() => get_next_feed(20, control));
+
+    const count_quotes = (feed: typeof liker_feed) =>
+      feed.filter((item) => item.type === 'quote').length;
+    const liker_quotes = count_quotes(liker_feed);
+    const control_quotes = count_quotes(control_feed);
+
+    // Both stay near the configured type share — likes did not inflate quotes.
+    // (Pre-fix, liker_quotes would be several times control_quotes.)
+    const expected = TYPE_SHARES.quote * draws * 20;
+    expect(liker_quotes).toBeWithin(expected * 0.7, expected * 1.3);
+    expect(control_quotes).toBeWithin(expected * 0.7, expected * 1.3);
+  });
 });
