@@ -25,6 +25,7 @@ export interface Picture extends BaseFeedItem {
   image_url: string;
   caption: string;
   credit: string | null;
+  categories: string[];
   topics: Topic[];
 }
 

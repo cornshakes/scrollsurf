@@ -1,10 +1,11 @@
 import { type Picture, type Topic } from './types';
 import { get_db } from './connection';
 import { fetch_topics_for_items } from './topics';
+import { fetch_visible_categories } from './categories';
 
-type PictureDbRow = Omit<Picture, 'type' | 'topics'>;
+type PictureDbRow = Omit<Picture, 'type' | 'categories' | 'topics'>;
 
-const row_to_picture = (r: PictureDbRow, topics: Topic[]): Picture => ({
+const row_to_picture = (r: PictureDbRow, topics: Topic[], categories: string[]): Picture => ({
   type: 'picture',
   id: r.id,
   title: r.title,
@@ -13,6 +14,7 @@ const row_to_picture = (r: PictureDbRow, topics: Topic[]): Picture => ({
   image_url: r.image_url,
   caption: r.caption,
   credit: r.credit,
+  categories,
   topics,
 });
 
@@ -32,7 +34,13 @@ export const fetch_pictures_by_ids = (ids: number[], user_id: number | null): Pi
     )
     .all(user_id, ...ids) as unknown as PictureDbRow[];
   const topics_by_id = fetch_topics_for_items(ids);
-  const by_id = new Map(rows.map((r) => [r.id, row_to_picture(r, topics_by_id.get(r.id) ?? [])]));
+  const cats_by_id = fetch_visible_categories(ids);
+  const by_id = new Map(
+    rows.map((r) => [
+      r.id,
+      row_to_picture(r, topics_by_id.get(r.id) ?? [], cats_by_id.get(r.id) ?? []),
+    ])
+  );
   return ids.flatMap((id) => {
     const p = by_id.get(id);
     return p ? [p] : [];
