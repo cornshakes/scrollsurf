@@ -2,6 +2,7 @@ import { open_db } from '@/lib/db/connection';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { type DatabaseSync } from 'node:sqlite';
+import { delete_test_users } from './helpers/db';
 
 const articles = {
   'unusual.db': [
@@ -243,6 +244,11 @@ const init_db = async () => {
     seed_quotes(db);
   }
   db.close();
+
+  // The fixture DB persists across runs, but `test_email` accounts are
+  // deterministic — purge them so a re-run doesn't hit the unique email
+  // constraint on the same addresses.
+  delete_test_users();
 };
 
 export default init_db;

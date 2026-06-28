@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { read_login_code } from './db';
 
 export type View = 'random' | 'liked' | 'disliked' | 'categories';
 
@@ -85,6 +86,13 @@ export const get_card_titles = async (page: Page) => {
 };
 
 export const open_menu = async (page: Page) => {
+  // Idempotent: if the drawer is already open the menu button sits behind the
+  // backdrop, so clicking it would be intercepted. The "Privacy" link only
+  // renders inside the open drawer (exact match avoids the consent popover's
+  // "Privacy info" link).
+  if (await page.getByRole('link', { name: 'Privacy', exact: true }).isVisible()) {
+    return;
+  }
   // scroll up to make button appear, then click
   await page
     .getByTestId('feed-scroll')
@@ -147,4 +155,87 @@ export const vote_card = async (card: Locator, direction: 'up' | 'down') => {
 /** The title link text of an article card. */
 export const article_title = async (card: Locator) => {
   return (await card.getByRole('heading').innerText()).trim();
+};
+
+/** Open the cookie consent popover. */
+export const open_consent = async (page: Page) => {
+  await page.getByRole('button', { name: 'Cookie consent settings' }).click();
+};
+
+/**
+ * Click an element that triggers `window.location.reload()` and wait for the
+ * fresh document to load. A marker is set on the current document before the
+ * click; the reload clears it, and `waitForFunction` re-injects across the
+ * navigation so it survives the context teardown. Without this, assertions race
+ * against the stale pre-reload DOM.
+ */
+export const click_reloading = async (page: Page, locator: Locator) => {
+  await page.evaluate(() => {
+    (window as unknown as { __pre_reload?: boolean }).__pre_reload = true;
+  });
+  await locator.click();
+  await page.waitForFunction(
+    () => !(window as unknown as { __pre_reload?: boolean }).__pre_reload,
+    null,
+    { timeout: 3_000 }
+  );
+};
+
+/**
+ * Confirm the menu reflects the expected auth state, then leave it closed. The
+ * account is fetched asynchronously after hydration, so retry the whole open;
+ * close any open drawer first (Escape) so a retry never clicks the
+ * backdrop-covered menu button.
+ */
+const expect_menu_auth = async (page: Page, item: 'Log in' | 'Log out') => {
+  const target = page.getByText(item, { exact: item === 'Log in' });
+  await expect(async () => {
+    await page.keyboard.press('Escape');
+    await open_menu(page);
+    await expect(target).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+
+  await page.keyboard.press('Escape');
+  await target.waitFor({ state: 'hidden' });
+};
+
+export const expect_logged_in_menu = (page: Page) => expect_menu_auth(page, 'Log out');
+export const expect_logged_out_menu = (page: Page) => expect_menu_auth(page, 'Log in');
+
+/**
+ * Drive the login dialog from open to verified, starting from a logged-out menu.
+ * Opens the menu, clicks "Log in", fills the email, sends the code, polls the DB
+ * until the code appears (handles the server-action round-trip), then fills and
+ * verifies it. `onSuccess` triggers `window.location.reload()`, so this waits for
+ * the reload to land and the account to load, then leaves the menu closed so
+ * callers start from a clean state.
+ *
+ * Does not assume the feed is non-empty afterwards — serving an item marks it
+ * seen, so a promoted session that already exhausted the small fixture pool can
+ * land on an empty feed.
+ */
+export const login_via_dialog = async (page: Page, email: string) => {
+  await open_menu(page);
+  await page.getByText('Log in', { exact: true }).click();
+  await page.getByRole('textbox', { name: 'Email' }).fill(email);
+  await page.getByRole('button', { name: 'Send code' }).click();
+
+  await expect.poll(() => read_login_code(email) !== null, { timeout: 10_000 }).toBe(true);
+  const code = read_login_code(email) ?? '';
+
+  await page.getByRole('textbox', { name: '6-digit code' }).fill(code);
+  await click_reloading(page, page.getByRole('button', { name: 'Verify' }));
+
+  await expect_logged_in_menu(page);
+};
+
+/**
+ * Log out via the menu. "Log out" triggers `window.location.reload()` (a fresh
+ * anonymous session), so this waits for the reload to land and the menu to show
+ * "Log in" again, then leaves the menu closed — safe to chain a fresh login.
+ */
+export const logout_via_menu = async (page: Page) => {
+  await open_menu(page);
+  await click_reloading(page, page.getByText('Log out'));
+  await expect_logged_out_menu(page);
 };

@@ -1,9 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { load_page, open_menu, remove_all_cards } from '../helpers/pages';
-
-export const open_consent = async (page: Page) => {
-  await page.getByRole('button', { name: 'Cookie consent settings' }).click();
-};
+import { load_page, open_consent, open_menu, remove_all_cards } from '../helpers/pages';
 
 const get_cookies = async (page: Page) => {
   const cookies = await page.context().cookies();

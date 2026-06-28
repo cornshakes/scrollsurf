@@ -194,3 +194,6 @@ All etiquette is enforced in `scripts/lib/mediawiki.ts` per [API:Etiquette](http
 
 - **Unit (Jest)** — `jest.config.ts`, node environment, coverage over `src/lib/db/*`, `src/lib/user.ts`, `src/app/actions.ts`. Tests live in `tests/` (helpers in `tests/helpers/`).
 - **E2e (Playwright)** — `playwright.config.ts`, runs a dev server on **port 3100** and the db at `e2e/.data/` (seeded by `e2e/global-setup.ts`). Mobile-chromium viewport; images are mocked and external navigation stubbed for stable visual snapshots.
+
+### E2E Screenshot tests
+When creating & reviewing E2E screenshot tests, consider failures because of a few different pixels, anti-aliasing, layout shifts, ui race conditions etc as **DONE**. Report that you can't get them exactly perfect every time and then move on. Don't spend *any* time on modifiying test helpers, sleeping, reloading, finding different things to wait on - just report it and move on.

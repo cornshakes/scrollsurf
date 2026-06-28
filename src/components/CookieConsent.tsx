@@ -108,8 +108,9 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
       >
         <Box data-testid="consent-popover" sx={{ p: 2, maxWidth: 300 }}>
           <Typography variant="body2" sx={{ mb: 1.5 }}>
-            One optional cookie remembers your likes &amp; dataset choices — nothing else, no third
-            parties.{' '}
+            One optional cookie to remember what you saw (to show you new things), likes and clicks
+            (to show you similar things). The cookie is not used for any other purpose and it is not
+            shared with anybody.{' '}
             <Link href="/privacy" underline="hover" onClick={() => setAnchor(null)}>
               Privacy info
             </Link>
@@ -119,8 +120,9 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
               {show_revoke_warning && (
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
                   <Typography variant="body2">
-                    This removes your account — your saved likes can no longer be recovered by
-                    email.
+                    Revoking cookie consent will remove your account.
+                    <br /> Your saved likes can no longer be recovered by email.
+                    <br /> Are you sure you want to do this?
                   </Typography>
                 </Alert>
               )}

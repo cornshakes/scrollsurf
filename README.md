@@ -67,7 +67,7 @@ These are averaged over seen items of that bucket, so a bucket needs a few signa
 
 Unseen items are then drawn with weights based on the average affinity of their buckets, i.e. liked buckets show up more often, disliked buckets show up less.
 
-Without any votes (or without the consent cookie) the feed is random.
+Without any votes (or without the consent cookie, see below) the feed is random.
 
 ### Example
 
@@ -143,6 +143,54 @@ The `ORDER BY` line is the whole sampling trick ([Efraimidis–Spirakis](https:/
 The weight has two factors. The first is the affinity term from the example (clamped to ±2). The second is a per-type share: `type_share / pool_size`, where `type_share` is the fixed `TYPE_SHARES` map in `feed.ts` (article 0.82, picture 0.1, quote 0.08) and `pool_size` is the count of eligible items of that type. Dividing by pool size makes each type's expected fraction equal its share ÷ Σshares, independent of how many items each pool actually holds. A type with share 0, or absent from the map, is hard-excluded by the `WHERE` clause.
 
 For anonymous (and brand-new) users `$user_id` is `NULL`, which matches nothing in the signal CTEs, so every item falls back to affinity `0` → uniform within each type, through the exact same query. The selected `(type, id)` rows are then hydrated into full `Article` / `Picture` / `Quote` payloads per type.
+
+## Cookies, Accounts & Login
+
+Once the user agrees to use cookies, their seen items, likes and clicks are stored with the cookie as the key. So when the cookie is cleared or expires after inactivity, that data is lost. Logging in with an email binds that history to an account, which multiple browser cookies can then point at.
+
+
+The `tokens` table maps each browser cookie to a row in `users`, and several cookies can point at the same account. An anonymous user is a `users` row with no email. Stale cookies are swept after `USER_INACTIVITY_DAYS` (default 14 of inactivity by `cleanup_inactive_users` on startup — the underlying user row and its history survive, only the cookie is dropped.
+
+### Passwordless email login
+
+Login is **code-only — there is no password**:
+
+1. Enter your email → the server `create_login_code` creates a single-use 6-digit code, upserted
+   into the `login_codes` table (one row per email, 15-minute expiry, 60-second resend
+   rate-limit) and sent over SMTP. If `SMTP_HOST` is unset (dev/e2e) the code is just
+   logged to the server console instead of emailed.
+2. Enter the code → `verify_login_code` checks it and **deletes it** (single use; wrong
+   attempts don't delete it, so you can retry until it expires).
+3. On success `attach_login` binds your browser token to an account, and `submit_login_code`
+   sets `ss_uid` and grants consent — **logging in implies consent**.
+
+### Merging / switching user histories on login
+
+`attach_login` reconciles any existing votes/clicks on login. It resolves the current browser cookie and the account matching the email, then picks one of these branches:
+
+| Situation | Outcome |
+|---|---|
+| Token already points at this account | No-op, stay logged in |
+| You're anonymous, account exists | **Merge** — fold your anon history into the account |
+| You're logged into *another* account | **Switch** — repoint just this browser's cookie; no merge |
+| No cookie at all, account exists | Mint a fresh cookie for the account |
+| You're anonymous, email is new | **Promote** — your anon user *becomes* the account (keeps all history) |
+| No cookie, email is new | Create a brand-new empty account |
+
+### (`merge_anon_to_account`)
+When "logging in", i.e. changing from anonymous to email, the anonymous account's votes are merged into the existing account's votes with the existing one taking precedence on conflict. Append-only clicks are carried over (added, never replacing the account's), the cookie of
+the anonymous identity is repointed to the account, and the anon user row is deleted.
+When "switching" accounts, i.e. changing from one email account to another, the browser cookie is pointed to the other account without any further changes.
+
+### Consent & revoking it
+
+Consent is recorded in the client-readable **`ss_consent`** cookie (`granted` / `denied` /
+`unknown`), surfaced through `ConsentContext` in
+[CookieConsent.tsx](src/components/CookieConsent.tsx). Voting and link-click tracking are
+consent-gated: without `granted` consent the client never fires the request and opens the
+consent dialog instead.
+
+**Revoking consent while logged in** (`unlink_email`) clears the email field only — the account's history stays intact but is **no longer recoverable by email re-login**. Logging in again with the same email therefore lands in the "email is new" branch and creates a fresh, empty account.
 
 ## Integration Testing
 
