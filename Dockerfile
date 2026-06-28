@@ -28,6 +28,7 @@ SCROLLSURF_DATA_DIR=/data
 COPY public/ ./public/
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
