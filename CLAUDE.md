@@ -151,7 +151,9 @@ Neutral users and anonymous users (`$user_id` is NULL → empty affinity CTEs �
 ## Users, cookies & consent
 
 - **Anonymous** users get a random feed but cannot vote or track clicks.
-- **Identity** is the `ss_uid` cookie (httpOnly, sameSite lax, a UUID set on consent grant), which drives `get_or_create_user`. Inactivity cleanup after `USER_INACTIVITY_DAYS` (default 14) runs as `cleanup_inactive_users` on startup; the cookie Max-Age matches. Constants in `src/lib/cookie.ts`; lookup in `src/lib/user.ts` (`current_user_id`).
+- **Identity** is the `ss_uid` cookie (httpOnly, sameSite lax, a token UUID). The `tokens` table maps each browser token to a `users.id`; multiple tokens can point to the same account. `get_or_create_user(token)` looks up or creates the user. Inactivity cleanup after `USER_INACTIVITY_DAYS` (default 14) runs as `cleanup_inactive_users` on startup and deletes stale tokens (users rows + history survive). Constants in `src/lib/cookie.ts`; lookup in `src/lib/user.ts` (`current_user_id`).
+- **Email login** is passwordless, code-only: enter email → receive a 6-digit code (single-use, 15-min expiry) via SMTP → enter code → logged in. Codes are upserted per email in the `login_codes` table. On login, if the browser already has an anonymous history and the account also has history, they are **merged** with the account's votes as authoritative (on conflict, keep the account's vote; on miss, adopt the browser's vote). Clicks (append-only) are always carried over. The browser's token is repointed to the account; all of that anonymous identity's tokens follow.
+- **Revoke consent** while logged in removes the email field only (account history stays intact and is not recoverable by email re-login). **Login implies consent** — `submit_login_code` grants consent and sets `ss_uid`.
 - **Consent** is recorded in the client-readable `ss_consent` cookie. `src/components/CookieConsent.tsx` provides `ConsentContext` (`granted | denied | unknown`). **Voting and link-click tracking are consent-gated** — without `granted` consent the client fires no server request and opens the consent dialog instead.
 
 ## Server actions & UI
@@ -175,6 +177,11 @@ Component map (all client components except the root layout/page): `App` (theme 
 | `WIKIPEDIA_USER_AGENT` | (required for downloads) | App name, version, contact email for the MediaWiki client |
 | `USER_INACTIVITY_DAYS=N` | `14` | Days of inactivity before a user is cleaned up / cookie expires |
 | `COMMIT_ID` | `dev` | Surfaced to the client as `NEXT_PUBLIC_COMMIT_ID` |
+| `SMTP_HOST` | (unset = log to console) | SMTP server host; unset in dev logs login codes to the server console instead of sending email |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | | SMTP username |
+| `SMTP_PASS` | | SMTP password |
+| `SMTP_FROM` | | From address for login code emails |
 
 ## Wikipedia API etiquette
 

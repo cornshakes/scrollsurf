@@ -29,8 +29,7 @@ const table_names = (db: DatabaseSync): string[] => {
 
 const has_object = (db: DatabaseSync, name: string): boolean => {
   const row = db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(name) as
-    | { name: string }
-    | undefined;
+    { name: string } | undefined;
   return row !== undefined;
 };
 
@@ -492,5 +491,124 @@ describe('migrate — real history', () => {
     expect(has_object(db, '_old_pictures')).toBe(false);
     expect(has_object(db, 'article_topics')).toBe(false);
     expect(has_object(db, 'picture_topics')).toBe(false);
+  });
+
+  test('version 12 creates tokens and rebuilds users without cookie_token', () => {
+    migrate(db);
+
+    expect(has_object(db, 'tokens')).toBe(true);
+    expect(has_object(db, 'idx_tokens_user')).toBe(true);
+    expect(has_object(db, 'idx_tokens_last_active')).toBe(true);
+
+    // users keeps id/email/timestamps but loses cookie_token
+    const users_columns = column_names(db, 'users');
+    expect(users_columns).toEqual(
+      expect.arrayContaining(['id', 'email', 'created_at', 'last_active_at'])
+    );
+    expect(users_columns).not.toContain('cookie_token');
+
+    // its email and last-active indexes are rebuilt alongside the table
+    expect(has_object(db, 'idx_users_email')).toBe(true);
+    expect(has_object(db, 'idx_users_last_active')).toBe(true);
+  });
+
+  test('version 12 moves cookie_token into tokens and preserves users and FK refs', () => {
+    // Fully migrate up to v11: users still has cookie_token + email here.
+    const v11_migrations = migrations.filter((entry) => entry.version <= 11);
+    migrate(db, v11_migrations);
+    expect(get_user_version(db)).toBe(11);
+    expect(column_names(db, 'users')).toContain('cookie_token');
+
+    const now = Math.floor(Date.now() / 1000);
+    // A user with a browser token + email, and one with no token (NULL cookie_token).
+    db.prepare(
+      'INSERT INTO users (cookie_token, email, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run('tok-1', 'a@example.com', now, now + 5);
+    const tokened_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    db.prepare(
+      'INSERT INTO users (cookie_token, email, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run(null, null, now, now + 9);
+    const tokenless_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number })
+      .id;
+
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // The cookie_token became a tokens row pointing at the same user, carrying timestamps.
+    const token_row = db
+      .prepare('SELECT token, user_id, created_at, last_active_at FROM tokens WHERE token = ?')
+      .get('tok-1') as {
+      token: string;
+      user_id: number;
+      created_at: number;
+      last_active_at: number;
+    };
+    expect(token_row.user_id).toBe(tokened_id);
+    expect(token_row.created_at).toBe(now);
+    expect(token_row.last_active_at).toBe(now + 5);
+
+    // The NULL-token user produced no tokens row but survives in users.
+    const token_count = db.prepare('SELECT COUNT(*) as count FROM tokens').get() as {
+      count: number;
+    };
+    expect(token_count.count).toBe(1);
+    const surviving = db.prepare('SELECT id, email FROM users WHERE id = ?').get(tokenless_id) as {
+      id: number;
+      email: string | null;
+    };
+    expect(surviving.id).toBe(tokenless_id);
+    expect(surviving.email).toBeNull();
+
+    // FK refs resolve to the rebuilt users table: a token to a real user inserts,
+    // a token to a missing user is rejected (with foreign_keys back ON).
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+        )
+        .run('tok-2', tokened_id, now, now)
+    ).not.toThrow();
+    expect(() =>
+      db
+        .prepare(
+          'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+        )
+        .run('tok-3', 999999, now, now)
+    ).toThrow();
+  });
+
+  test('version 13 adds the login_codes table on top of a fully migrated v12 database', () => {
+    const v12_migrations = migrations.filter((entry) => entry.version <= 12);
+    migrate(db, v12_migrations);
+    expect(get_user_version(db)).toBe(12);
+    expect(has_object(db, 'login_codes')).toBe(false);
+
+    migrate(db);
+
+    expect(get_user_version(db)).toBe(migrations.length);
+    expect(has_object(db, 'login_codes')).toBe(true);
+    expect(column_names(db, 'login_codes')).toEqual(
+      expect.arrayContaining(['email', 'code', 'expires_at', 'created_at'])
+    );
+  });
+
+  test('version 13: login_codes upserts a single-row-per-email code', () => {
+    migrate(db);
+
+    const now = Math.floor(Date.now() / 1000);
+    const upsert = db.prepare(
+      `INSERT INTO login_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = excluded.created_at`
+    );
+    upsert.run('a@example.com', '111111', now + 900, now);
+    upsert.run('a@example.com', '222222', now + 1800, now + 1);
+
+    const rows = db
+      .prepare('SELECT code, expires_at FROM login_codes WHERE email = ?')
+      .all('a@example.com') as { code: string; expires_at: number }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toBe('222222');
+    expect(rows[0].expires_at).toBe(now + 1800);
   });
 });

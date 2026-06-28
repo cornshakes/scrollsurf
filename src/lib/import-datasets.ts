@@ -15,8 +15,7 @@ export const import_articles_dataset = (filename: string) => {
   db.exec(`ATTACH '${ref_path}' AS ref`);
   try {
     const row = db.prepare("SELECT value FROM ref.metadata WHERE key = 'title'").get() as
-      | { value: string }
-      | undefined;
+      { value: string } | undefined;
     if (!row) {
       throw new Error(`${filename}: no 'title' key in metadata`);
     }
@@ -67,8 +66,7 @@ export const import_pictures_dataset = (filename: string) => {
   db.exec(`ATTACH '${ref_path}' AS ref`);
   try {
     const row = db.prepare("SELECT value FROM ref.metadata WHERE key = 'title'").get() as
-      | { value: string }
-      | undefined;
+      { value: string } | undefined;
     if (!row) {
       throw new Error(`${filename}: no 'title' key in metadata`);
     }

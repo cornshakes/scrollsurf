@@ -47,6 +47,16 @@ describe('get_or_create_user', () => {
     expect(id1).toBe(id2);
   });
 
+  test('creates a tokens row for an unknown token', () => {
+    const db = get_db();
+    const token = 'brand-new-token';
+    const uid = get_or_create_user(token);
+
+    const row = db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(token) as
+      { user_id: number } | undefined;
+    expect(row?.user_id).toBe(uid);
+  });
+
   test('updates last_active_at on the second call', () => {
     const db = get_db();
     const token = 'test-token-456';
@@ -71,54 +81,56 @@ describe('get_or_create_user', () => {
 });
 
 describe('cleanup_inactive_users', () => {
-  test('sets cookie_token = NULL for users older than INACTIVITY_DAYS', () => {
+  test('deletes tokens older than INACTIVITY_DAYS', () => {
     const db = get_db();
     const now = Math.floor(Date.now() / 1000);
 
-    // Insert an old user
-    db.prepare('INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)').run(
+    // Insert an old user with an old token
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(
+      now - INACTIVITY_DAYS * 86400 - 1000,
+      now - INACTIVITY_DAYS * 86400 - 1000
+    );
+    const old_user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare(
+      'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run(
       'old-token',
+      old_user_id,
       now - INACTIVITY_DAYS * 86400 - 1000,
       now - INACTIVITY_DAYS * 86400 - 1000
     );
 
-    // Insert a recent user
-    db.prepare('INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)').run(
-      'new-token',
-      now,
-      now
-    );
+    // Insert a recent user with a recent token
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+    const new_user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare(
+      'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run('new-token', new_user_id, now, now);
 
-    const old_row = db.prepare('SELECT id FROM users WHERE cookie_token = ?').get('old-token') as {
-      id: number;
-    };
     cleanup_inactive_users();
-    const after = db.prepare('SELECT cookie_token FROM users WHERE id = ?').get(old_row.id) as {
-      cookie_token: string | null;
-    };
-    expect(after.cookie_token).toBeNull();
 
-    const new_user = db
-      .prepare('SELECT cookie_token FROM users WHERE cookie_token = ?')
-      .get('new-token') as { cookie_token: string | null } | undefined;
-    expect(new_user?.cookie_token).toBe('new-token');
+    const old_tok = db.prepare('SELECT token FROM tokens WHERE token = ?').get('old-token');
+    expect(old_tok).toBeUndefined();
+
+    const new_tok = db.prepare('SELECT token FROM tokens WHERE token = ?').get('new-token') as
+      { token: string } | undefined;
+    expect(new_tok?.token).toBe('new-token');
   });
 
-  test('leaves recent users untouched', () => {
+  test('leaves recent tokens untouched', () => {
     const db = get_db();
     const now = Math.floor(Date.now() / 1000);
 
-    db.prepare('INSERT INTO users (cookie_token, created_at, last_active_at) VALUES (?, ?, ?)').run(
-      'recent-token',
-      now,
-      now
-    );
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+    const uid = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare(
+      'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run('recent-token', uid, now, now);
 
     cleanup_inactive_users();
 
-    const user = db.prepare('SELECT cookie_token FROM users WHERE id = 1').get() as {
-      cookie_token: string;
-    };
-    expect(user.cookie_token).toBe('recent-token');
+    const tok = db.prepare('SELECT token FROM tokens WHERE token = ?').get('recent-token') as
+      { token: string } | undefined;
+    expect(tok?.token).toBe('recent-token');
   });
 });

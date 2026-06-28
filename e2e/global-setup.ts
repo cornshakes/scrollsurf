@@ -103,8 +103,7 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
     e2e_db.exec(`ATTACH '${ref_path}' AS ref`);
     try {
       const row = e2e_db.prepare("SELECT value FROM ref.metadata WHERE key = 'title'").get() as
-        | { value: string }
-        | undefined;
+        { value: string } | undefined;
       if (!row) {
         throw new Error(`${filename}: no 'title' key in metadata`);
       }
@@ -161,8 +160,7 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
     e2e_db.exec(`ATTACH '${ref_path}' AS ref`);
     try {
       const row = e2e_db.prepare("SELECT value FROM ref.metadata WHERE key = 'title'").get() as
-        | { value: string }
-        | undefined;
+        { value: string } | undefined;
       if (!row) {
         throw new Error(`${filename}: no 'title' key in metadata`);
       }

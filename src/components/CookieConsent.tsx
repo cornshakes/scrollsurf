@@ -8,9 +8,11 @@ import Popover from '@mui/material/Popover';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
+import Alert from '@mui/material/Alert';
 import CookieIcon from '@mui/icons-material/Cookie';
 import { grant_consent, revoke_consent } from '@/app/actions';
 import { CONSENT_COOKIE } from '@/lib/cookie';
+import { useAuth } from './AuthContext';
 
 type ConsentState = 'granted' | 'denied' | 'unknown';
 
@@ -41,8 +43,10 @@ const read_consent_cookie = (): ConsentState => {
 export const ConsentProvider = ({ children }: { children: React.ReactNode }) => {
   const [consent, setConsent] = useState<ConsentState>(read_consent_cookie);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [show_revoke_warning, setShowRevokeWarning] = useState(false);
   const icon_ref = useRef<HTMLButtonElement>(null);
   const router = useRouter();
+  const { account, refreshAccount } = useAuth();
 
   const openConsent = useCallback(() => {
     setAnchor(icon_ref.current);
@@ -55,11 +59,21 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
     router.refresh();
   };
 
-  const handle_revoke = async () => {
+  const handle_revoke_click = () => {
+    if (account) {
+      setShowRevokeWarning(true);
+    } else {
+      handle_revoke_confirmed();
+    }
+  };
+
+  const handle_revoke_confirmed = async () => {
     await revoke_consent();
     setConsent('denied');
     setAnchor(null);
-    router.refresh();
+    setShowRevokeWarning(false);
+    await refreshAccount();
+    window.location.reload();
   };
 
   const open = Boolean(anchor);
@@ -101,9 +115,39 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
             </Link>
           </Typography>
           {consent === 'granted' ? (
-            <Button size="small" color="error" variant="outlined" onClick={handle_revoke}>
-              Withdraw consent
-            </Button>
+            <>
+              {show_revoke_warning && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  <Typography variant="body2">
+                    This removes your account — your saved likes can no longer be recovered by
+                    email.
+                  </Typography>
+                </Alert>
+              )}
+              {show_revoke_warning ? (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    onClick={handle_revoke_confirmed}
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setShowRevokeWarning(false)}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              ) : (
+                <Button size="small" color="error" variant="outlined" onClick={handle_revoke_click}>
+                  Withdraw consent
+                </Button>
+              )}
+            </>
           ) : (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button size="small" variant="contained" onClick={handle_grant}>

@@ -322,4 +322,70 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 11,
+    name: 'add_user_email',
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE users ADD COLUMN email TEXT;
+        CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE email IS NOT NULL;
+      `);
+    },
+  },
+  {
+    version: 12,
+    name: 'add_tokens',
+    up: (db) => {
+      // cookie_token has an implicit UNIQUE auto-index; SQLite won't let us
+      // DROP COLUMN on it, so we rebuild users via CREATE+DROP+RENAME.
+      //
+      // We must DROP the old users table rather than renaming it away, because
+      // SQLite 3.26+ auto-updates FK references when a table is renamed: if we
+      // rename users→_old, the tokens table (just created with REFERENCES
+      // users(id)) would be silently rewritten to REFERENCES _old(id), breaking
+      // it once _old is dropped. Dropping users (with foreign_keys=OFF) leaves
+      // the FK text unchanged; renaming _users_new→users makes all existing
+      // REFERENCES users(id) resolve correctly. Runner holds foreign_keys = OFF.
+      db.exec(`
+        CREATE TABLE tokens (
+          token          TEXT PRIMARY KEY,
+          user_id        INTEGER NOT NULL REFERENCES users(id),
+          created_at     INTEGER NOT NULL,
+          last_active_at INTEGER NOT NULL
+        ) STRICT;
+        CREATE INDEX idx_tokens_user ON tokens(user_id);
+        CREATE INDEX idx_tokens_last_active ON tokens(last_active_at);
+        INSERT INTO tokens (token, user_id, created_at, last_active_at)
+          SELECT cookie_token, id, created_at, last_active_at FROM users WHERE cookie_token IS NOT NULL;
+
+        CREATE TABLE _users_new (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          email          TEXT,
+          created_at     INTEGER NOT NULL,
+          last_active_at INTEGER NOT NULL
+        ) STRICT;
+        INSERT INTO _users_new (id, email, created_at, last_active_at)
+          SELECT id, email, created_at, last_active_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE _users_new RENAME TO users;
+
+        CREATE INDEX idx_users_last_active ON users(last_active_at);
+        CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE email IS NOT NULL;
+      `);
+    },
+  },
+  {
+    version: 13,
+    name: 'add_login_codes',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE login_codes (
+          email      TEXT NOT NULL PRIMARY KEY,
+          code       TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        ) STRICT;
+      `);
+    },
+  },
 ];

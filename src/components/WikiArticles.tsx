@@ -19,6 +19,7 @@ import { RandomFeed } from './RandomFeed';
 import { VotedFeed } from './VotedFeed';
 import { CategoryFeed } from './CategoryFeed';
 import { useFeed } from './FeedContext';
+import { useAuth } from './AuthContext';
 
 type View = 'random' | 'liked' | 'disliked' | 'categories';
 
@@ -65,6 +66,7 @@ const WikiArticles = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
   const { scrollTopRef } = useFeed();
+  const { account, openLogin, logout } = useAuth();
   const scroll_nodeRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -147,6 +149,37 @@ const WikiArticles = () => {
               />
             </ListItemButton>
           </ListItem>
+          <Divider />
+          {account === null ? (
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  openLogin();
+                  setDrawerOpen(false);
+                }}
+              >
+                <ListItemText primary="Log in" />
+              </ListItemButton>
+            </ListItem>
+          ) : (
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  logout();
+                  setDrawerOpen(false);
+                }}
+              >
+                <ListItemText
+                  primary={account.email}
+                  secondary="Log out"
+                  slotProps={{
+                    primary: { variant: 'body2' },
+                    secondary: { variant: 'caption' },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
+          )}
         </List>
       </Drawer>
 

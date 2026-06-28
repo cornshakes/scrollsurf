@@ -26,15 +26,16 @@ export const reset_db = () => {
   init_db(true);
 };
 
-export const insert_user = (cookie_token?: string): number => {
+export const insert_user = (token?: string): number => {
   const db = get_db();
   const now = Math.floor(Date.now() / 1000);
-  const token = cookie_token ?? randomUUID();
-  const stmt = db.prepare(
-    'INSERT INTO users (cookie_token, created_at, last_active_at) VALUES ($token, $now, $now)'
-  );
-  stmt.run({ $token: token, $now: now });
-  return (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+  const tok = token ?? randomUUID();
+  db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+  const user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+  db.prepare(
+    'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+  ).run(tok, user_id, now, now);
+  return user_id;
 };
 
 export const insert_article = (
