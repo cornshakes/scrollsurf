@@ -136,6 +136,12 @@ export const submit_login_code = async (
 
 export const logout = async (): Promise<void> => {
   const store = await cookies();
+  // Invalidate the existing browser token server-side so the old cookie value
+  // can never be reused to resolve back to the account.
+  const old_token = store.get(COOKIE_NAME)?.value;
+  if (old_token) {
+    delete_token(old_token);
+  }
   const token = crypto.randomUUID();
   store.set(COOKIE_NAME, token, cookie_options());
   get_or_create_user(token);

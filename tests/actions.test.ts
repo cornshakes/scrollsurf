@@ -1,19 +1,23 @@
 import { setup, insert_user, insert_article, insert_picture, reset_db } from './helpers/test-db';
+import { get_db } from '@/lib/db/connection';
 
 // Mock user and headers before importing the actions module
 jest.mock('@/lib/user', () => ({ current_user_id: jest.fn() }));
 jest.mock('next/headers', () => ({
   cookies: jest.fn().mockResolvedValue({
+    get: jest.fn(),
     set: jest.fn(),
     delete: jest.fn(),
   }),
 }));
 
+import { cookies } from 'next/headers';
 import { current_user_id } from '@/lib/user';
-import { get_voted_feed_items, vote_feed_item, get_next_feed_items } from '@/app/actions';
+import { get_voted_feed_items, vote_feed_item, get_next_feed_items, logout } from '@/app/actions';
 import { save_vote } from '@/lib/db';
 
 const mock_uid = current_user_id as jest.Mock;
+const mock_cookies = cookies as jest.Mock;
 const topic = [{ dataset: 'D', topic: 'T' }];
 
 beforeAll(setup);
@@ -79,4 +83,28 @@ it('get_next_feed_items works for unauthenticated user (null uid)', async () => 
 
   const result = await get_next_feed_items(10);
   expect(result).toHaveLength(1);
+});
+
+it('logout deletes the old token from the db so it can no longer be reused', async () => {
+  const db = get_db();
+  const old_token = 'logout-old-token';
+  insert_user(old_token);
+
+  const set = jest.fn();
+  mock_cookies.mockResolvedValue({
+    get: jest.fn().mockReturnValue({ value: old_token }),
+    set,
+    delete: jest.fn(),
+  });
+
+  await logout();
+
+  // Old token no longer resolves to any account
+  expect(db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(old_token)).toBeUndefined();
+
+  // A fresh anonymous token was issued and exists in the db
+  expect(set).toHaveBeenCalled();
+  const new_token = set.mock.calls[0][1] as string;
+  expect(new_token).not.toBe(old_token);
+  expect(db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(new_token)).toBeDefined();
 });
