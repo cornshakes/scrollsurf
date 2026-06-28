@@ -103,7 +103,7 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
           <DialogTitle>Enter code</DialogTitle>
           <DialogContent>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              We sent a 6-digit code to {email}.
+              Scrollsurf sent a 6-digit code to {email}.
             </Typography>
             <TextField
               autoFocus
