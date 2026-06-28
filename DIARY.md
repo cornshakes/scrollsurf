@@ -291,3 +291,6 @@ I spent so much time on them and they are still very much incomplete, so I can't
 
 I didn't really use the unify-topics script, and the database is just one simple table, so I did the topic->bucket mapping manually in sql - it felt like the easiest thing to do after just accepting everything from the script to prepopulate it.
 That's also how I (you) might adjust it in the future - just change the topic_buckets.db, it is reimported on every startup.
+
+# Email setup
+To use my icloud account for sending emails, I created an "app-specific password".
