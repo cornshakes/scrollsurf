@@ -6,11 +6,17 @@ export const INACTIVITY_DAYS = Number(process.env.USER_INACTIVITY_DAYS ?? 14);
 export const COOKIE_NAME = 'ss_uid';
 export const COOKIE_MAX_AGE = INACTIVITY_DAYS * 24 * 60 * 60;
 
+// `secure` only in production: the identity token is a bearer credential, so it
+// must not travel over plain HTTP in deploys. Left off in dev so cookies still
+// set over http://localhost.
+const SECURE_COOKIES = process.env.NODE_ENV === 'production';
+
 export const cookie_options = () => ({
   httpOnly: true,
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: COOKIE_MAX_AGE, // no `secure` yet
+  maxAge: COOKIE_MAX_AGE,
+  secure: SECURE_COOKIES,
 });
 
 // Consent cookie — records the user's choice. Not httpOnly so the client can
@@ -23,4 +29,5 @@ export const consent_cookie_options = () => ({
   sameSite: 'lax' as const,
   path: '/',
   maxAge: CONSENT_MAX_AGE,
+  secure: SECURE_COOKIES,
 });

@@ -16,11 +16,12 @@ export { get_voted_pictures } from './pictures';
 export { fetch_quotes_by_ids, get_voted_quotes } from './quotes';
 export { get_next_feed } from './feed';
 export { get_category_tree } from './topics';
-export { cleanup_inactive_users, get_or_create_user } from './users';
+export { cleanup_inactive_users, get_or_create_user, delete_token } from './users';
 export { save_vote, record_click, get_voted_items } from './votes';
 export {
   create_login_code,
   verify_login_code,
+  cleanup_expired_login_codes,
   get_user_email,
   unlink_email,
   attach_login,

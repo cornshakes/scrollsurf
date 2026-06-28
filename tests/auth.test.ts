@@ -4,11 +4,12 @@ import { reset_db, setup, insert_user, insert_article } from './helpers/test-db'
 import {
   create_login_code,
   verify_login_code,
+  cleanup_expired_login_codes,
   get_user_email,
   unlink_email,
   attach_login,
 } from '@/lib/db/auth';
-import { get_or_create_user } from '@/lib/db/users';
+import { get_or_create_user, delete_token } from '@/lib/db/users';
 import { migrate } from '@/lib/db/migrate';
 import { migrations } from '@/lib/db/migrations';
 
@@ -126,6 +127,91 @@ describe('create_login_code / verify_login_code', () => {
   });
 });
 
+describe('verify_login_code brute-force protection', () => {
+  const wrong_for = (code: string): string => (code === '000000' ? '000001' : '000000');
+
+  test('code is invalidated after 5 failed attempts', () => {
+    const db = get_db();
+    const email = 'brute@example.com';
+    const code = create_login_code(email);
+    const wrong = wrong_for(code);
+
+    // Four wrong guesses: code survives, attempt counter climbs
+    for (let i = 0; i < 4; i++) {
+      expect(verify_login_code(email, wrong)).toBe(false);
+    }
+    const row = db.prepare('SELECT attempts FROM login_codes WHERE email = ?').get(email) as {
+      attempts: number;
+    };
+    expect(row.attempts).toBe(4);
+
+    // Fifth wrong guess burns the code
+    expect(verify_login_code(email, wrong)).toBe(false);
+    expect(db.prepare('SELECT code FROM login_codes WHERE email = ?').get(email)).toBeUndefined();
+
+    // Even the (now correct) code no longer works
+    expect(verify_login_code(email, code)).toBe(false);
+  });
+
+  test('a correct guess before the limit still succeeds despite earlier failures', () => {
+    const email = 'mix@example.com';
+    const code = create_login_code(email);
+    const wrong = wrong_for(code);
+
+    expect(verify_login_code(email, wrong)).toBe(false);
+    expect(verify_login_code(email, wrong)).toBe(false);
+    expect(verify_login_code(email, code)).toBe(true);
+  });
+
+  test('requesting a fresh code resets the attempt counter', () => {
+    const db = get_db();
+    const email = 'reset-attempts@example.com';
+    const code = create_login_code(email);
+    const wrong = wrong_for(code);
+
+    verify_login_code(email, wrong);
+    verify_login_code(email, wrong);
+    expect(
+      (
+        db.prepare('SELECT attempts FROM login_codes WHERE email = ?').get(email) as {
+          attempts: number;
+        }
+      ).attempts
+    ).toBe(2);
+
+    // Age the row past the 60s resend window, then request a fresh code
+    const old_time = Math.floor(Date.now() / 1000) - 61;
+    db.prepare('UPDATE login_codes SET created_at = ? WHERE email = ?').run(old_time, email);
+    create_login_code(email);
+
+    expect(
+      (
+        db.prepare('SELECT attempts FROM login_codes WHERE email = ?').get(email) as {
+          attempts: number;
+        }
+      ).attempts
+    ).toBe(0);
+  });
+});
+
+describe('cleanup_expired_login_codes', () => {
+  test('deletes expired codes and keeps live ones', () => {
+    const db = get_db();
+    const live = 'live@example.com';
+    const dead = 'dead@example.com';
+    create_login_code(live);
+    create_login_code(dead);
+
+    const past = Math.floor(Date.now() / 1000) - 1;
+    db.prepare('UPDATE login_codes SET expires_at = ? WHERE email = ?').run(past, dead);
+
+    cleanup_expired_login_codes();
+
+    expect(db.prepare('SELECT email FROM login_codes WHERE email = ?').get(dead)).toBeUndefined();
+    expect(db.prepare('SELECT email FROM login_codes WHERE email = ?').get(live)).toBeDefined();
+  });
+});
+
 describe('migration v12: tokens table', () => {
   test('tokens table exists and users.cookie_token is gone after full migration', () => {
     const db = get_db();
@@ -218,6 +304,34 @@ describe('get_or_create_user against tokens', () => {
     expect(second_ts).toBeGreaterThan(first_ts);
 
     jest.useRealTimers();
+  });
+});
+
+describe('delete_token', () => {
+  test('removes the token row but keeps the user and its history', () => {
+    const db = get_db();
+    const now = Math.floor(Date.now() / 1000);
+    const token = 'logout-token';
+    const uid = insert_user(token);
+    const item = insert_article({ url: 'https://logout-article' });
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(uid, item, 1, now);
+
+    delete_token(token);
+
+    // Token no longer resolves to the account
+    expect(db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(token)).toBeUndefined();
+    // User row and vote history survive
+    expect(db.prepare('SELECT id FROM users WHERE id = ?').get(uid)).toBeDefined();
+    const votes = db
+      .prepare('SELECT COUNT(*) as count FROM user_items WHERE user_id = ?')
+      .get(uid) as { count: number };
+    expect(votes.count).toBe(1);
+  });
+
+  test('deleting an unknown token is a no-op', () => {
+    expect(() => delete_token('does-not-exist')).not.toThrow();
   });
 });
 

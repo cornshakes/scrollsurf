@@ -1,4 +1,5 @@
 import { get_db } from './connection';
+import { cleanup_expired_login_codes } from './auth';
 import { INACTIVITY_DAYS } from '../cookie';
 
 let last_cleanup = 0;
@@ -6,6 +7,12 @@ let last_cleanup = 0;
 export const cleanup_inactive_users = () => {
   const cutoff = Math.floor(Date.now() / 1000) - INACTIVITY_DAYS * 86400;
   get_db().prepare('DELETE FROM tokens WHERE last_active_at < ?').run(cutoff);
+};
+
+// Invalidate a single browser token server-side (logout / revoke). The user row
+// and its history survive; only this token stops resolving to the account.
+export const delete_token = (token: string): void => {
+  get_db().prepare('DELETE FROM tokens WHERE token = ?').run(token);
 };
 
 export const get_or_create_user = (token: string): number => {
@@ -16,6 +23,7 @@ export const get_or_create_user = (token: string): number => {
   if (now - last_cleanup > 3600) {
     last_cleanup = now;
     cleanup_inactive_users();
+    cleanup_expired_login_codes();
   }
 
   const existing = db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(token) as

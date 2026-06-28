@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import {
   get_next_feed,
   save_vote,
@@ -8,6 +8,7 @@ import {
   get_voted_items,
   get_category_tree,
   get_or_create_user,
+  delete_token,
   create_login_code,
   verify_login_code,
   get_user_email,
@@ -20,6 +21,11 @@ import {
 import { current_user_id } from '@/lib/user';
 import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
 import { send_login_code } from '@/lib/email';
+import { rate_limit } from '@/lib/rate-limit';
+
+// Rejects whitespace (so no CR/LF header injection into the SMTP `to:` field)
+// and requires a dotted domain — `a@b` and `x@y\nbcc:` don't pass.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const get_next_feed_items = async (count: number): Promise<FeedItem[]> => {
   const uid = await current_user_id();
@@ -78,6 +84,10 @@ export const revoke_consent = async () => {
   if (uid !== null && get_user_email(uid) !== null) {
     unlink_email(uid);
   }
+  const token = store.get(COOKIE_NAME)?.value;
+  if (token) {
+    delete_token(token);
+  }
   store.set(CONSENT_COOKIE, 'denied', consent_cookie_options());
   store.delete(COOKIE_NAME);
 };
@@ -85,8 +95,15 @@ export const revoke_consent = async () => {
 export const request_login_code = async (
   email: string
 ): Promise<{ ok: boolean; error?: string }> => {
-  if (!email.includes('@')) {
+  if (!EMAIL_RE.test(email.trim())) {
     return { ok: false, error: 'Invalid email' };
+  }
+  // Throttle outbound mail so the endpoint can't be used as a spam relay /
+  // mail bomb: per-client (best-effort via forwarded IP) and a global ceiling.
+  // this throttles logins globally to 50 per ten minutes
+  const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!rate_limit(`login_ip:${ip}`, 5, 600) || !rate_limit('login_global', 50, 600)) {
+    return { ok: false, error: 'Please wait before requesting another code' };
   }
   try {
     const code = create_login_code(email);

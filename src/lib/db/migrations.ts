@@ -388,4 +388,11 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 14,
+    name: 'add_login_code_attempts',
+    up: (db) => {
+      db.exec('ALTER TABLE login_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];

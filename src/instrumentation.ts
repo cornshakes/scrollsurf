@@ -13,7 +13,7 @@ export const register = async () => {
     import_categories,
     import_topic_buckets,
   } = await import('./lib/import-datasets');
-  const { cleanup_inactive_users } = await import('./lib/db');
+  const { cleanup_inactive_users, cleanup_expired_login_codes } = await import('./lib/db');
 
   const datasets = ['vital_50000.db', 'unusual.db', 'good_articles.db', 'featured_articles.db'];
 
@@ -59,7 +59,8 @@ export const register = async () => {
 
   try {
     cleanup_inactive_users();
+    cleanup_expired_login_codes();
   } catch (err) {
-    console.warn('[instrumentation] cleanup_inactive_users failed:', err);
+    console.warn('[instrumentation] cleanup failed:', err);
   }
 };

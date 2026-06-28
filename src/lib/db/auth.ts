@@ -20,6 +20,10 @@
 import { webcrypto } from 'node:crypto';
 import { get_db } from './connection';
 
+// A login code is single-use; cap wrong guesses before it's invalidated so a
+// 6-digit code (10^6 space, 15-min life) can't be brute-forced.
+const MAX_LOGIN_CODE_ATTEMPTS = 5;
+
 const normalize_email = (email: string): string => email.trim().toLowerCase();
 
 const generate_code = (): string => {
@@ -45,7 +49,7 @@ export const create_login_code = (email: string): string => {
   db.prepare(
     `INSERT INTO login_codes (email, code, expires_at, created_at)
      VALUES (?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = excluded.created_at`
+     ON CONFLICT(email) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = excluded.created_at, attempts = 0`
   ).run(normalized, code, expires_at, now);
   return code;
 };
@@ -56,15 +60,38 @@ export const verify_login_code = (email: string, code: string): boolean => {
   const now = Math.floor(Date.now() / 1000);
 
   const row = db
-    .prepare('SELECT code, expires_at FROM login_codes WHERE email = ?')
-    .get(normalized) as { code: string; expires_at: number } | undefined;
+    .prepare('SELECT code, expires_at, attempts FROM login_codes WHERE email = ?')
+    .get(normalized) as { code: string; expires_at: number; attempts: number } | undefined;
 
-  if (!row || row.code !== code || row.expires_at <= now) {
+  // Expired, already exhausted, or absent → invalidate and reject.
+  if (!row || row.expires_at <= now || row.attempts >= MAX_LOGIN_CODE_ATTEMPTS) {
+    if (row) {
+      db.prepare('DELETE FROM login_codes WHERE email = ?').run(normalized);
+    }
+    return false;
+  }
+
+  if (row.code !== code) {
+    const attempts = row.attempts + 1;
+    if (attempts >= MAX_LOGIN_CODE_ATTEMPTS) {
+      // Out of guesses — burn the code so a fresh one must be requested.
+      db.prepare('DELETE FROM login_codes WHERE email = ?').run(normalized);
+    } else {
+      db.prepare('UPDATE login_codes SET attempts = ? WHERE email = ?').run(attempts, normalized);
+    }
     return false;
   }
 
   db.prepare('DELETE FROM login_codes WHERE email = ?').run(normalized);
   return true;
+};
+
+// Expired/abandoned codes are otherwise only cleared on success or on the next
+// upsert for the same email, so a flood of distinct addresses would grow the
+// table without bound. Swept periodically alongside inactive-user cleanup.
+export const cleanup_expired_login_codes = (): void => {
+  const now = Math.floor(Date.now() / 1000);
+  get_db().prepare('DELETE FROM login_codes WHERE expires_at < ?').run(now);
 };
 
 export const get_user_email = (user_id: number): string | null => {

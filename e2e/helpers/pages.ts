@@ -140,6 +140,7 @@ export const scroll_to_load_all = async (page: Page) => {
 export const switch_view = async (page: Page, view: View) => {
   await open_menu(page);
   const item = page.getByTestId(`view-${view}`);
+  await item.waitFor({ state: 'visible' });
   await item.click();
   await item.waitFor({ state: 'hidden' });
 };

@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
 
 export const send_login_code = async (email: string, code: string): Promise<void> => {
+  // guard against header injection: SMTP `to:` field can't contain CRLF
+  if (/[\x00-\x1f]/.test(email)) {
+    throw new Error('invalid_email');
+  }
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
   if (!SMTP_HOST) {
     console.warn(`[login code] ${email}: ${code}`);
