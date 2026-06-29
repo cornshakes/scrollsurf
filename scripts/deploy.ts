@@ -77,7 +77,8 @@ if (command === 'up') {
     }
   }
 } else if (command === 'logs') {
-  run(`${dc} logs -f`);
+  // the grep removes the tailscale watchdog every 15s
+  run(`${dc} logs -f | grep -vF "localapi: [POST] /localapi/v0/debug"`);
 } else if (command === 'down') {
   run(`${dc} down`);
 } else if (command === 'funnel') {
