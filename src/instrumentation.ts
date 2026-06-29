@@ -1,66 +1,31 @@
+import type { Instrumentation } from 'next';
+
 export const register = async () => {
-  if (process.env.NEXT_RUNTIME === 'edge') {
+  // All Node-only startup work lives in instrumentation-node.ts, dynamically imported
+  // so the Edge bundle never pulls in process.on / node:sqlite / pino.
+  if (process.env.NEXT_RUNTIME !== 'nodejs') {
     return;
   }
+  const { start } = await import('./instrumentation-node');
+  await start();
+};
 
-  const { init_db } = await import('./lib/db');
-  init_db();
-
-  const {
-    import_articles_dataset,
-    import_pictures_dataset,
-    import_quotes_dataset,
-    import_categories,
-    import_topic_buckets,
-  } = await import('./lib/import-datasets');
-  const { cleanup_inactive_users, cleanup_expired_login_codes } = await import('./lib/db');
-
-  const datasets = ['vital_50000.db', 'unusual.db', 'good_articles.db', 'featured_articles.db'];
-
-  for (const filename of datasets) {
-    try {
-      import_articles_dataset(filename);
-    } catch (err) {
-      console.warn(`[instrumentation] failed to import ${filename}:`, err);
-    }
+// Next.js calls this for every server-side error that escapes RSC render, route
+// handlers, or server actions — the safety net beyond per-action try/catch. The logger
+// is imported lazily so this hook stays Edge-safe.
+export const onRequestError: Instrumentation.onRequestError = async (err, request, context) => {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') {
+    return;
   }
-
-  for (const filename of ['featured_pictures.db', 'commons_featured_pictures.db']) {
-    try {
-      import_pictures_dataset(filename);
-    } catch (err) {
-      console.warn(`[instrumentation] failed to import ${filename}:`, err);
-    }
-  }
-
-  try {
-    import_quotes_dataset('quotes.db');
-  } catch (err) {
-    console.warn('[instrumentation] failed to import quotes.db:', err);
-  }
-
-  try {
-    import_categories('categories.db');
-  } catch (err) {
-    console.warn('[instrumentation] failed to import categories.db:', err);
-  }
-
-  try {
-    import_categories('commons_category_hierarchy.db');
-  } catch (err) {
-    console.warn('[instrumentation] failed to import commons_category_hierarchy.db:', err);
-  }
-
-  try {
-    import_topic_buckets('topic_buckets.db');
-  } catch (err) {
-    console.warn('[instrumentation] failed to import topic_buckets.db:', err);
-  }
-
-  try {
-    cleanup_inactive_users();
-    cleanup_expired_login_codes();
-  } catch (err) {
-    console.warn('[instrumentation] cleanup failed:', err);
-  }
+  const { log } = await import('./lib/log');
+  log.error(
+    {
+      err,
+      path: request.path,
+      method: request.method,
+      routeType: context.routeType,
+      routePath: context.routePath,
+    },
+    'request error'
+  );
 };

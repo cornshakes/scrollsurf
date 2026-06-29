@@ -12,3 +12,9 @@ services:
     volumes:
       - ${DATA_DIR_HOST}:/data
     restart: unless-stopped
+    # App logs JSON to stdout; Docker rotates the capture file (~50MB ceiling).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

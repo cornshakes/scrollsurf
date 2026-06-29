@@ -32,6 +32,13 @@ services:
     depends_on:
       - ts-scrollsurf
     restart: unless-stopped
+    # App logs JSON to stdout; Docker rotates the capture file (~50MB ceiling) so the
+    # Pi's disk can't fill up. `pi:logs:prod` reads across the rotated set transparently.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   ts-state:

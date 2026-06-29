@@ -177,6 +177,7 @@ Component map (all client components except the root layout/page): `App` (theme 
 | `WIKIPEDIA_USER_AGENT` | (required for downloads) | App name, version, contact email for the MediaWiki client |
 | `USER_INACTIVITY_DAYS=N` | `14` | Days of inactivity before a user is cleaned up / cookie expires |
 | `COMMIT_ID` | `dev` | Surfaced to the client as `NEXT_PUBLIC_COMMIT_ID` |
+| `LOG_LEVEL` | `debug` dev / `info` prod | pino level (`src/lib/log.ts`) — JSON to stdout in prod, pretty in dev; Docker rotates the stream |
 | `SMTP_HOST` | (unset = log to console) | SMTP server host; unset in dev logs login codes to the server console instead of sending email |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | | SMTP username |

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { log } from './log';
 
 export const send_login_code = async (email: string, code: string): Promise<void> => {
   // guard against header injection: SMTP `to:` field can't contain CRLF
@@ -7,7 +8,7 @@ export const send_login_code = async (email: string, code: string): Promise<void
   }
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
   if (!SMTP_HOST) {
-    console.warn(`[login code] ${email}: ${code}`);
+    log.warn(`[login code] ${email}: ${code}`);
     return;
   }
   const transporter = nodemailer.createTransport({

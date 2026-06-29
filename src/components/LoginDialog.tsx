@@ -40,7 +40,7 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
   const handle_send_code = async () => {
     setError(null);
     setLoading(true);
-    const result = await request_login_code(email);
+    const result = await request_login_code({ email });
     setLoading(false);
     if (!result.ok) {
       setError(result.error ?? 'Something went wrong');
@@ -52,7 +52,7 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
   const handle_verify = async () => {
     setError(null);
     setLoading(true);
-    const result = await submit_login_code(email, code);
+    const result = await submit_login_code({ email, code });
     setLoading(false);
     if (!result.ok) {
       setError(result.error ?? 'Something went wrong');
