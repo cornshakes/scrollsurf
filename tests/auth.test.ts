@@ -559,23 +559,43 @@ describe('attach_login', () => {
     expect(user.email).toBe(email.toLowerCase());
   });
 
-  test('first login fresh: new users + tokens row created, new_token returned', () => {
+  test('first login promote: likes and clicks are carried over', () => {
     const db = get_db();
-    const email = 'fresh@example.com';
-    const new_token = 'fresh-login-token';
+    const now = Math.floor(Date.now() / 1000);
+    const email = 'promote-history@example.com';
+    const current_token = 'anon-promote-history-token';
+    const anon_uid = get_or_create_user(current_token);
 
-    const result = attach_login(email, null, new_token);
+    const liked_item = insert_article({ url: 'https://promote-liked' });
+    const disliked_item = insert_article({ url: 'https://promote-disliked' });
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(anon_uid, liked_item, 1, now);
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(anon_uid, disliked_item, -1, now);
+    db.prepare(
+      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(anon_uid, 'article', liked_item, 'title', now);
 
-    expect(result).toBe(new_token);
+    const result = attach_login(email, current_token, 'unused-new-token');
 
-    const user = db
-      .prepare('SELECT id, email FROM users WHERE email = ?')
-      .get(email.toLowerCase()) as { id: number; email: string } | undefined;
-    expect(user?.email).toBe(email.toLowerCase());
+    expect(result).toBe(current_token);
 
-    const tok = db.prepare('SELECT user_id FROM tokens WHERE token = ?').get(new_token) as
-      { user_id: number } | undefined;
-    expect(tok?.user_id).toBe(user?.id);
+    // Same user row was promoted, so its votes ride along untouched
+    const votes = db
+      .prepare('SELECT item_id, like FROM user_items WHERE user_id = ? ORDER BY item_id')
+      .all(anon_uid) as { item_id: number; like: number }[];
+    expect(votes).toEqual([
+      { item_id: liked_item, like: 1 },
+      { item_id: disliked_item, like: -1 },
+    ]);
+
+    // Clicks stay attached to the promoted user
+    const clicks = db
+      .prepare('SELECT item_id, link_type FROM user_clicks WHERE user_id = ?')
+      .all(anon_uid) as { item_id: number; link_type: string }[];
+    expect(clicks).toEqual([{ item_id: liked_item, link_type: 'title' }]);
   });
 });
 
