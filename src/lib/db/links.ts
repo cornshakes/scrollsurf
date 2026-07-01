@@ -12,25 +12,23 @@ export const fetch_links_for_items = (ids: number[]): Map<number, Link[]> => {
     .prepare(
       `SELECT it.item_id, it.dataset, it.topic, d.source_url
        FROM item_topics it
-       LEFT JOIN datasets d ON d.name = it.dataset
+       JOIN datasets d ON d.name = it.dataset
        WHERE it.item_id IN (${placeholders})`
     )
     .all(...ids) as unknown as {
     item_id: number;
     dataset: string;
     topic: string;
-    source_url: string | null;
+    source_url: string;
   }[];
 
-  // item_topics has PRIMARY KEY (item_id, dataset, topic), so each row is
-  // already unique per item — no dedup needed.
   for (const row of rows) {
     const list = by_id.get(row.item_id) ?? [];
     list.push({ type: 'dataset', title: row.dataset, url: row.source_url });
     list.push({
       type: 'topic',
       title: row.topic,
-      url: row.source_url ? `${row.source_url}/${row.topic.replace(/ /g, '_')}` : null,
+      url: `${row.source_url}/${row.topic.replace(/ /g, '_')}`,
     });
     by_id.set(row.item_id, list);
   }

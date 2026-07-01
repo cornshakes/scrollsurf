@@ -75,7 +75,10 @@ export const insert_article = (
     $image_url: merged.image_url,
   });
   for (const t of merged.topics ?? []) {
-    db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run(t.dataset);
+    db.prepare('INSERT OR IGNORE INTO datasets (name, source_url) VALUES (?, ?)').run(
+      t.dataset,
+      `https://en.wikipedia.org/wiki/${t.dataset}`
+    );
     db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
       item_id,
       t.dataset,
@@ -121,7 +124,10 @@ export const insert_picture = (data: {
     $credit: data.credit ?? null,
   });
   for (const t of data.topics ?? []) {
-    db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run(t.dataset);
+    db.prepare('INSERT OR IGNORE INTO datasets (name, source_url) VALUES (?, ?)').run(
+      t.dataset,
+      `https://en.wikipedia.org/wiki/${t.dataset}`
+    );
     db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
       item_id,
       t.dataset,
@@ -158,7 +164,10 @@ export const insert_quote = (data: {
     $author_image: data.author_image ?? null,
     $quote_year: data.quote_year ?? null,
   });
-  db.prepare('INSERT OR IGNORE INTO datasets (name) VALUES (?)').run('Quotes');
+  db.prepare('INSERT OR IGNORE INTO datasets (name, source_url) VALUES (?, ?)').run(
+    'Quotes',
+    'https://en.wikiquote.org/wiki/Wikiquote:QOTD_by_month'
+  );
   db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
     item_id,
     'Quotes',

@@ -424,4 +424,34 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 16,
+    name: 'datasets_source_url_not_null',
+    up: (db) => {
+      // source_url was nullable since the baseline (migration 1). Every dataset
+      // now supplies one at import, so tighten the column to NOT NULL. There is
+      // no agreed backfill value — a NULL means a dataset was imported without a
+      // source page, which is a bug we want to surface, so throw rather than
+      // silently patch. SQLite can't ALTER a column to NOT NULL; nothing
+      // references datasets, so a plain CREATE+INSERT+DROP+RENAME suffices.
+      const missing = db.prepare('SELECT name FROM datasets WHERE source_url IS NULL').all() as {
+        name: string;
+      }[];
+      if (missing.length > 0) {
+        const names = missing.map((row) => row.name).join(', ');
+        throw new Error(`datasets missing source_url: ${names}`);
+      }
+
+      db.exec(`
+        CREATE TABLE _datasets_new (
+          name       TEXT NOT NULL PRIMARY KEY,
+          source_url TEXT NOT NULL
+        );
+        INSERT INTO _datasets_new (name, source_url)
+          SELECT name, source_url FROM datasets;
+        DROP TABLE datasets;
+        ALTER TABLE _datasets_new RENAME TO datasets;
+      `);
+    },
+  },
 ];

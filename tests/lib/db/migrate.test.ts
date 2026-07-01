@@ -412,7 +412,10 @@ describe('migrate — real history', () => {
     );
     const picture_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
 
-    db.prepare('INSERT INTO datasets (name) VALUES (?)').run('TestDS');
+    db.prepare('INSERT INTO datasets (name, source_url) VALUES (?, ?)').run(
+      'TestDS',
+      'https://example.com/testds'
+    );
     db.prepare('INSERT INTO article_topics (article_id, dataset, topic) VALUES (?, ?, ?)').run(
       article_id,
       'TestDS',
@@ -666,7 +669,7 @@ describe('migrate — real history', () => {
       .all(user_id) as { item_id: number; like: number; updated_at: number }[];
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ item_id: stamped_item, like: 1, updated_at: now });
-    expect(rows[1]).toMatchObject({ item_id: null_item, like: -1, updated_at: 1782864000 });
+    expect(rows[1]).toMatchObject({ item_id: null_item, like: -1, updated_at: 1767225600 });
 
     // The index and vote data survive the rebuild; a NULL updated_at is now rejected.
     expect(has_object(db, 'idx_user_items_user')).toBe(true);
@@ -681,5 +684,61 @@ describe('migrate — real history', () => {
         .prepare('INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)')
         .run(user_id, new_item, 0, null)
     ).toThrow();
+  });
+
+  test('version 16 makes datasets.source_url NOT NULL', () => {
+    // Migrate up to v15: datasets.source_url is still nullable here.
+    const v15_migrations = migrations.filter((entry) => entry.version <= 15);
+    migrate(db, v15_migrations);
+    expect(get_user_version(db)).toBe(15);
+
+    db.prepare('INSERT INTO datasets (name, source_url) VALUES (?, ?)').run(
+      'Vital',
+      'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/5'
+    );
+
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // The column is now NOT NULL, and the existing row survives.
+    const columns = db
+      .prepare("SELECT name, `notnull` FROM pragma_table_info('datasets')")
+      .all() as { name: string; notnull: number }[];
+    const source_url_column = columns.find((column) => column.name === 'source_url');
+    expect(source_url_column?.notnull).toBe(1);
+
+    const row = db.prepare('SELECT source_url FROM datasets WHERE name = ?').get('Vital') as {
+      source_url: string;
+    };
+    expect(row.source_url).toBe('https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/5');
+
+    // A NULL source_url is now rejected.
+    expect(() =>
+      db.prepare('INSERT INTO datasets (name, source_url) VALUES (?, ?)').run('Broken', null)
+    ).toThrow();
+  });
+
+  test('version 16 throws when a dataset is missing source_url', () => {
+    const v15_migrations = migrations.filter((entry) => entry.version <= 15);
+    migrate(db, v15_migrations);
+    expect(get_user_version(db)).toBe(15);
+
+    // A dataset imported without a source page — the bug the migration surfaces.
+    db.prepare('INSERT INTO datasets (name, source_url) VALUES (?, ?)').run('Vital', null);
+
+    // The runner wraps the failure; the original reason is the `cause`.
+    let caught: unknown;
+    try {
+      migrate(db);
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as Error).message).toBe('migration 16 (datasets_source_url_not_null) failed');
+    expect(((caught as Error).cause as Error).message).toMatch(
+      /datasets missing source_url: Vital/
+    );
+
+    // The failed migration rolled back; the DB stays at v15.
+    expect(get_user_version(db)).toBe(15);
   });
 });

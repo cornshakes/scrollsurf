@@ -74,7 +74,7 @@ it('topic names containing :: round-trip intact (regression: value is never pars
   expect(topic_link).toEqual({
     type: 'topic',
     title: 'Science::Physics',
-    url: null,
+    url: 'https://en.wikipedia.org/wiki/Vital/Science::Physics',
   });
 });
 
