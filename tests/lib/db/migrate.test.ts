@@ -611,4 +611,75 @@ describe('migrate — real history', () => {
     expect(rows[0].code).toBe('222222');
     expect(rows[0].expires_at).toBe(now + 1800);
   });
+
+  test('version 15 makes user_items.updated_at NOT NULL and backfills NULLs', () => {
+    // Migrate up to v14: user_items.updated_at is still nullable here.
+    const v14_migrations = migrations.filter((entry) => entry.version <= 14);
+    migrate(db, v14_migrations);
+    expect(get_user_version(db)).toBe(14);
+
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+    const user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'article',
+      'A',
+      'https://a.one'
+    );
+    const stamped_item = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number })
+      .id;
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'article',
+      'B',
+      'https://b.one'
+    );
+    const null_item = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    // One row with a real timestamp, one legacy row with a NULL updated_at.
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(user_id, stamped_item, 1, now);
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(user_id, null_item, -1, null);
+
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // The column is now NOT NULL.
+    const columns = db
+      .prepare("SELECT name, `notnull` FROM pragma_table_info('user_items')")
+      .all() as {
+      name: string;
+      notnull: number;
+    }[];
+    const updated_at_column = columns.find((column) => column.name === 'updated_at');
+    expect(updated_at_column?.notnull).toBe(1);
+
+    // The pre-existing timestamp is untouched; the NULL row is backfilled to
+    // 2026-01-01T00:00:00Z (1767225600).
+    const rows = db
+      .prepare(
+        'SELECT item_id, like, updated_at FROM user_items WHERE user_id = ? ORDER BY item_id'
+      )
+      .all(user_id) as { item_id: number; like: number; updated_at: number }[];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ item_id: stamped_item, like: 1, updated_at: now });
+    expect(rows[1]).toMatchObject({ item_id: null_item, like: -1, updated_at: 1782864000 });
+
+    // The index and vote data survive the rebuild; a NULL updated_at is now rejected.
+    expect(has_object(db, 'idx_user_items_user')).toBe(true);
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'article',
+      'C',
+      'https://c.one'
+    );
+    const new_item = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    expect(() =>
+      db
+        .prepare('INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)')
+        .run(user_id, new_item, 0, null)
+    ).toThrow();
+  });
 });

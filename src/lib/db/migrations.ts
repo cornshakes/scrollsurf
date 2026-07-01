@@ -395,4 +395,33 @@ export const migrations: readonly migration[] = [
       db.exec('ALTER TABLE login_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 15,
+    name: 'user_items_updated_at_not_null',
+    up: (db) => {
+      // updated_at was added nullable in migration 8. SQLite can't ALTER a column
+      // to NOT NULL, so backfill any NULLs then rebuild user_items with the
+      // constraint. 1767225600 = 2026-01-01T00:00:00Z (Unix epoch seconds), the
+      // agreed value for rows that predate the column. Runner holds
+      // foreign_keys = OFF; nothing references user_items, so a plain
+      // CREATE+INSERT+DROP+RENAME suffices.
+      db.exec(`
+        UPDATE user_items SET updated_at = 1767225600 WHERE updated_at IS NULL;
+
+        CREATE TABLE _user_items_new (
+          user_id    INTEGER NOT NULL REFERENCES users(id),
+          item_id    INTEGER NOT NULL REFERENCES items(id),
+          like       INTEGER NOT NULL DEFAULT 0,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, item_id)
+        ) STRICT;
+        INSERT INTO _user_items_new (user_id, item_id, like, updated_at)
+          SELECT user_id, item_id, like, updated_at FROM user_items;
+        DROP TABLE user_items;
+        ALTER TABLE _user_items_new RENAME TO user_items;
+
+        CREATE INDEX idx_user_items_user ON user_items(user_id);
+      `);
+    },
+  },
 ];

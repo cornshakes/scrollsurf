@@ -43,9 +43,6 @@ const affinity_strength_expr =
     .join(' ') +
   ` ELSE 0 END`;
 
-const MARK_SEEN_SQL =
-  'INSERT OR IGNORE INTO user_items (user_id, item_id) VALUES ($user_id, $item_id)';
-
 const FEED_GET_NEXT_SQL = `
   ${feed_affinity_ctes()}
   SELECT p.type, p.id
@@ -69,10 +66,17 @@ export const get_next_feed = (count: number, user_id: number | null): FeedItem[]
   }) as unknown as { type: 'article' | 'picture' | 'quote'; id: number }[];
 
   if (user_id !== null) {
-    const mark_seen = db.prepare(MARK_SEEN_SQL);
+    const mark_seen = db.prepare(
+      `INSERT OR IGNORE INTO user_items (user_id, item_id, updated_at)
+      VALUES ($user_id, $item_id, $updated_at)`
+    );
     db.exec('BEGIN');
     for (const r of rows) {
-      mark_seen.run({ $user_id: user_id, $item_id: r.id });
+      mark_seen.run({
+        $user_id: user_id,
+        $item_id: r.id,
+        $updated_at: Math.floor(Date.now() / 1000),
+      });
     }
     db.exec('COMMIT');
   }
