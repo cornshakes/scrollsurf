@@ -14,8 +14,18 @@ const get_next_quotes = (count: number, uid: number | null): Quote[] =>
 
 it('batch fetch: each quote gets the fixed Quotes/Quote of the Day topic with no cross-leak', () => {
   const uid = insert_user();
-  const id1 = insert_quote({ text: 'Q1', url: 'https://q1', author: 'A1' });
-  const id2 = insert_quote({ text: 'Q2', url: 'https://q2', author: 'A2' });
+  const id1 = insert_quote({
+    text: 'Q1',
+    url: 'https://q1',
+    author: 'A1',
+    author_url: 'https://en.wikiquote.org/wiki/A1',
+  });
+  const id2 = insert_quote({
+    text: 'Q2',
+    url: 'https://q2',
+    author: 'A2',
+    author_url: 'https://en.wikiquote.org/wiki/A2',
+  });
   const result = get_next_quotes(10, uid);
   expect(result).toHaveLength(2);
   const q1 = result.find((quote) => quote.id === id1) as Quote;
@@ -56,6 +66,7 @@ it('fetch_quotes_by_ids reflects like value for a voted quote', () => {
     text: 'Quote text',
     url: 'https://en.wikiquote.org/wiki/test2',
     author: 'Author',
+    author_url: `https://en.wikiquote.org/wiki/Author`,
   });
   save_vote(uid, id, 1);
   const result = fetch_quotes_by_ids([id], uid);

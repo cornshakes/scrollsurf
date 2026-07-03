@@ -53,8 +53,6 @@ export const QuoteCard = ({
     record_link_click(quote.id, url);
   };
 
-  const author_url = quote.author_url;
-
   return (
     <Box
       data-testid="feed-card"
@@ -127,21 +125,17 @@ export const QuoteCard = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {author_url ? (
-                  <Link
-                    href={author_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    underline="hover"
-                    color="inherit"
-                    data-testid="link-by"
-                    onClick={() => track(author_url)}
-                  >
-                    {quote.author}
-                  </Link>
-                ) : (
-                  quote.author
-                )}
+                <Link
+                  href={quote.author_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  underline="hover"
+                  color="inherit"
+                  data-testid="link-by"
+                  onClick={() => track(quote.author_url)}
+                >
+                  {quote.author}
+                </Link>
               </Typography>
 
               {quote.quote_year && (

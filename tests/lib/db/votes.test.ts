@@ -104,7 +104,12 @@ describe('get_voted_items', () => {
     const uid = insert_user();
     const article_id = insert_article({ url: 'https://a' });
     const picture_id = insert_picture({ image_url: 'https://img', url: 'https://p' });
-    const quote_id = insert_quote({ text: 'Q', url: 'https://q', author: 'A' });
+    const quote_id = insert_quote({
+      text: 'Q',
+      url: 'https://q',
+      author: 'A',
+      author_url: 'https://en.wikiquote.org/wiki/A',
+    });
     save_vote(uid, article_id, 1);
     save_vote(uid, picture_id, 1);
     save_vote(uid, quote_id, 1);
@@ -168,7 +173,12 @@ describe('record_click', () => {
 
   it('is append-only: repeated clicks add new rows', () => {
     const uid = insert_user();
-    const id = insert_quote({ text: 'Q', url: 'https://q', author: 'A' });
+    const id = insert_quote({
+      text: 'Q',
+      url: 'https://q',
+      author: 'A',
+      author_url: 'https://en.wikiquote.org/wiki/A',
+    });
     record_click(id, 'https://q', uid);
     record_click(id, 'https://en.wikiquote.org/wiki/A', uid);
     record_click(id, 'https://q', uid);

@@ -95,7 +95,12 @@ describe('get_next_feed(): Without User', () => {
   it('items are fully hydrated with plain object literals', () => {
     insert_article({ url: 'https://hydr.article', topics: topic, categories: ['Science'] });
     insert_picture({ image_url: 'https://hydr.img', url: 'https://hydr.picture', topics: topic });
-    insert_quote({ text: 'Q', url: 'https://q', author: 'Me' });
+    insert_quote({
+      text: 'Q',
+      url: 'https://q',
+      author: 'Me',
+      author_url: 'https://en.wikiquote.org/wiki/Me',
+    });
     const feed = get_next_feed(5, null);
     expect(feed.length).toBe(3);
     for (const item of feed) {
@@ -188,6 +193,7 @@ describe('get_next_feed(): With User', () => {
         text: `signal quote ${index}`,
         url: `https://signal.quote/${index}`,
         author: 'A',
+        author_url: 'https://en.wikiquote.org/wiki/A',
       })
     );
     for (const quote_id of quote_ids) {

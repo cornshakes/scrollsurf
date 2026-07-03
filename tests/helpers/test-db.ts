@@ -138,10 +138,10 @@ export const insert_picture = (data: {
 };
 
 export const insert_quote = (data: {
-  text?: string;
-  url?: string;
+  text: string;
+  url: string;
   author: string;
-  author_url?: string | null;
+  author_url: string;
   author_image?: string | null;
   quote_year?: string | null;
 }): number => {
@@ -160,7 +160,7 @@ export const insert_quote = (data: {
   ).run({
     $item_id: item_id,
     $author: data.author,
-    $author_url: data.author_url ?? null,
+    $author_url: data.author_url,
     $author_image: data.author_image ?? null,
     $quote_year: data.quote_year ?? null,
   });

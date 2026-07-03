@@ -29,7 +29,7 @@ export interface Picture extends BaseFeedItem {
 export interface Quote extends BaseFeedItem {
   type: 'quote';
   author: string;
-  author_url: string | null;
+  author_url: string;
   author_image: string | null;
   quote_year: string | null;
 }

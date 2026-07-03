@@ -880,4 +880,82 @@ describe('migrate — real history', () => {
     expect(get_user_version(db)).toBe(16);
     expect(column_names(db, 'user_clicks')).toContain('link_type');
   });
+
+  test('version 18 makes quotes.author_url NOT NULL', () => {
+    // Migrate up to v17: quotes.author_url is still nullable here.
+    const v17_migrations = migrations.filter((entry) => entry.version <= 17);
+    migrate(db, v17_migrations);
+    expect(get_user_version(db)).toBe(17);
+
+    const author_url = 'https://en.wikiquote.org/wiki/Leonardo_da_Vinci';
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'quote',
+      'A quote',
+      'https://en.wikiquote.org/wiki/QOTD'
+    );
+    const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare(
+      'INSERT INTO quotes (item_id, author, author_url, quote_year) VALUES (?, ?, ?, ?)'
+    ).run(item_id, 'Leonardo da Vinci', author_url, '1503');
+
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // The column is now NOT NULL, and the existing row survives intact.
+    const columns = db.prepare("SELECT name, `notnull` FROM pragma_table_info('quotes')").all() as {
+      name: string;
+      notnull: number;
+    }[];
+    expect(columns.find((column) => column.name === 'author_url')?.notnull).toBe(1);
+
+    const row = db
+      .prepare('SELECT author, author_url, quote_year FROM quotes WHERE item_id = ?')
+      .get(item_id) as { author: string; author_url: string; quote_year: string };
+    expect(row).toEqual({
+      author: 'Leonardo da Vinci',
+      author_url,
+      quote_year: '1503',
+    });
+
+    // A NULL author_url is now rejected.
+    expect(() =>
+      db
+        .prepare('INSERT INTO quotes (item_id, author, author_url) VALUES (?, ?, ?)')
+        .run(item_id + 1, 'Anon', null)
+    ).toThrow();
+  });
+
+  test('version 18 throws when a quote is missing author_url', () => {
+    const v17_migrations = migrations.filter((entry) => entry.version <= 17);
+    migrate(db, v17_migrations);
+    expect(get_user_version(db)).toBe(17);
+
+    // A quote imported without an author page — the bug the migration surfaces.
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'quote',
+      'A quote',
+      'https://en.wikiquote.org/wiki/QOTD'
+    );
+    const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare('INSERT INTO quotes (item_id, author, author_url) VALUES (?, ?, ?)').run(
+      item_id,
+      'Anon',
+      null
+    );
+
+    // The runner wraps the failure; the original reason is the `cause`.
+    let caught: unknown;
+    try {
+      migrate(db);
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as Error).message).toBe('migration 18 (quotes_author_url_not_null) failed');
+    expect(((caught as Error).cause as Error).message).toMatch(
+      new RegExp(`quotes missing author_url: ${item_id}`)
+    );
+
+    // The failed migration rolled back; the DB stays at v17.
+    expect(get_user_version(db)).toBe(17);
+  });
 });

@@ -536,4 +536,38 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 18,
+    name: 'quotes_author_url_not_null',
+    up: (db) => {
+      // author_url was nullable since it was added (migration 6). Every quote now
+      // carries its author's Wikiquote page, so tighten the column to NOT NULL.
+      // As with migration 16, there is no agreed backfill value — a NULL means a
+      // quote was imported without an author page, which is a bug we want to
+      // surface, so throw rather than silently patch. SQLite can't ALTER a column
+      // to NOT NULL; nothing references quotes, so a plain CREATE+INSERT+DROP+
+      // RENAME suffices. Runner holds foreign_keys = OFF.
+      const missing = db.prepare('SELECT item_id FROM quotes WHERE author_url IS NULL').all() as {
+        item_id: number;
+      }[];
+      if (missing.length > 0) {
+        const ids = missing.map((row) => row.item_id).join(', ');
+        throw new Error(`quotes missing author_url: ${ids}`);
+      }
+
+      db.exec(`
+        CREATE TABLE _quotes_new (
+          item_id      INTEGER PRIMARY KEY REFERENCES items(id),
+          author       TEXT NOT NULL,
+          author_url   TEXT NOT NULL,
+          author_image TEXT,
+          quote_year   TEXT
+        );
+        INSERT INTO _quotes_new (item_id, author, author_url, author_image, quote_year)
+          SELECT item_id, author, author_url, author_image, quote_year FROM quotes;
+        DROP TABLE quotes;
+        ALTER TABLE _quotes_new RENAME TO quotes;
+      `);
+    },
+  },
 ];
