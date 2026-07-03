@@ -9,7 +9,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { alpha } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material/styles';
-import type { Link, LinkType } from '@/lib/db/types';
+import type { Link } from '@/lib/db/types';
 
 const ROW_PADDING = 6; // breathing room so chip glows aren't clipped by overflow
 // top padding + 2 × 24px chips + 1 × 4px gap, clipped just below row 2 so the
@@ -40,7 +40,7 @@ export const CardTags = ({
   sx,
 }: {
   links: Link[];
-  onTrack: (link_type: LinkType, link_label: string) => void;
+  onTrack: (url: string) => void;
   // Rendered as the first element of the chip row (e.g. the vote control).
   leading?: ReactNode;
   sx?: SxProps;
@@ -90,13 +90,13 @@ export const CardTags = ({
               size="small"
               color={'primary'}
               variant="outlined"
-              component={link.url ? 'a' : 'div'}
-              href={link.url ?? undefined}
-              target={link.url ? '_blank' : undefined}
-              rel={link.url ? 'noopener noreferrer' : undefined}
-              clickable={!!link.url}
+              component="a"
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              clickable
               data-testid={`link-${link.type}`}
-              onClick={link.url ? () => onTrack(link.type as LinkType, link.title) : undefined}
+              onClick={() => onTrack(link.url)}
               sx={is_accent ? accent_sx : { maxWidth: '100%' }}
             />
           );

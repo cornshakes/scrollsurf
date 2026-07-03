@@ -4,10 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 
 interface ClickRow {
-  item_type: 'article' | 'picture' | 'quote';
   item_id: number;
-  link_type: 'title' | 'by' | 'category' | 'topic' | 'dataset';
-  link_label: string | null;
+  url: string;
 }
 
 /**
@@ -20,7 +18,7 @@ const read_clicks_from_db = (token: string): ClickRow[] => {
   try {
     return db
       .prepare(
-        `SELECT c.item_type, c.item_id, c.link_type, c.link_label
+        `SELECT c.item_id, c.url
          FROM user_clicks c
          JOIN tokens t ON t.user_id = c.user_id
          WHERE t.token = ?
@@ -33,29 +31,18 @@ const read_clicks_from_db = (token: string): ClickRow[] => {
 };
 
 /**
- * Poll the seeded DB until a logged click row matches the expected fields. When
- * `link_label` is given it's compared with whitespace normalized (rendered link
- * text collapses whitespace; the stored label keeps the source's raw spacing).
+ * Poll the seeded DB until a click logging the given followed `url` appears.
+ * The click log now stores the exact href that was followed, so a test asserts
+ * that the url it read off the rendered link is what got recorded.
  */
-export const expect_click_in_db = async (
-  token: string,
-  expected: {
-    item_type: ClickRow['item_type'];
-    link_type: ClickRow['link_type'];
-    link_label?: string;
-  },
-  message: string
-) => {
-  const match = (c: ClickRow) =>
-    c.item_type === expected.item_type &&
-    c.link_type === expected.link_type &&
-    (expected.link_label === undefined || norm(c.link_label) === norm(expected.link_label));
+export const expect_click_in_db = async (token: string, expected_url: string, message: string) => {
   await expect
-    .poll(() => read_clicks_from_db(token).some(match), { message, timeout: 10_000 })
+    .poll(() => read_clicks_from_db(token).some((click) => click.url === expected_url), {
+      message,
+      timeout: 10_000,
+    })
     .toBe(true);
 };
-
-const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim();
 
 /**
  * Read a login code from the seeded test DB for the given email.

@@ -1,4 +1,4 @@
-import { type LinkType, type FeedItem } from './types';
+import { type FeedItem } from './types';
 import { get_db } from './connection';
 import { hydrate_feed_items } from './feed';
 
@@ -36,24 +36,16 @@ export const save_vote = (user_id: number, id: number, value: -1 | 0 | 1) => {
     });
 };
 
-export const record_click = (
-  item_type: 'article' | 'picture' | 'quote',
-  item_id: number,
-  link_type: LinkType,
-  link_label: string | null,
-  user_id: number
-) => {
+export const record_click = (item_id: number, url: string, user_id: number) => {
   get_db()
     .prepare(
-      `INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at)
-      VALUES ($user_id, $item_type, $item_id, $link_type, $link_label, $created_at)`
+      `INSERT INTO user_clicks (user_id, item_id, url, created_at)
+      VALUES ($user_id, $item_id, $url, $created_at)`
     )
     .run({
       $user_id: user_id,
-      $item_type: item_type,
       $item_id: item_id,
-      $link_type: link_type,
-      $link_label: link_label,
+      $url: url,
       $created_at: Math.floor(Date.now() / 1000),
     });
 };

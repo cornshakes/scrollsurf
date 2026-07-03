@@ -454,4 +454,86 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 17,
+    name: 'user_clicks_store_url',
+    up: (db) => {
+      // Reshape the engagement log. Drop item_type/link_type/link_label — only
+      // (user_id, item_id) ever fed affinity; the descriptive columns were logged
+      // but never read by a query — and record the followed `url` instead. `url`
+      // is NOT NULL going forward: every followed link has an href.
+      //
+      // The old rows never stored the target url, but they kept enough to
+      // reconstruct it the same way the cards build their hrefs (see links.ts /
+      // the *Card components), keyed on link_type + link_label:
+      //   title    -> the item's own url
+      //   dataset  -> datasets.source_url for the dataset named by the label
+      //   topic    -> that dataset's source_url + '/' + label (spaces -> '_')
+      //   category -> https://en.wikipedia.org/wiki/Category:<label>
+      //   by       -> a quote's author_url, else a picture's commons User: page
+      // SQL can't run encodeURIComponent, so labels are only space-escaped
+      // ('%20'); labels with rarer characters resolve to a slightly different url
+      // than the app would mint today.
+      //
+      // There is no fallback: if a click can't be resolved (its item is gone, an
+      // unknown link_type, a dataset/topic/label that no longer exists), that's a
+      // bug we want to surface — like migration 16 — so throw rather than patch it
+      // with a placeholder url. SQLite can't DROP + add-NOT-NULL in place, so
+      // rebuild via CREATE+INSERT+DROP+RENAME. Nothing references user_clicks;
+      // runner holds foreign_keys = OFF.
+      const url_expr = `
+        CASE c.link_type
+          WHEN 'dataset' THEN
+            (SELECT d.source_url FROM datasets d WHERE d.name = c.link_label)
+          WHEN 'topic' THEN
+            (SELECT d.source_url || '/' || replace(c.link_label, ' ', '_')
+               FROM item_topics it
+               JOIN datasets d ON d.name = it.dataset
+              WHERE it.item_id = c.item_id AND it.topic = c.link_label
+              LIMIT 1)
+          WHEN 'category' THEN
+            'https://en.wikipedia.org/wiki/Category:' || replace(c.link_label, ' ', '%20')
+          WHEN 'by' THEN
+            COALESCE(
+              (SELECT q.author_url FROM quotes q WHERE q.item_id = c.item_id),
+              'https://commons.wikimedia.org/wiki/User:' || replace(c.link_label, ' ', '%20')
+            )
+          ELSE i.url
+        END`;
+
+      // LEFT JOIN so a click whose item is gone (i.id IS NULL) counts as
+      // unresolvable too, not just one whose reconstruction yields NULL.
+      const unresolved = db
+        .prepare(
+          `SELECT c.id, c.link_type, c.link_label
+             FROM user_clicks c
+             LEFT JOIN items i ON i.id = c.item_id
+            WHERE i.id IS NULL OR (${url_expr}) IS NULL`
+        )
+        .all() as { id: number; link_type: string; link_label: string | null }[];
+      if (unresolved.length > 0) {
+        const detail = unresolved
+          .map((row) => `#${row.id} (${row.link_type}: ${row.link_label ?? 'NULL'})`)
+          .join(', ');
+        throw new Error(`user_clicks rows with unresolvable url: ${detail}`);
+      }
+
+      db.exec(`
+        CREATE TABLE _user_clicks_new (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id    INTEGER NOT NULL REFERENCES users(id),
+          item_id    INTEGER NOT NULL,
+          url        TEXT    NOT NULL,
+          created_at INTEGER NOT NULL
+        ) STRICT;
+        INSERT INTO _user_clicks_new (id, user_id, item_id, url, created_at)
+          SELECT c.id, c.user_id, c.item_id, ${url_expr}, c.created_at
+          FROM user_clicks c JOIN items i ON i.id = c.item_id;
+        DROP TABLE user_clicks;
+        ALTER TABLE _user_clicks_new RENAME TO user_clicks;
+
+        CREATE INDEX idx_user_clicks_user ON user_clicks(user_id);
+      `);
+    },
+  },
 ];

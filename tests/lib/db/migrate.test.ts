@@ -240,6 +240,14 @@ describe('migrate — real history', () => {
     expect(column_names(db, 'quotes')).toContain('author_image');
     // ...and the quote's year (migration 9)
     expect(column_names(db, 'quotes')).toContain('quote_year');
+
+    // user_clicks logs the followed url (migration 17); the old descriptive
+    // columns are gone
+    expect(column_names(db, 'user_clicks')).toContain('url');
+    expect(column_names(db, 'user_clicks')).toContain('item_id');
+    expect(column_names(db, 'user_clicks')).not.toContain('item_type');
+    expect(column_names(db, 'user_clicks')).not.toContain('link_type');
+    expect(column_names(db, 'user_clicks')).not.toContain('link_label');
   });
 
   test('converges a legacy prod DB (user_version 0, no caption, has user_settings)', () => {
@@ -740,5 +748,136 @@ describe('migrate — real history', () => {
 
     // The failed migration rolled back; the DB stays at v15.
     expect(get_user_version(db)).toBe(15);
+  });
+
+  test('version 17 changes user_clicks to store the followed url', () => {
+    // Migrate up to v16: user_clicks still has item_type/link_type/link_label.
+    const v16_migrations = migrations.filter((entry) => entry.version <= 16);
+    migrate(db, v16_migrations);
+    expect(get_user_version(db)).toBe(16);
+    expect(column_names(db, 'user_clicks')).toContain('link_type');
+
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+    const user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    const source_url = 'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/5';
+    const author_url = 'https://en.wikiquote.org/wiki/Leonardo_da_Vinci';
+
+    // An article (with a dataset + topic), a quote (with an author page), and a
+    // picture — enough to exercise every link_type's url reconstruction.
+    const insert_item = (type: string, title: string, url: string): number => {
+      db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(type, title, url);
+      return (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    };
+    const article_id = insert_item(
+      'article',
+      'Black hole',
+      'https://en.wikipedia.org/wiki/Black_hole'
+    );
+    const quote_id = insert_item('quote', 'A quote', 'https://en.wikiquote.org/wiki/QOTD');
+    const picture_id = insert_item(
+      'picture',
+      'A picture',
+      'https://commons.wikimedia.org/wiki/File:X'
+    );
+
+    db.prepare('INSERT INTO datasets (name, source_url) VALUES (?, ?)').run('Vital', source_url);
+    db.prepare('INSERT INTO item_topics (item_id, dataset, topic) VALUES (?, ?, ?)').run(
+      article_id,
+      'Vital',
+      'People'
+    );
+    db.prepare('INSERT INTO quotes (item_id, author, author_url) VALUES (?, ?, ?)').run(
+      quote_id,
+      'Leonardo da Vinci',
+      author_url
+    );
+
+    // One legacy click of each kind, in the old shape.
+    const insert_click = (item: number, link_type: string, link_label: string | null) => {
+      db.prepare(
+        'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(user_id, 'article', item, link_type, link_label, now);
+    };
+    insert_click(article_id, 'title', 'Black hole');
+    insert_click(article_id, 'dataset', 'Vital');
+    insert_click(article_id, 'topic', 'People');
+    insert_click(article_id, 'category', 'Physics');
+    insert_click(quote_id, 'by', 'Leonardo da Vinci');
+    insert_click(picture_id, 'by', 'Jane Doe');
+
+    migrate(db);
+    expect(get_user_version(db)).toBe(migrations.length);
+
+    // New shape: url present, descriptive columns gone, index rebuilt.
+    const columns = column_names(db, 'user_clicks');
+    expect(columns).toContain('url');
+    expect(columns).not.toContain('item_type');
+    expect(columns).not.toContain('link_type');
+    expect(columns).not.toContain('link_label');
+    expect(has_object(db, 'idx_user_clicks_user')).toBe(true);
+
+    // url is NOT NULL now.
+    const info = db
+      .prepare("SELECT name, `notnull` FROM pragma_table_info('user_clicks')")
+      .all() as { name: string; notnull: number }[];
+    expect(info.find((column) => column.name === 'url')?.notnull).toBe(1);
+
+    // Each click is backfilled with the url its link kind actually pointed at —
+    // reconstructed from link_type + link_label, not the item's own url.
+    const rows = db
+      .prepare('SELECT item_id, url FROM user_clicks WHERE user_id = ? ORDER BY id')
+      .all(user_id) as { item_id: number; url: string }[];
+    expect(rows).toEqual([
+      { item_id: article_id, url: 'https://en.wikipedia.org/wiki/Black_hole' }, // title -> item url
+      { item_id: article_id, url: source_url }, // dataset -> dataset source_url
+      { item_id: article_id, url: `${source_url}/People` }, // topic -> source_url + '/' + topic
+      { item_id: article_id, url: 'https://en.wikipedia.org/wiki/Category:Physics' }, // category
+      { item_id: quote_id, url: author_url }, // by (quote) -> author_url
+      { item_id: picture_id, url: 'https://commons.wikimedia.org/wiki/User:Jane%20Doe' }, // by (picture)
+    ]);
+
+    // New inserts reject a NULL url.
+    expect(() =>
+      db
+        .prepare('INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)')
+        .run(user_id, article_id, null, now)
+    ).toThrow();
+  });
+
+  test('version 17 throws when a click url cannot be reconstructed', () => {
+    const v16_migrations = migrations.filter((entry) => entry.version <= 16);
+    migrate(db, v16_migrations);
+    expect(get_user_version(db)).toBe(16);
+
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare('INSERT INTO users (created_at, last_active_at) VALUES (?, ?)').run(now, now);
+    const user_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+    db.prepare('INSERT INTO items (type, title, url) VALUES (?, ?, ?)').run(
+      'article',
+      'Black hole',
+      'https://en.wikipedia.org/wiki/Black_hole'
+    );
+    const item_id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id;
+
+    // A dataset click whose label matches no dataset — the reconstruction the
+    // migration can no longer resolve, so it must throw rather than fabricate.
+    db.prepare(
+      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, link_label, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(user_id, 'article', item_id, 'dataset', 'Gone', now);
+
+    let caught: unknown;
+    try {
+      migrate(db);
+    } catch (error) {
+      caught = error;
+    }
+    expect((caught as Error).message).toBe('migration 17 (user_clicks_store_url) failed');
+    expect(((caught as Error).cause as Error).message).toMatch(/unresolvable url.*dataset: Gone/);
+
+    // The failed migration rolled back; the DB stays at v16 with the old shape.
+    expect(get_user_version(db)).toBe(16);
+    expect(column_names(db, 'user_clicks')).toContain('link_type');
   });
 });

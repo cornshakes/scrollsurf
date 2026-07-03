@@ -1,6 +1,6 @@
 export interface Link {
   title: string;
-  url: string | null;
+  url: string;
   type: 'dataset' | 'topic' | 'category';
 }
 
@@ -52,7 +52,3 @@ export interface CategoryGroup {
 }
 
 export type CategoryTree = CategoryGroup[];
-
-// Followed-link kinds we log for engagement. The image link on a picture card
-// is recorded as 'title' (it is that card's primary link to the source page).
-export type LinkType = 'title' | 'by' | 'category' | 'topic' | 'dataset';

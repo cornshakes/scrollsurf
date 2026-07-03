@@ -6,7 +6,7 @@ import Paper from '@mui/material/Paper';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import { vote_feed_item, record_link_click } from '@/app/actions';
-import type { Picture, LinkType } from '@/lib/db';
+import type { Picture } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { CardTags } from './CardTags';
 import { VoteButtons } from './VoteButtons';
@@ -34,12 +34,16 @@ export const PictureCard = ({
 
   // Only log followed links once consent is granted — skip the request entirely
   // otherwise (the server would no-op anyway).
-  const track = (link_type: LinkType, link_label: string) => {
+  const track = (url: string) => {
     if (consent !== 'granted') {
       return;
     }
-    record_link_click('picture', picture.id, link_type, link_label);
+    record_link_click(picture.id, url);
   };
+
+  const credit_url = picture.credit
+    ? `https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`
+    : null;
 
   return (
     <Box
@@ -62,7 +66,7 @@ export const PictureCard = ({
             target="_blank"
             rel="noopener noreferrer"
             data-testid="link-title"
-            onClick={() => track('title', picture.title)}
+            onClick={() => track(picture.url)}
           >
             <Box
               component="img"
@@ -89,7 +93,7 @@ export const PictureCard = ({
             rel="noopener noreferrer"
             underline="none"
             color="inherit"
-            onClick={() => track('title', picture.title)}
+            onClick={() => track(picture.url)}
           >
             <Typography
               variant="body2"
@@ -110,13 +114,13 @@ export const PictureCard = ({
           <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 1 }}>
             by{' '}
             <Link
-              href={`https://commons.wikimedia.org/wiki/User:${encodeURIComponent(picture.credit)}`}
+              href={credit_url ?? undefined}
               target="_blank"
               rel="noopener noreferrer"
               underline="hover"
               color="inherit"
               data-testid="link-by"
-              onClick={() => track('by', picture.credit ?? '')}
+              onClick={credit_url ? () => track(credit_url) : undefined}
             >
               {picture.credit}
             </Link>

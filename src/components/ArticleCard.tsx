@@ -5,7 +5,7 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import { vote_feed_item, record_link_click } from '@/app/actions';
-import type { Article, LinkType } from '@/lib/db';
+import type { Article } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { CardTags } from './CardTags';
 import { VoteButtons } from './VoteButtons';
@@ -33,11 +33,11 @@ export const ArticleCard = ({
 
   // Only log followed links once consent is granted — skip the request entirely
   // otherwise (the server would no-op anyway).
-  const track = (link_type: LinkType, link_label: string) => {
+  const track = (url: string) => {
     if (consent !== 'granted') {
       return;
     }
-    record_link_click('article', article.id, link_type, link_label);
+    record_link_click(article.id, url);
   };
 
   return (
@@ -70,7 +70,7 @@ export const ArticleCard = ({
               rel="noopener noreferrer"
               underline="hover"
               data-testid="link-title"
-              onClick={() => track('title', article.title)}
+              onClick={() => track(article.url)}
             >
               {article.title}
             </Link>

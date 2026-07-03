@@ -7,7 +7,6 @@ import {
   screenshot_card,
   find_card_by_text,
   article_cards,
-  picture_cards,
 } from '../helpers/pages';
 import { expect_click_in_db } from '../helpers/db';
 
@@ -47,6 +46,24 @@ test.describe('Like/Dislike', () => {
     await switch_view(page, 'disliked');
     await screenshot_card(page, 'Chae Yong-sin', 'picture-disliked');
   });
+
+  test('liking a quote surfaces it in the Liked view', async ({ page }) => {
+    await load_page(page, true);
+    await scroll_to_load_all(page);
+    const card = find_card_by_text(page, 'Movement will cease');
+    await vote_card(card, 'up');
+    await switch_view(page, 'liked');
+    await screenshot_card(page, 'Movement will cease', 'quote-liked');
+  });
+
+  test('disliking a quote surfaces it in the Disliked view', async ({ page }) => {
+    await load_page(page, true);
+    await scroll_to_load_all(page);
+    const card = find_card_by_text(page, 'faith in light is admirable');
+    await vote_card(card, 'down');
+    await switch_view(page, 'disliked');
+    await screenshot_card(page, 'faith in light is admirable', 'quote-disliked');
+  });
 });
 
 test.describe('Click Tracking', () => {
@@ -76,48 +93,45 @@ test.describe('Click Tracking', () => {
   test('every article link click is recorded', async ({ page }) => {
     const token = (await load_page(page, true)) || '';
 
-    // title — the article heading link; label is the title text.
-    const title_link = article_cards(page).first().getByTestId('link-title');
-    const title = (await title_link.innerText()).trim();
-    await title_link.click();
-    await expect_click_in_db(
-      token,
-      { item_type: 'article', link_type: 'title', link_label: title },
-      `title click for "${title}"`
-    );
-
-    // dataset / topic / category chips — label is the chip text.
-    for (const link_type of ['dataset', 'topic', 'category'] as const) {
-      const chip = page
+    // title — the heading link; dataset / topic / category — the chips.
+    for (const link_type of ['title', 'dataset', 'topic', 'category'] as const) {
+      const link = page
         .locator(`[data-card-type="article"] [data-testid="link-${link_type}"]`)
         .first();
-      const label = (await chip.innerText()).trim();
-      await chip.click();
-      await expect_click_in_db(
-        token,
-        { item_type: 'article', link_type, link_label: label },
-        `${link_type} click for "${label}"`
-      );
+      const href = await link.getAttribute('href');
+      expect(href, `${link_type} link should render an href`).toBeTruthy();
+      await link.click();
+      await expect_click_in_db(token, href ?? '', `${link_type} click records ${href}`);
     }
   });
 
   test('every picture link click is recorded', async ({ page }) => {
     const token = (await load_page(page, true)) || '';
-    await picture_cards(page).first().getByTestId('link-title').click();
-    await expect_click_in_db(
-      token,
-      { item_type: 'picture', link_type: 'title' },
-      'picture image (title) click'
-    );
 
-    // by — the credit link; label is the credit name.
-    const by_link = page.locator('[data-card-type="picture"] [data-testid="link-by"]').first();
-    const credit = (await by_link.innerText()).trim();
-    await by_link.click();
-    await expect_click_in_db(
-      token,
-      { item_type: 'picture', link_type: 'by', link_label: credit },
-      `picture credit (by) click for "${credit}"`
-    );
+    // title — the image/caption link to the source page; by — the credit link.
+    for (const link_type of ['title', 'dataset', 'topic', 'by'] as const) {
+      const link = page
+        .locator(`[data-card-type="picture"] [data-testid="link-${link_type}"]`)
+        .first();
+      const href = await link.getAttribute('href');
+      expect(href, `${link_type} link should render an href`).toBeTruthy();
+      await link.click();
+      await expect_click_in_db(token, href ?? '', `picture ${link_type} click records ${href}`);
+    }
+  });
+
+  test('every quote link click is recorded', async ({ page }) => {
+    const token = (await load_page(page, true)) || '';
+
+    // title — the quote-text link to the QOTD page; by — the author link.
+    for (const link_type of ['title', 'by'] as const) {
+      const link = page
+        .locator(`[data-card-type="quote"] [data-testid="link-${link_type}"]`)
+        .first();
+      const href = await link.getAttribute('href');
+      expect(href, `${link_type} link should render an href`).toBeTruthy();
+      await link.click();
+      await expect_click_in_db(token, href ?? '', `quote ${link_type} click records ${href}`);
+    }
   });
 });

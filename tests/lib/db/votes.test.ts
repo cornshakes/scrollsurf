@@ -139,40 +139,39 @@ describe('get_voted_items', () => {
 });
 
 describe('record_click', () => {
-  it('appends a click row with all fields', () => {
+  it('appends a click row with the item, followed url, and a timestamp', () => {
     const uid = insert_user();
     const id = insert_article({ url: 'https://a' });
-    record_click('article', id, 'title', 'Some title', uid);
+    record_click(id, 'https://en.wikipedia.org/wiki/Black_hole', uid);
     const row = get_db().prepare('SELECT * FROM user_clicks WHERE user_id = ?').get(uid) as Record<
       string,
       unknown
     >;
     expect(row).toMatchObject({
       user_id: uid,
-      item_type: 'article',
       item_id: id,
-      link_type: 'title',
-      link_label: 'Some title',
+      url: 'https://en.wikipedia.org/wiki/Black_hole',
     });
     expect(typeof row.created_at).toBe('number');
   });
 
-  it('allows a null link_label', () => {
+  it('records the exact followed url, not the item url', () => {
     const uid = insert_user();
     const id = insert_picture({ image_url: 'https://img', url: 'https://p' });
-    record_click('picture', id, 'title', null, uid);
-    const row = get_db()
-      .prepare('SELECT link_label FROM user_clicks WHERE user_id = ?')
-      .get(uid) as { link_label: string | null };
-    expect(row.link_label).toBeNull();
+    // e.g. a topic/category chip click — a different url from the item itself.
+    record_click(id, 'https://en.wikipedia.org/wiki/Category:Physics', uid);
+    const row = get_db().prepare('SELECT url FROM user_clicks WHERE user_id = ?').get(uid) as {
+      url: string;
+    };
+    expect(row.url).toBe('https://en.wikipedia.org/wiki/Category:Physics');
   });
 
   it('is append-only: repeated clicks add new rows', () => {
     const uid = insert_user();
     const id = insert_quote({ text: 'Q', url: 'https://q', author: 'A' });
-    record_click('quote', id, 'topic', 'Quote of the Day', uid);
-    record_click('quote', id, 'by', 'A', uid);
-    record_click('quote', id, 'topic', 'Quote of the Day', uid);
+    record_click(id, 'https://q', uid);
+    record_click(id, 'https://en.wikiquote.org/wiki/A', uid);
+    record_click(id, 'https://q', uid);
     const count = get_db()
       .prepare('SELECT COUNT(*) AS count FROM user_clicks WHERE user_id = ?')
       .get(uid) as { count: number };

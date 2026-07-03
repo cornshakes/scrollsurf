@@ -16,7 +16,6 @@ import {
   attach_login,
   type FeedItem,
   type CategoryTree,
-  type LinkType,
 } from '@/lib/db';
 import { current_user_id } from '@/lib/user';
 import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
@@ -44,21 +43,13 @@ export const vote_feed_item = with_log('vote_feed_item', async (id: number, valu
   save_vote(uid, id, value);
 });
 
-export const record_link_click = with_log(
-  'record_link_click',
-  async (
-    type: 'article' | 'picture' | 'quote',
-    id: number,
-    link_type: LinkType,
-    link_label?: string
-  ) => {
-    const uid = await current_user_id();
-    if (uid === null) {
-      return;
-    }
-    record_click(type, id, link_type, link_label ?? null, uid);
+export const record_link_click = with_log('record_link_click', async (id: number, url: string) => {
+  const uid = await current_user_id();
+  if (uid === null) {
+    return;
   }
-);
+  record_click(id, url, uid);
+});
 
 export const get_voted_feed_items = with_log(
   'get_voted_feed_items',

@@ -7,7 +7,6 @@ export type {
   TopicStat,
   CategoryGroup,
   CategoryTree,
-  LinkType,
 } from './types';
 
 export { db, init_db } from './connection';

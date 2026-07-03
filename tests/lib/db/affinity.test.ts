@@ -81,7 +81,7 @@ it('clicks alone boost a topic (statistical)', () => {
   }
   for (let i = 0; i < 20; i++) {
     save_vote(uid, x_ids[i], 0);
-    record_click('article', x_ids[i], 'title', null, uid);
+    record_click(x_ids[i], `https://a.t3.x/${i}`, uid);
   }
   const result = get_articles(100, uid);
   const x_count = result.filter((a) =>

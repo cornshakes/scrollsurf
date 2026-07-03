@@ -6,7 +6,7 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import { vote_feed_item, record_link_click } from '@/app/actions';
-import type { Quote, LinkType } from '@/lib/db';
+import type { Quote } from '@/lib/db';
 import { useConsent } from './CookieConsent';
 import { VoteButtons } from './VoteButtons';
 
@@ -46,12 +46,14 @@ export const QuoteCard = ({
     onVoteChange?.('quote', quote.id, next);
   };
 
-  const track = (link_type: LinkType, link_label: string) => {
+  const track = (url: string) => {
     if (consent !== 'granted') {
       return;
     }
-    record_link_click('quote', quote.id, link_type, link_label);
+    record_link_click(quote.id, url);
   };
+
+  const author_url = quote.author_url;
 
   return (
     <Box
@@ -125,15 +127,15 @@ export const QuoteCard = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {quote.author_url ? (
+                {author_url ? (
                   <Link
-                    href={quote.author_url}
+                    href={author_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     underline="hover"
                     color="inherit"
                     data-testid="link-by"
-                    onClick={() => track('by', quote.author)}
+                    onClick={() => track(author_url)}
                   >
                     {quote.author}
                   </Link>
@@ -156,7 +158,7 @@ export const QuoteCard = ({
               underline="none"
               color="inherit"
               data-testid="link-title"
-              onClick={() => track('title', quote.title)}
+              onClick={() => track(quote.url)}
             >
               <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
                 {quote.title}

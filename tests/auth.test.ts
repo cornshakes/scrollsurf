@@ -394,8 +394,8 @@ describe('attach_login', () => {
 
     // Anon click
     db.prepare(
-      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(anon_uid, 'article', anon_only_item, 'title', now);
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(anon_uid, anon_only_item, 'https://anon-only', now);
 
     const result = attach_login(email, anon_primary_token, 'unused-new-token');
 
@@ -449,28 +449,28 @@ describe('attach_login', () => {
 
     // Account already has two clicks of its own
     db.prepare(
-      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(account_uid, 'article', account_item, 'title', now);
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(account_uid, account_item, 'https://clicks-account', now);
     db.prepare(
-      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(account_uid, 'article', account_item, 'category', now);
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(account_uid, account_item, 'https://clicks-account-category', now);
 
     // Anon has one click
     db.prepare(
-      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(anon_uid, 'article', anon_item, 'title', now);
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(anon_uid, anon_item, 'https://clicks-anon', now);
 
     attach_login(email, anon_token, 'unused-new-token');
 
     // Account keeps all three clicks: its own two are preserved, anon's one is added
     const account_clicks = db
-      .prepare('SELECT item_id, link_type FROM user_clicks WHERE user_id = ? ORDER BY id')
-      .all(account_uid) as { item_id: number; link_type: string }[];
+      .prepare('SELECT item_id, url FROM user_clicks WHERE user_id = ? ORDER BY id')
+      .all(account_uid) as { item_id: number; url: string }[];
     expect(account_clicks).toHaveLength(3);
     expect(account_clicks).toEqual([
-      { item_id: account_item, link_type: 'title' },
-      { item_id: account_item, link_type: 'category' },
-      { item_id: anon_item, link_type: 'title' },
+      { item_id: account_item, url: 'https://clicks-account' },
+      { item_id: account_item, url: 'https://clicks-account-category' },
+      { item_id: anon_item, url: 'https://clicks-anon' },
     ]);
 
     // No clicks remain on the (now deleted) anon user
@@ -575,8 +575,8 @@ describe('attach_login', () => {
       'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
     ).run(anon_uid, disliked_item, -1, now);
     db.prepare(
-      'INSERT INTO user_clicks (user_id, item_type, item_id, link_type, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(anon_uid, 'article', liked_item, 'title', now);
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(anon_uid, liked_item, 'https://promote-liked', now);
 
     const result = attach_login(email, current_token, 'unused-new-token');
 
@@ -593,9 +593,9 @@ describe('attach_login', () => {
 
     // Clicks stay attached to the promoted user
     const clicks = db
-      .prepare('SELECT item_id, link_type FROM user_clicks WHERE user_id = ?')
-      .all(anon_uid) as { item_id: number; link_type: string }[];
-    expect(clicks).toEqual([{ item_id: liked_item, link_type: 'title' }]);
+      .prepare('SELECT item_id, url FROM user_clicks WHERE user_id = ?')
+      .all(anon_uid) as { item_id: number; url: string }[];
+    expect(clicks).toEqual([{ item_id: liked_item, url: 'https://promote-liked' }]);
   });
 });
 
