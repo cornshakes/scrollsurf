@@ -2,12 +2,10 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   click_reloading,
   expect_logged_in_menu,
-  expect_logged_out_menu,
   find_card_by_text,
   load_page,
   login_via_dialog,
   logout_via_menu,
-  open_consent,
   open_menu,
   remove_all_cards,
   scroll_to_load_all,
@@ -115,6 +113,16 @@ test.describe('Menu', () => {
     await expect(drawer(page)).toHaveScreenshot('menu-logged-out.png', { maxDiffPixels: 5 });
   });
 
+  test('hides "Download my data" without cookie consent', async ({ page }) => {
+    await load_page(page, false);
+
+    await open_menu(page);
+    await expect(page.getByText('Log in', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('download-data')).toHaveCount(0);
+
+    await expect(drawer(page)).toHaveScreenshot('menu-no-consent.png', { maxDiffPixels: 5 });
+  });
+
   test('renders the logged-in menu', async ({ page }) => {
     const email = test_email();
     await load_page(page, true);
@@ -183,58 +191,5 @@ test.describe('Account switch', () => {
 
     await open_menu(page);
     await expect(page.getByText(email_b, { exact: true })).toBeVisible();
-  });
-});
-
-test.describe('Revoke consent (logged in)', () => {
-  test('withdrawing consent removes the account and clears cookies', async ({ page }) => {
-    const email = test_email();
-    await load_page(page, true);
-
-    await login_via_dialog(page, email);
-
-    await open_consent(page);
-    await page.getByRole('button', { name: 'Withdraw consent' }).click();
-
-    await expect(page.getByText(/will remove your account/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Confirm' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
-    const popover = page.getByTestId('consent-popover');
-    await expect(popover).toHaveScreenshot('consent-revoke-warning.png', { maxDiffPixels: 5 });
-
-    // Confirm triggers window.location.reload() back to an anonymous session.
-    await click_reloading(page, page.getByRole('button', { name: 'Confirm' }));
-
-    const cookies = await page.context().cookies();
-    expect(cookies.find((cookie) => cookie.name === 'ss_consent')?.value).toBe('denied');
-    expect(cookies.find((cookie) => cookie.name === 'ss_uid')).toBeUndefined();
-
-    await expect_logged_out_menu(page);
-  });
-
-  test('re-login after revoke creates a fresh account with no history', async ({ page }) => {
-    // Two logins plus a revoke reload exceeds the default 10s per-test budget.
-    test.slow();
-    const email = test_email();
-    await load_page(page, true);
-
-    await scroll_to_load_all(page);
-    const yoga_card = find_card_by_text(page, 'Yoga');
-    await expect(yoga_card).toBeVisible();
-    await vote_card(yoga_card, 'up');
-
-    await login_via_dialog(page, email);
-
-    await open_consent(page);
-    await page.getByRole('button', { name: 'Withdraw consent' }).click();
-    await click_reloading(page, page.getByRole('button', { name: 'Confirm' }));
-    await expect_logged_out_menu(page);
-
-    // `unlink_email` nulled the old account's email, so re-login with the same
-    // email takes the "first login fresh" branch — a brand new account.
-    await login_via_dialog(page, email);
-
-    await switch_view(page, 'liked');
-    await expect(page.getByTestId('feed-card')).toHaveCount(0);
   });
 });

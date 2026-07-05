@@ -173,9 +173,19 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
                   </Button>
                 </Box>
               ) : (
-                <Button size="small" color="error" variant="outlined" onClick={handle_revoke_click}>
-                  Withdraw consent
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button size="small" variant="contained" onClick={() => setAnchor(null)}>
+                    OK
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    variant="outlined"
+                    onClick={handle_revoke_click}
+                  >
+                    Withdraw consent
+                  </Button>
+                </Box>
               )}
             </>
           ) : (

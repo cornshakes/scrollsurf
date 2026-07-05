@@ -62,20 +62,46 @@ export const read_login_code = (email: string): string | null => {
 };
 
 /**
- * Look up the email for a given session token by joining tokens → users.
+ * Look up the user for a token.
  * Opens a short-lived read-only connection. Returns null if not found.
  */
-export const get_email_for_token = (token: string): string | null => {
+export const get_user_for_token = (token: string) => {
   const db = new DatabaseSync(path.join('e2e', '.data', 'scrollsurf.db'), { readOnly: true });
   try {
     const row = db
       .prepare(
-        `SELECT u.email FROM tokens t
+        `SELECT u.id, u.email FROM tokens t
          JOIN users u ON u.id = t.user_id
          WHERE t.token = ?`
       )
-      .get(token) as { email: string | null } | undefined;
-    return row?.email ?? null;
+      .get(token) as { id: number; email: string | null } | undefined;
+    return row ? { ...row } : null;
+  } finally {
+    db.close();
+  }
+};
+
+export const does_email_exist = (email: string) => {
+  const db = new DatabaseSync(path.join('e2e', '.data', 'scrollsurf.db'), { readOnly: true });
+  try {
+    const row = db.prepare(`SELECT 1 FROM users where email = ?`).get(email);
+    return !!row;
+  } finally {
+    db.close();
+  }
+};
+
+/**
+ * Count the `user_items` (vote) rows a user owns, straight from the seeded DB.
+ * Used to assert whether a revoke kept or erased the user's history.
+ */
+export const count_user_items = (user_id: number): number => {
+  const db = new DatabaseSync(path.join('e2e', '.data', 'scrollsurf.db'), { readOnly: true });
+  try {
+    const row = db
+      .prepare('SELECT COUNT(*) AS count FROM user_items WHERE user_id = ?')
+      .get(user_id) as { count: number };
+    return row.count;
   } finally {
     db.close();
   }

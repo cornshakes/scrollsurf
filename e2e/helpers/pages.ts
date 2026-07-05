@@ -4,6 +4,14 @@ import { read_login_code } from './db';
 
 export type View = 'random' | 'liked' | 'disliked' | 'categories';
 
+export const get_cookies = async (page: Page) => {
+  const cookies = await page.context().cookies();
+  return {
+    uid: cookies.find((c) => c.name === 'ss_uid')?.value,
+    consent: cookies.find((c) => c.name === 'ss_consent')?.value,
+  };
+};
+
 /**
  * Inject consent + a fresh user-id cookie so the session starts already
  * consented. The server's `current_user_id` lazily creates the user row from the
