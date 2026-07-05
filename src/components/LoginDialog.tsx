@@ -9,7 +9,11 @@ import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Link from '@mui/material/Link';
 import { request_login_code, submit_login_code } from '@/app/actions';
+import { read_consent_cookie } from './CookieConsent';
 
 interface LoginDialogProps {
   open: boolean;
@@ -23,6 +27,12 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  // Login already grants consent server-side, so the checkbox only matters when
+  // consent hasn't been given yet. Reading the cookie during render is safe: the
+  // dialog body only renders client-side (open starts false), so there is no
+  // SSR/client hydration mismatch.
+  const needs_consent = open && read_consent_cookie() !== 'granted';
 
   const reset = () => {
     setStep('email');
@@ -30,6 +40,7 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
     setCode('');
     setError(null);
     setLoading(false);
+    setAgreed(false);
   };
 
   const handle_close = () => {
@@ -85,6 +96,36 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
               }}
               disabled={loading}
             />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'justify' }}>
+              Scrollsurf will store a cookie to keep you signed in and remember your likes and
+              clicks so it can personalize your feed. You can withdraw consent and delete your data
+              anytime from the menu or the cookie button on the bottom right. If you log in with
+              your e-mail address, you&apos;ll be able to get back to your account even after your
+              browser deletes the cookie, and you&apos;ll be able to use your account on other
+              devices too.
+              <br />
+              <Link href="/privacy" underline="hover">
+                Privacy info
+              </Link>
+            </Typography>
+            {needs_consent && (
+              <FormControlLabel
+                sx={{ mt: 1, alignItems: 'flex-start' }}
+                control={
+                  <Checkbox
+                    checked={agreed}
+                    onChange={(evt) => setAgreed(evt.target.checked)}
+                    disabled={loading}
+                    sx={{ pt: 0 }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ pt: 0.5 }}>
+                    I agree
+                  </Typography>
+                }
+              />
+            )}
             {error && (
               <Alert severity="error" sx={{ mt: 1.5 }}>
                 {error}
@@ -93,7 +134,11 @@ export const LoginDialog = ({ open, onClose, onSuccess }: LoginDialogProps) => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handle_close}>Cancel</Button>
-            <Button variant="contained" onClick={handle_send_code} disabled={loading || !email}>
+            <Button
+              variant="contained"
+              onClick={handle_send_code}
+              disabled={loading || !email || (needs_consent && !agreed)}
+            >
               Send code
             </Button>
           </DialogActions>

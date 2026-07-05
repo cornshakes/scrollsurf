@@ -38,6 +38,19 @@ export const insert_user = (token?: string): number => {
   return user_id;
 };
 
+export const insert_user_with_email = (email: string, token: string): number => {
+  const db = get_db();
+  const now = Math.floor(Date.now() / 1000);
+  const result = db
+    .prepare('INSERT INTO users (email, created_at, last_active_at) VALUES (?, ?, ?)')
+    .run(email, now, now);
+  const user_id = Number(result.lastInsertRowid);
+  db.prepare(
+    'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+  ).run(token, user_id, now, now);
+  return user_id;
+};
+
 export const insert_article = (
   data?: Partial<{
     title: string;

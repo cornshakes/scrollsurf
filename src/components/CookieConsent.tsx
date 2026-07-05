@@ -9,6 +9,8 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 import Alert from '@mui/material/Alert';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import CookieIcon from '@mui/icons-material/Cookie';
 import { grant_consent, revoke_consent } from '@/app/actions';
 import { CONSENT_COOKIE } from '@/lib/cookie';
@@ -28,7 +30,7 @@ const ConsentContext = createContext<ConsentContextValue>({
 
 export const useConsent = () => useContext(ConsentContext);
 
-const read_consent_cookie = (): ConsentState => {
+export const read_consent_cookie = (): ConsentState => {
   if (typeof document === 'undefined') {
     return 'unknown';
   }
@@ -44,6 +46,7 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
   const [consent, setConsent] = useState<ConsentState>(read_consent_cookie);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [show_revoke_warning, setShowRevokeWarning] = useState(false);
+  const [keep_for_research, setKeepForResearch] = useState(false);
   const icon_ref = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const { account, refreshAccount } = useAuth();
@@ -60,18 +63,15 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const handle_revoke_click = () => {
-    if (account) {
-      setShowRevokeWarning(true);
-    } else {
-      handle_revoke_confirmed();
-    }
+    setShowRevokeWarning(true);
   };
 
   const handle_revoke_confirmed = async () => {
-    await revoke_consent();
+    await revoke_consent({ keep_data: keep_for_research });
     setConsent('denied');
     setAnchor(null);
     setShowRevokeWarning(false);
+    setKeepForResearch(false);
     await refreshAccount();
     window.location.reload();
   };
@@ -118,13 +118,38 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
           {consent === 'granted' ? (
             <>
               {show_revoke_warning && (
-                <Alert severity="warning" sx={{ mb: 1.5 }}>
-                  <Typography variant="body2">
-                    Revoking cookie consent will remove your account.
-                    <br /> Your saved likes can no longer be recovered by email.
-                    <br /> Are you sure you want to do this?
-                  </Typography>
-                </Alert>
+                <>
+                  <Alert severity="warning" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2">
+                      {account ? (
+                        <>
+                          Withdrawing consent will remove your account.
+                          <br /> Your saved likes can no longer be recovered by email.
+                        </>
+                      ) : (
+                        'Withdrawing consent stops all tracking.'
+                      )}
+                      <br />
+                      Are you sure?
+                    </Typography>
+                  </Alert>
+                  <FormControlLabel
+                    sx={{ mb: 1.5, alignItems: 'flex-start' }}
+                    control={
+                      <Checkbox
+                        checked={keep_for_research}
+                        onChange={(evt) => setKeepForResearch(evt.target.checked)}
+                        size="small"
+                        sx={{ pt: 0 }}
+                      />
+                    }
+                    label={
+                      <Typography variant="body2">
+                        You can keep my anonymous data for research
+                      </Typography>
+                    }
+                  />
+                </>
               )}
               {show_revoke_warning ? (
                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -139,7 +164,10 @@ export const ConsentProvider = ({ children }: { children: React.ReactNode }) => 
                   <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => setShowRevokeWarning(false)}
+                    onClick={() => {
+                      setShowRevokeWarning(false);
+                      setKeepForResearch(false);
+                    }}
                   >
                     Cancel
                   </Button>

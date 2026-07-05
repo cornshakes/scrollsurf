@@ -9,6 +9,8 @@ import {
   get_category_tree,
   get_or_create_user,
   delete_token,
+  delete_user_and_data,
+  export_user_data,
   create_login_code,
   verify_login_code,
   get_user_email,
@@ -16,6 +18,7 @@ import {
   attach_login,
   type FeedItem,
   type CategoryTree,
+  type UserDataExport,
 } from '@/lib/db';
 import { current_user_id } from '@/lib/user';
 import { COOKIE_NAME, CONSENT_COOKIE, cookie_options, consent_cookie_options } from '@/lib/cookie';
@@ -82,19 +85,39 @@ export const grant_consent = with_log('grant_consent', async () => {
   get_or_create_user(token);
 });
 
-export const revoke_consent = with_log('revoke_consent', async () => {
-  const store = await cookies();
-  const uid = await current_user_id();
-  if (uid !== null && get_user_email(uid) !== null) {
-    unlink_email(uid);
+export const revoke_consent = with_log(
+  'revoke_consent',
+  async ({ keep_data }: { keep_data: boolean }) => {
+    const store = await cookies();
+    const uid = await current_user_id();
+    if (!keep_data && uid !== null) {
+      // Erase all activity: votes, clicks, every token, and the user row.
+      delete_user_and_data(uid);
+    } else {
+      // Keep the activity but anonymize it by dropping the e-mail.
+      if (uid !== null && get_user_email(uid) !== null) {
+        unlink_email(uid);
+      }
+      const token = store.get(COOKIE_NAME)?.value;
+      if (token) {
+        delete_token(token);
+      }
+    }
+    store.set(CONSENT_COOKIE, 'denied', consent_cookie_options());
+    store.delete(COOKIE_NAME);
   }
-  const token = store.get(COOKIE_NAME)?.value;
-  if (token) {
-    delete_token(token);
+);
+
+export const export_my_data = with_log(
+  'export_my_data',
+  async (): Promise<UserDataExport | null> => {
+    const uid = await current_user_id();
+    if (uid === null) {
+      return null;
+    }
+    return export_user_data(uid);
   }
-  store.set(CONSENT_COOKIE, 'denied', consent_cookie_options());
-  store.delete(COOKIE_NAME);
-});
+);
 
 export const request_login_code = with_log(
   'request_login_code',

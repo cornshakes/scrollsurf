@@ -1,6 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
 import { get_db } from '@/lib/db/connection';
-import { reset_db, setup, insert_user, insert_article } from './helpers/test-db';
+import {
+  reset_db,
+  setup,
+  insert_user,
+  insert_article,
+  insert_user_with_email,
+} from './helpers/test-db';
 import {
   create_login_code,
   verify_login_code,
@@ -9,7 +15,13 @@ import {
   unlink_email,
   attach_login,
 } from '@/lib/db/auth';
-import { get_or_create_user, delete_token } from '@/lib/db/users';
+import {
+  get_or_create_user,
+  delete_token,
+  delete_user_and_data,
+  export_user_data,
+} from '@/lib/db/users';
+import { record_click, save_vote } from '@/lib/db/votes';
 import { migrate } from '@/lib/db/migrate';
 import { migrations } from '@/lib/db/migrations';
 
@@ -35,19 +47,6 @@ jest.mock('@/lib/cookie', () => ({
 
 beforeAll(setup);
 beforeEach(reset_db);
-
-const insert_user_with_email = (email: string, token: string): number => {
-  const db = get_db();
-  const now = Math.floor(Date.now() / 1000);
-  const result = db
-    .prepare('INSERT INTO users (email, created_at, last_active_at) VALUES (?, ?, ?)')
-    .run(email, now, now);
-  const user_id = Number(result.lastInsertRowid);
-  db.prepare(
-    'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
-  ).run(token, user_id, now, now);
-  return user_id;
-};
 
 describe('create_login_code / verify_login_code', () => {
   test('valid code verifies and is deleted (single-use)', () => {
@@ -639,5 +638,145 @@ describe('get_user_email', () => {
 
   test('returns null for an unknown user id', () => {
     expect(get_user_email(99999)).toBeNull();
+  });
+});
+
+describe('delete_user_and_data', () => {
+  test('erases votes, clicks, all tokens, and the user row', () => {
+    const db = get_db();
+    const now = Math.floor(Date.now() / 1000);
+    const primary_token = 'delete-primary-token';
+    const second_token = 'delete-second-token';
+    const uid = insert_user(primary_token);
+    db.prepare(
+      'INSERT INTO tokens (token, user_id, created_at, last_active_at) VALUES (?, ?, ?, ?)'
+    ).run(second_token, uid, now, now);
+
+    const item_id = insert_article({ url: 'https://delete-article' });
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(uid, item_id, 1, now);
+    db.prepare(
+      'INSERT INTO user_clicks (user_id, item_id, url, created_at) VALUES (?, ?, ?, ?)'
+    ).run(uid, item_id, 'https://delete-article', now);
+
+    delete_user_and_data(uid);
+
+    expect(db.prepare('SELECT id FROM users WHERE id = ?').get(uid)).toBeUndefined();
+    expect(
+      (
+        db.prepare('SELECT COUNT(*) as count FROM tokens WHERE user_id = ?').get(uid) as {
+          count: number;
+        }
+      ).count
+    ).toBe(0);
+    expect(
+      (
+        db.prepare('SELECT COUNT(*) as count FROM user_items WHERE user_id = ?').get(uid) as {
+          count: number;
+        }
+      ).count
+    ).toBe(0);
+    expect(
+      (
+        db.prepare('SELECT COUNT(*) as count FROM user_clicks WHERE user_id = ?').get(uid) as {
+          count: number;
+        }
+      ).count
+    ).toBe(0);
+  });
+
+  test('deleting an unknown user id is a no-op', () => {
+    expect(() => delete_user_and_data(99999)).not.toThrow();
+  });
+});
+
+describe('export_user_data', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('returns the email, seen items, liked/disliked subsets, and clicks with ISO dates', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-07-01T10:41:01.000Z'));
+    const uid = insert_user_with_email('export@example.com', 'export-token');
+    const liked = insert_article({ url: 'https://export-liked' });
+    const disliked = insert_article({ url: 'https://export-disliked' });
+    const seen_only = insert_article({ url: 'https://export-seen' });
+    save_vote(uid, liked, 1);
+    save_vote(uid, disliked, -1);
+    save_vote(uid, seen_only, 0);
+    record_click(liked, 'https://export-liked', uid);
+    record_click(liked, 'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5', uid);
+    record_click(
+      liked,
+      'https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5/Physical_sciences',
+      uid
+    );
+
+    const data = export_user_data(uid);
+    expect(data).toMatchInlineSnapshot(`
+      {
+        "clicked": [
+          {
+            "clicked_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5/Physical_sciences",
+          },
+          {
+            "clicked_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5",
+          },
+          {
+            "clicked_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-liked",
+          },
+        ],
+        "disliked": [
+          {
+            "disliked_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-disliked",
+          },
+        ],
+        "exported_at": "2026-07-01T10:41:01.000Z",
+        "liked": [
+          {
+            "liked_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-liked",
+          },
+        ],
+        "seen": [
+          {
+            "seen_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-seen",
+          },
+          {
+            "seen_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-disliked",
+          },
+          {
+            "seen_at": "2026-07-01T10:41:01.000Z",
+            "url": "https://export-liked",
+          },
+        ],
+        "user_email": "export@example.com",
+      }
+    `);
+  });
+
+  test('anonymous user: email is null, seen/liked still returned, no clicks', () => {
+    const db = get_db();
+    const now = Math.floor(Date.now() / 1000);
+    const uid = insert_user('export-anon-token');
+    const item_id = insert_article({ url: 'https://export-anon' });
+    db.prepare(
+      'INSERT INTO user_items (user_id, item_id, like, updated_at) VALUES (?, ?, ?, ?)'
+    ).run(uid, item_id, 1, now);
+
+    const data = export_user_data(uid);
+
+    expect(data.user_email).toBeNull();
+    expect(data.seen).toHaveLength(1);
+    expect(data.liked).toHaveLength(1);
+    expect(data.clicked).toHaveLength(0);
   });
 });

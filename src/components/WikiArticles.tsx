@@ -20,6 +20,8 @@ import { VotedFeed } from './VotedFeed';
 import { CategoryFeed } from './CategoryFeed';
 import { useFeed } from './FeedContext';
 import { useAuth } from './AuthContext';
+import { useConsent } from './CookieConsent';
+import { export_my_data } from '@/app/actions';
 
 type View = 'random' | 'liked' | 'disliked' | 'categories';
 
@@ -67,7 +69,24 @@ const WikiArticles = () => {
   const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
   const { scrollTopRef } = useFeed();
   const { account, openLogin, logout } = useAuth();
+  const { consent } = useConsent();
   const scroll_nodeRef = useRef<HTMLDivElement | null>(null);
+
+  const download_my_data = async () => {
+    const data = await export_my_data();
+    if (data === null) {
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'scrollsurf-data.json';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   useLayoutEffect(() => {
     if (view === 'random' && scroll_nodeRef.current) {
@@ -149,6 +168,22 @@ const WikiArticles = () => {
               />
             </ListItemButton>
           </ListItem>
+          {consent === 'granted' && (
+            <ListItem disablePadding>
+              <ListItemButton
+                data-testid="download-data"
+                onClick={async () => {
+                  await download_my_data();
+                  setDrawerOpen(false);
+                }}
+              >
+                <ListItemText
+                  primary="Download my data"
+                  slotProps={{ primary: { variant: 'body2', color: 'text.secondary' } }}
+                />
+              </ListItemButton>
+            </ListItem>
+          )}
           <Divider />
           {account === null ? (
             <ListItem disablePadding>
