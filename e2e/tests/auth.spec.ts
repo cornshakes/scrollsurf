@@ -11,6 +11,7 @@ import {
   scroll_to_load_all,
   switch_view,
   vote_card,
+  wait_for_download,
 } from '../helpers/pages';
 import { read_login_code, seed_account, test_email } from '../helpers/db';
 
@@ -113,14 +114,26 @@ test.describe('Menu', () => {
     await expect(drawer(page)).toHaveScreenshot('menu-logged-out.png', { maxDiffPixels: 5 });
   });
 
-  test('hides "Download my data" without cookie consent', async ({ page }) => {
-    await load_page(page, false);
+  test.describe('Download my data', () => {
+    test('is hidden without cookie consent', async ({ page }) => {
+      await load_page(page, false);
 
-    await open_menu(page);
-    await expect(page.getByText('Log in', { exact: true })).toBeVisible();
-    await expect(page.getByTestId('download-data')).toHaveCount(0);
+      await open_menu(page);
+      await expect(page.getByText('Log in', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('download-data')).toHaveCount(0);
 
-    await expect(drawer(page)).toHaveScreenshot('menu-no-consent.png', { maxDiffPixels: 5 });
+      await expect(drawer(page)).toHaveScreenshot('menu-no-consent.png', { maxDiffPixels: 5 });
+    });
+
+    test('enables the user to download their data', async ({ page }) => {
+      await load_page(page, true);
+      await open_menu(page);
+      const download = wait_for_download(page);
+      await page.getByTestId('download-data').click();
+      const result = await download;
+      expect(result.name).toBe('scrollsurf-data.json');
+      expect(result.data).toMatchObject({ liked: [], disliked: [], clicked: [] });
+    });
   });
 
   test('renders the logged-in menu', async ({ page }) => {

@@ -248,3 +248,16 @@ export const logout_via_menu = async (page: Page) => {
   await click_reloading(page, page.getByText('Log out'));
   await expect_logged_out_menu(page);
 };
+
+export const wait_for_download = async (page: Page) => {
+  const download = await page.waitForEvent('download');
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk as Buffer);
+  }
+  return {
+    name: download.suggestedFilename(),
+    data: JSON.parse(Buffer.concat(chunks).toString('utf-8')),
+  };
+};
