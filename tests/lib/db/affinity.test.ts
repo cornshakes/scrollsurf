@@ -150,7 +150,7 @@ it('isolation: likes on D1/History do not boost D2/History without a bucket mapp
   const d2h_count = result.filter((a) =>
     a.links.some((l) => l.type === 'dataset' && l.title === 'D2')
   ).length;
-  // D2/History resolves to a different fallback bucket (D2␟History) — must not be boosted
+  // D2/History resolves to a different per-pair bucket (D2␟History) — must not be boosted
   expect(d2h_count).toBeLessThan(35);
 });
 

@@ -60,7 +60,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - `datasets/quotes.db` — [Wikiquote Quote of the Day](https://en.wikiquote.org/wiki/Wikiquote:QOTD_by_month) entries. Built by `npm run download-quotes`. **Uses the quote schema** (`quotes`/`quote_topics`) — not the article schema.
   - `datasets/categories.db` — Wikipedia category hierarchy mapped to top-level categories. Built by `npm run categorize`.
 
-On startup, `src/instrumentation.ts` (`register`, Node runtime only) calls `init_db()`, then imports the available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-datasets.ts`), then runs `cleanup_inactive_users()`. Picture datasets go through `import_pictures_dataset`, article datasets through `import_articles_dataset`, quotes through `import_quotes_dataset`, categories through `import_categories`. Each import is wrapped in try/catch — a missing or broken reference DB just warns and is skipped.
+On startup, `src/instrumentation.ts` (`register`, Node runtime only) calls `init_db()`, then imports the available datasets from `datasets/` into `scrollsurf.db` via SQLite `ATTACH` + bulk `INSERT OR IGNORE` (`src/lib/import-datasets.ts`), then runs `rebuild_feed_index()` (not wrapped in try/catch — a broken feed index must fail startup loudly) and `cleanup_inactive_users()`. Picture datasets go through `import_pictures_dataset`, article datasets through `import_articles_dataset`, quotes through `import_quotes_dataset`, categories through `import_categories`. Each import is wrapped in try/catch — a missing or broken reference DB just warns and is skipped.
 
 ## Data pipeline
 
@@ -80,7 +80,7 @@ All download scripts are resumable: already-downloaded items are skipped. **Data
 
 Uses Node.js built-in `DatabaseSync` from `node:sqlite` — not better-sqlite3, not Drizzle, no ORM. The connection (`src/lib/db/connection.ts`) opens with `PRAGMA journal_mode = WAL`, `busy_timeout = 5000`, `foreign_keys = ON`, then runs migrations.
 
-`src/lib/db/` is a directory of focused modules (re-exported from `index.ts`), split by responsibility: `connection.ts` (pragmas, `init_db`/`get_db`), `migrate.ts`/`migrations.ts`, `articles.ts`/`pictures.ts`, `feed.ts`, `affinity.ts`, `topics.ts`, `votes.ts`, `users.ts`, `types.ts`.
+`src/lib/db/` is a directory of focused modules (re-exported from `index.ts`), split by responsibility: `connection.ts` (pragmas, `init_db`/`get_db`), `migrate.ts`/`migrations.ts`, `articles.ts`/`pictures.ts`, `feed.ts`, `feed-index.ts`, `affinity.ts`, `topics.ts`, `votes.ts`, `users.ts`, `types.ts`.
 
 **All queries are hand-written prepared statements, prepared per call.** Do **not** reintroduce module-level statement caches (e.g. a `let stmts` holding prepared statements) — that pattern was removed deliberately.
 
@@ -95,7 +95,7 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 - Content: `items` (unified supertype), `articles`, `pictures`, `quotes`, `item_topics`, `item_categories`, `categories`.
 - Metadata: `datasets`, `category_hierarchy`.
 - Users (STRICT tables): `users`, `user_items` (`like` −1/0/1), `user_clicks` (append-only engagement log).
-- `feed_items` — a VIEW unifying articles + pictures + quotes at the identity level (`type, id`) for feed selection.
+- Feed index (derived, rebuilt on startup by `rebuild_feed_index()`): `bucket_set_items`, `bucket_set_buckets`, `bucket_set_counts` (see Feed selection).
 
 (Columns are authoritative in `src/lib/db/migrations.ts`.)
 
@@ -113,7 +113,7 @@ Schema changes are an **append-only** list in `src/lib/db/migrations.ts`, tracke
 
 The dataset grouping is why topic names may safely collide across datasets (multiple datasets can have a History/Technology). An item may have several topics. Per-dataset `source_url` lives in each reference DB's `metadata` key/value table and is copied into `scrollsurf.db`'s `datasets` table on import, so each card's dataset chip can link to its source page.
 
-**Buckets** are a backend-only grouping that exists purely for affinity. `topic_buckets (dataset, topic, bucket)` maps fine-grained `(dataset, topic)` pairs into coarser buckets; affinity is accumulated **per bucket**, not per `(dataset, topic)` (see Feed selection). A `(dataset, topic)` pair with no mapping falls back to being its own bucket (`dataset ∥ topic`). Buckets never reach the client — chips/links are still built from `dataset` and `topic` ([links.ts](src/lib/db/links.ts)).
+**Buckets** are a backend-only grouping that exists purely for affinity. `topic_buckets (dataset, topic, bucket)` maps fine-grained `(dataset, topic)` pairs into coarser buckets; affinity is accumulated **per bucket**, not per `(dataset, topic)` (see Feed selection). Every `(dataset, topic)` pair **must** have a mapping — `import_topic_buckets` validates this on startup and throws if any pair is unmapped (run `npm run unify-topics` to map new pairs); the feed index has no fallback. Buckets never reach the client — chips/links are still built from `dataset` and `topic` ([links.ts](src/lib/db/links.ts)).
 
 ## Categories
 
@@ -133,20 +133,22 @@ All three types use **fully separate schemas** end-to-end:
 | Download pipeline | `scripts/lib/dataset.ts` / `DiscoveredArticle` | `scripts/lib/pictures-dataset.ts` / `DiscoveredPicture` | `scripts/lib/quotes-dataset.ts` / fixed topics at import |
 | TS type | `Article` (`type: 'article'`) | `Picture` (`type: 'picture'`) | `Quote` (`type: 'quote'`) |
 
-The feed returns `FeedItem = Article | Picture | Quote`. The `feed_items` view unifies all three only at the identity level (`type, id`) for selection; the fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection. **Always switch on `.type` when handling feed items.**
+The feed returns `FeedItem = Article | Picture | Quote`. Selection is unified at the identity level (`type, id`) via the feed-index tables; the fully-separate payload schemas remain end-to-end — payload columns are fetched per-type after selection. **Always switch on `.type` when handling feed items.**
 
 ## Feed selection
 
-`get_next_feed` (`src/lib/db/feed.ts`) issues a single Efraimidis–Spirakis weighted draw over the `feed_items` view, assembled from `feed_affinity_ctes()` + `weighted_random_order_by()` in `src/lib/db/affinity.ts`. It selects unseen items. Weight per item:
+Full write-up in [Feed.md](Feed.md). Weight per unseen item:
 
 ```
-weight = exp(AFFINITY_STRENGTH · clamped_affinity) · type_share / pool_size
+weight = exp(AFFINITY_STRENGTH[type] · clamped_affinity) · type_share / pool_size
 ```
 
-- `type_share` is the per-type share from the fixed `TYPE_SHARES` map in `feed.ts`, and `pool_size` is the count of eligible items of that type — so the expected fraction of each type equals its share ÷ Σshares, independent of actual pool sizes. A type with share 0 or absent from the map is hard-excluded (via `WHERE`).
-- Per-item affinity is the **average** of its buckets' affinities. Per-bucket affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. The `item_buckets` CTE resolves each item's `(dataset, topic)` rows to buckets via `topic_buckets` (unmapped pairs fall back to `dataset ∥ topic`), so accumulation is **by bucket, not by `(dataset, topic)`**. Dislikes downweight buckets but never hard-exclude items.
+- `type_share` is the per-type share from the fixed `TYPE_SHARES` map in `feed.ts`, and `pool_size` is the count of eligible items of that type — so the expected fraction of each type equals its share ÷ Σshares, independent of actual pool sizes. Every item type in the DB must have an entry in the map; a share of 0 gives its groups weight 0.
+- Per-item affinity is the **average** of its buckets' affinities. Per-bucket affinity is `(W_LIKE·likes + W_CLICK·clicks − W_DISLIKE·dislikes) / (seen + AFFINITY_SMOOTHING)`, normalized by exposure (smoothing prevents extreme scores on small samples), then clamped to ±`AFFINITY_CLAMP`. Accumulation is **by bucket, not by `(dataset, topic)`**. Dislikes downweight buckets but never hard-exclude items.
 
-Neutral users and anonymous users (`$user_id` is NULL → empty affinity CTEs → affinity 0 everywhere) reduce to exactly uniform random through the same query — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
+The draw is two-stage, exploiting that weight depends only on `(type, bucket set)` — a *bucket set* being an item's combination of buckets, precomputed by `rebuild_feed_index()` (`src/lib/db/feed-index.ts`, called on startup after imports; tests call it after seeding topics): `feed_group_stats_sql` (`src/lib/db/affinity.ts`) returns one row per `(type, set_id)` group (never per item), then `get_next_feed` (`src/lib/db/feed.ts`) picks a group per slot with P ∝ `n_eligible · weight` in TS and fetches uniform random unseen items per chosen group via `bucket_set_items`. This is exactly equivalent to a per-item Efraimidis–Spirakis draw (weight is constant within a group) but O(user history + #groups) instead of O(catalog) — the old single-query full-scan draw took ~2 s on the Pi.
+
+Neutral users and anonymous users (`$user_id` is NULL → empty signal CTEs → affinity 0 everywhere) reduce to exactly uniform random through the same code path — a strict generalization. **Do not add hard exclusions or deterministic secondary sorts.**
 
 ## Users, cookies & consent
 

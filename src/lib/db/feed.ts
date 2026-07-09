@@ -1,86 +1,155 @@
-import { type FeedItem } from './types';
+import { type FeedItem, type FeedItemType } from './types';
 import { fetch_articles_by_ids } from './articles';
 import { fetch_pictures_by_ids } from './pictures';
 import { fetch_quotes_by_ids } from './quotes';
 import { get_db } from './connection';
-import { feed_affinity_ctes, AFFINITY_STRENGTH, AFFINITY_CLAMP } from './affinity';
+import { type BucketSet, load_weighted_bucket_sets } from './affinity';
 import { groupBy, keyBy } from 'es-toolkit';
 
-// Per-type feed shares. Relative weights — each type's expected fraction of the
-// feed is its share ÷ Σshares, independent of pool sizes. A share of 0 (or a type
-// absent from this map) hard-excludes that type via the `type_where` clause below.
-export const TYPE_SHARES = {
-  article: 0.82,
-  picture: 0.1,
-  quote: 0.08,
+type Slot = {
+  set_id: number;
+  type: FeedItemType;
 };
 
-const included_types = Object.keys(TYPE_SHARES);
+type SlotItem = {
+  id: number;
+  type: FeedItemType;
+};
 
-// WHERE clause: only types with a positive share are eligible
-const type_where =
-  included_types.length > 0
-    ? `p.type IN (${included_types.map((t) => `'${t}'`).join(', ')})`
-    : 'FALSE';
-
-// CASE expression: unnormalized per-type share weight.
-// Pool-size normalization (/ max(ps.n, 1)) ensures expected fraction = share / Σshares
-// for types actually present in the pool.
-const type_weight_expr =
-  `CASE p.type ` +
-  [...Object.entries(TYPE_SHARES)]
-    .filter(([, share]) => share > 0)
-    .map(([type_name, share]) => `WHEN '${type_name}' THEN ${share}`)
-    .join(' ') +
-  ` ELSE 0 END`;
-
-// CASE expression: per-type affinity strength (multiplies clamped affinity inside
-// exp()). Lets quotes opt out of affinity boosting (strength 0) — see affinity.ts.
-const affinity_strength_expr =
-  `CASE p.type ` +
-  Object.entries(AFFINITY_STRENGTH)
-    .map(([type_name, strength]) => `WHEN '${type_name}' THEN ${strength}`)
-    .join(' ') +
-  ` ELSE 0 END`;
-
-const FEED_GET_NEXT_SQL = `
-  ${feed_affinity_ctes()}
-  SELECT p.type, p.id
-  FROM eligible_pool p
-  JOIN pool_size ps ON ps.type = p.type
-  LEFT JOIN item_affinity ia ON ia.item_id = p.id
-  WHERE ${type_where}
-  ORDER BY
-    -ln(max((RANDOM() / 9223372036854775808.0 + 1.0) / 2.0, 1e-12))
-    / ( exp(${affinity_strength_expr} * max(-${AFFINITY_CLAMP}, min(${AFFINITY_CLAMP}, COALESCE(ia.affinity, 0.0))))
-        * ${type_weight_expr}
-        / max(ps.n, 1) )
-  LIMIT $limit
-`;
-
-export const get_next_feed = (count: number, user_id: number | null): FeedItem[] => {
-  const db = get_db();
-  const rows = db.prepare(FEED_GET_NEXT_SQL).all({
-    $limit: count,
-    $user_id: user_id,
-  }) as unknown as { type: 'article' | 'picture' | 'quote'; id: number }[];
-
-  if (user_id !== null) {
-    const mark_seen = db.prepare(
-      `INSERT OR IGNORE INTO user_items (user_id, item_id, updated_at)
-      VALUES ($user_id, $item_id, $updated_at)`
-    );
-    db.exec('BEGIN');
-    for (const r of rows) {
-      mark_seen.run({
-        $user_id: user_id,
-        $item_id: r.id,
-        $updated_at: Math.floor(Date.now() / 1000),
-      });
+/**
+ * Turns bucket sets and their weights into slots ready to be populated with random items.
+ */
+const draw_weighted_random_slots = (bucket_sets: BucketSet[], count: number) => {
+  // I am told this is a weighted roulette wheel draw.
+  // First, each group gets a number range proportional to its weight and eligible items.
+  // |-group 1-|-------group 2----------|g3|--- group 4---| ...
+  // then, I throw a dart and see what range it hits.
+  // repeat 10 times to get 10 slots.
+  const slots: Slot[] = [];
+  for (let slot = 0; slot < count; slot++) {
+    let total = 0;
+    const ruler = bucket_sets.map((set) => (total += set.item_count * set.weight));
+    if (total === 0) {
+      // no more items to  serve
+      break;
     }
-    db.exec('COMMIT');
+    const dart = Math.random() * total;
+    const hit = ruler.findIndex((n) => dart <= n);
+    const chosen = bucket_sets[hit];
+    chosen.item_count -= 1;
+    slots.push({ set_id: chosen.set_id, type: chosen.type });
   }
-  return hydrate_feed_items(rows, user_id);
+  return slots;
+};
+
+/**
+ * selects random unseen item ids of the desired type and bucket set.
+ * @param type the type of the items to select
+ * @param set_id the bucket set it of the items to select
+ * @param user_id the user that should not have seen these items before
+ * @param count the amount of items to return
+ *
+ */
+const get_random_item_ids = (
+  type: FeedItemType,
+  set_id: number,
+  user_id: number | null,
+  count: number
+) => {
+  const rows = get_db()
+    .prepare(
+      `SELECT item_id FROM bucket_set_items
+          WHERE type = $type AND set_id = $set_id
+          AND item_id NOT IN (SELECT item_id FROM user_items WHERE user_id = $user_id)
+          ORDER BY RANDOM()
+          LIMIT $limit`
+    )
+    .all({
+      $type: type,
+      $set_id: set_id,
+      $user_id: user_id,
+      $limit: count,
+    }) as unknown as { item_id: number }[];
+  return rows.map((r) => r.item_id);
+};
+
+/**
+ * Populates preapared slots with items.
+ */
+const populate_slots = (slots: Slot[], user_id: number | null): SlotItem[] => {
+  const slot_key = (slot: Slot) => `${slot.type}:${slot.set_id}`;
+  const item_ids_by_slot_key = new Map(
+    // group slots that are the same
+    Object.entries(groupBy(slots, slot_key)).map(([key, slots]) => {
+      return [
+        key,
+        // get appropriate amount of item ids for each slot group
+        get_random_item_ids(slots[0].type, slots[0].set_id, user_id, slots.length),
+      ];
+    })
+  );
+
+  // throw if my scheme doesn't work (and get proper typing)
+  const pop_id = (slot: Slot) => {
+    const id = item_ids_by_slot_key.get(slot_key(slot))?.pop();
+    if (!id) {
+      throw new Error("my scheme doesn't work");
+    }
+    return id;
+  };
+
+  return slots.map((s) => ({
+    type: s.type,
+    id: pop_id(s),
+  }));
+};
+
+/**
+ *
+ * Record the served items as seen (like = 0) so they never come up again for this user.
+ * No-op for anonymous users.
+ *
+ */
+const mark_items_seen = (rows: { id: number }[], user_id: number | null): void => {
+  if (user_id === null) {
+    return;
+  }
+  const db = get_db();
+  const mark_seen = db.prepare(
+    `INSERT OR IGNORE INTO user_items (user_id, item_id, updated_at)
+    VALUES ($user_id, $item_id, $updated_at)`
+  );
+  db.exec('BEGIN');
+  for (const row of rows) {
+    mark_seen.run({
+      $user_id: user_id,
+      $item_id: row.id,
+      $updated_at: Math.floor(Date.now() / 1000),
+    });
+  }
+  db.exec('COMMIT');
+};
+
+// The two-stage weighted draw. Item weight is
+//   exp(AFFINITY_STRENGTH[type] · clamped_affinity) · TYPE_SHARES[type] / pool_size(type)
+// and depends only on the item's (type, bucket set) group, so a per-item
+// Efraimidis–Spirakis draw (take the k smallest -ln(u)/w keys — i.e. sample k
+// items without replacement with probability ∝ weight) is exactly equivalent
+// to: draw a group with P ∝ n_eligible·weight, take a uniform random unseen
+// item from it, decrement, repeat k times. That keeps the whole request at
+// O(user history + #groups) plus one cheap indexed pick per chosen group,
+// instead of scanning and weighing the entire catalog.
+//
+// Dislikes only shrink a group's weight, never exclude it, and there is no
+// deterministic ordering anywhere — with count >= pool the full pool is
+// returned, just in weighted-random order.
+export const get_next_feed = (count: number, user_id: number | null): FeedItem[] => {
+  const groups = load_weighted_bucket_sets(user_id);
+  const slots = draw_weighted_random_slots(groups, count);
+  const slot_items = populate_slots(slots, user_id);
+
+  mark_items_seen(slot_items, user_id);
+  return hydrate_feed_items(slot_items, user_id);
 };
 
 export const hydrate_feed_items = (

@@ -22,6 +22,13 @@ const register_process_handlers = () => {
   });
 };
 
+const do_step = (step_name: string, fn: () => void) => {
+  const start = performance.now();
+  fn();
+  const duration = Math.round(performance.now() - start);
+  log.debug(`${step_name} done (${duration}ms).`);
+};
+
 export const start = async () => {
   register_process_handlers();
 
@@ -38,75 +45,32 @@ export const start = async () => {
     import_categories,
     import_topic_buckets,
   } = await import('./lib/import-datasets');
-  const { cleanup_inactive_users, cleanup_expired_login_codes } = await import('./lib/db');
+  const { cleanup_inactive_users, cleanup_expired_login_codes, rebuild_feed_index } =
+    await import('./lib/db');
 
-  const datasets = ['vital_50000.db', 'unusual.db', 'good_articles.db', 'featured_articles.db'];
-
-  for (const filename of datasets) {
-    try {
-      import_articles_dataset(filename);
-      log.debug({ step: 'import_articles', filename }, 'dataset imported');
-    } catch (err) {
-      log.warn({ step: 'import_articles', filename, err }, 'dataset import failed');
-    }
+  for (const filename of [
+    'vital_50000.db',
+    'unusual.db',
+    'good_articles.db',
+    'featured_articles.db',
+  ]) {
+    do_step(`import ${filename}`, () => import_articles_dataset(filename));
   }
 
   for (const filename of ['featured_pictures.db', 'commons_featured_pictures.db']) {
-    try {
-      import_pictures_dataset(filename);
-      log.debug({ step: 'import_pictures', filename }, 'dataset imported');
-    } catch (err) {
-      log.warn({ step: 'import_pictures', filename, err }, 'dataset import failed');
-    }
+    do_step(`import ${filename}`, () => import_pictures_dataset(filename));
   }
 
-  try {
-    import_quotes_dataset('quotes.db');
-    log.debug({ step: 'import_quotes', filename: 'quotes.db' }, 'dataset imported');
-  } catch (err) {
-    log.warn({ step: 'import_quotes', filename: 'quotes.db', err }, 'dataset import failed');
+  do_step(`import quotes.db`, () => import_quotes_dataset('quotes.db'));
+
+  for (const filename of ['categories.db', 'commons_category_hierarchy.db']) {
+    do_step(`import ${filename}`, () => import_categories(filename));
   }
 
-  try {
-    import_categories('categories.db');
-    log.debug({ step: 'import_categories', filename: 'categories.db' }, 'dataset imported');
-  } catch (err) {
-    log.warn(
-      { step: 'import_categories', filename: 'categories.db', err },
-      'dataset import failed'
-    );
-  }
-
-  try {
-    import_categories('commons_category_hierarchy.db');
-    log.debug(
-      { step: 'import_categories', filename: 'commons_category_hierarchy.db' },
-      'dataset imported'
-    );
-  } catch (err) {
-    log.warn(
-      { step: 'import_categories', filename: 'commons_category_hierarchy.db', err },
-      'dataset import failed'
-    );
-  }
-
-  try {
-    import_topic_buckets('topic_buckets.db');
-    log.debug({ step: 'import_topic_buckets', filename: 'topic_buckets.db' }, 'dataset imported');
-  } catch (err) {
-    log.warn(
-      { step: 'import_topic_buckets', filename: 'topic_buckets.db', err },
-      'dataset import failed'
-    );
-  }
-
-  try {
-    cleanup_inactive_users();
-    cleanup_expired_login_codes();
-    log.debug({ step: 'cleanup' }, 'cleanup complete');
-  } catch (err) {
-    log.warn({ step: 'cleanup', err }, 'cleanup failed');
-  }
+  do_step(`import topic_buckets.db`, () => import_topic_buckets('topic_buckets.db'));
+  do_step('rebuild_feed_index', rebuild_feed_index);
+  do_step('cleanup_inactive_users', cleanup_inactive_users);
+  do_step('cleanup_expired_login_codes', cleanup_expired_login_codes);
 
   log.info({ ms: Math.round(performance.now() - started) }, 'startup complete');
 };

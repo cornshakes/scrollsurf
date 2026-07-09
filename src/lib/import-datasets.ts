@@ -168,18 +168,32 @@ export const import_categories = (filename: string) => {
 
 export const import_topic_buckets = (filename: string) => {
   const ref_path = dataset_path(filename);
-  if (!existsSync(ref_path)) {
-    return;
+  if (existsSync(ref_path)) {
+    db.exec(`ATTACH '${ref_path}' AS ref`);
+    try {
+      db.exec('DELETE FROM main.topic_buckets');
+      db.exec(
+        `INSERT INTO main.topic_buckets (dataset, topic, bucket)
+         SELECT dataset, topic, bucket FROM ref.topic_buckets`
+      );
+    } finally {
+      db.exec('DETACH ref');
+    }
   }
 
-  db.exec(`ATTACH '${ref_path}' AS ref`);
-  try {
-    db.exec('DELETE FROM main.topic_buckets');
-    db.exec(
-      `INSERT INTO main.topic_buckets (dataset, topic, bucket)
-       SELECT dataset, topic, bucket FROM ref.topic_buckets`
-    );
-  } finally {
-    db.exec('DETACH ref');
+  // Throw if there are items without topic_buckets,
+  // because rebuild_feed_index() relies on it.
+  const unmapped = db
+    .prepare(
+      `SELECT DISTINCT it.dataset, it.topic
+       FROM item_topics it
+       LEFT JOIN topic_buckets tb ON tb.dataset = it.dataset AND tb.topic = it.topic
+       WHERE tb.bucket IS NULL
+       ORDER BY it.dataset, it.topic`
+    )
+    .all() as { dataset: string; topic: string }[];
+  if (unmapped.length > 0) {
+    const pairs = unmapped.map((pair) => `(${pair.dataset}, ${pair.topic})`).join(', ');
+    throw new Error(`topic_buckets: unmapped (dataset, topic) pairs: ${pairs}`);
   }
 };

@@ -1,4 +1,22 @@
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+
+// Startup (import_topic_buckets) loads the bucket mapping from
+// SCROLLSURF_DATA_DIR/datasets/topic_buckets.db and fails loudly if any seeded
+// (dataset, topic) pair is unmapped. Playwright boots the webServer *before*
+// globalSetup runs, so mirror the real mapping into the e2e data dir here in
+// the config — the earliest hook — to keep it in sync on every run.
+const copy_topic_buckets = () => {
+  const src = path.join('datasets', 'topic_buckets.db');
+  if (!existsSync(src)) {
+    throw new Error(`missing reference DB: ${src} (build it with npm run unify-topics)`);
+  }
+  const dest_dir = path.join('e2e', '.data', 'datasets');
+  mkdirSync(dest_dir, { recursive: true });
+  copyFileSync(src, path.join(dest_dir, 'topic_buckets.db'));
+};
+copy_topic_buckets();
 
 // Integration tests run against a dev server on a dedicated port (3100) backed
 // by the seeded test DB in e2e/.data — never the real scrollsurf.db.

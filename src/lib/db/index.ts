@@ -14,6 +14,7 @@ export { get_voted_articles } from './articles';
 export { get_voted_pictures } from './pictures';
 export { fetch_quotes_by_ids, get_voted_quotes } from './quotes';
 export { get_next_feed } from './feed';
+export { rebuild_feed_index } from './feed-index';
 export { get_category_tree } from './topics';
 export {
   cleanup_inactive_users,

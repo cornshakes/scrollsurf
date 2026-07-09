@@ -570,4 +570,38 @@ export const migrations: readonly migration[] = [
       `);
     },
   },
+  {
+    version: 19,
+    name: 'add_feed_index_tables',
+    up: (db) => {
+      // Derived feed-index tables (see src/lib/db/feed-index.ts). A "bucket set"
+      // is the combination of buckets an item's topics resolve to; items sharing
+      // a set have identical affinity and draw weight. Contents are derived
+      // purely from item_topics + topic_buckets and rebuilt wholesale by
+      // rebuild_feed_index() on startup after dataset import, so this migration
+      // only creates the empty tables. set_ids are not stable across rebuilds.
+      db.exec(`
+        CREATE TABLE bucket_set_buckets (
+          set_id INTEGER NOT NULL,
+          bucket TEXT    NOT NULL,
+          PRIMARY KEY (set_id, bucket)
+        );
+
+        CREATE TABLE bucket_set_items (
+          item_id INTEGER PRIMARY KEY REFERENCES items(id),
+          type    TEXT    NOT NULL,
+          set_id  INTEGER NOT NULL
+        );
+
+        CREATE INDEX idx_bucket_set_items_group ON bucket_set_items(type, set_id, item_id);
+
+        CREATE TABLE bucket_set_counts (
+          type       TEXT    NOT NULL,
+          set_id     INTEGER NOT NULL,
+          item_count INTEGER NOT NULL,
+          PRIMARY KEY (type, set_id)
+        );
+      `);
+    },
+  },
 ];

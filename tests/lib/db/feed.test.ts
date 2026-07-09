@@ -7,8 +7,9 @@ import {
   reset_db,
   insert_quote,
 } from '../../helpers/test-db';
-import { get_next_feed, TYPE_SHARES } from '@/lib/db/feed';
-import { save_vote } from '@/lib/db';
+import { get_next_feed } from '@/lib/db/feed';
+import { rebuild_feed_index, save_vote } from '@/lib/db';
+import { TYPE_SHARES } from '@/lib/db/affinity';
 
 beforeAll(setup);
 beforeEach(reset_db);
@@ -17,30 +18,39 @@ const topic = [{ dataset: 'D', topic: 'T' }];
 
 const make_articles = (n: number) => {
   for (let i = 0; i < n; i++) {
-    insert_article({ url: `https://test.article/${i}`, topics: topic });
+    insert_article({ url: `https://test.article/${i}`, topics: topic }, false);
   }
+  rebuild_feed_index();
 };
 
 const make_pictures = (n: number) => {
   for (let i = 0; i < n; i++) {
-    insert_picture({
-      image_url: `https://img/${i}`,
-      url: `https://test.picture/${i}`,
-      topics: topic,
-    });
+    insert_picture(
+      {
+        image_url: `https://img/${i}`,
+        url: `https://test.picture/${i}`,
+        topics: topic,
+      },
+      false
+    );
   }
+  rebuild_feed_index();
 };
 
 const make_quotes = (n: number) => {
   for (let i = 0; i < n; i++) {
-    insert_quote({
-      text: `${i} little ducks go round and round`,
-      url: `https://test.quote/${i}`,
-      author: 'Dan Brown',
-      author_url: `https://wiki.author/${i}`,
-      author_image: `https://wiki.author.image/${i}`,
-    });
+    insert_quote(
+      {
+        text: `${i} little ducks go round and round`,
+        url: `https://test.quote/${i}`,
+        author: 'Dan Brown',
+        author_url: `https://wiki.author/${i}`,
+        author_image: `https://wiki.author.image/${i}`,
+      },
+      false
+    );
   }
+  rebuild_feed_index();
 };
 
 describe('get_next_feed(): Without User', () => {

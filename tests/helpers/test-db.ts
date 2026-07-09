@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { get_db, init_db } from '@/lib/db/connection';
 import { randomUUID } from 'node:crypto';
+import { rebuild_feed_index } from '@/lib/db';
 
 let test_dir: string;
 
@@ -60,7 +61,8 @@ export const insert_article = (
     image_url: string;
     topics: Array<{ dataset: string; topic: string }>;
     categories: string[];
-  }>
+  }>,
+  rebuild_index = true
 ): number => {
   const db = get_db();
   const defaults = {
@@ -69,7 +71,7 @@ export const insert_article = (
     url: `https://example.com/${Date.now()}`,
     description: 'Test description',
     image_url: null,
-    topics: [],
+    topics: [{ dataset: 'TestDataset', topic: 'TestTopic' }],
     categories: [],
   };
   const merged = { ...defaults, ...data };
@@ -97,6 +99,7 @@ export const insert_article = (
       t.dataset,
       t.topic
     );
+    ensure_topic_bucket(t.dataset, t.topic);
   }
   for (const cat of merged.categories ?? []) {
     db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)').run(cat);
@@ -108,17 +111,23 @@ export const insert_article = (
       cat_id
     );
   }
+  if (rebuild_index) {
+    rebuild_feed_index();
+  }
   return item_id;
 };
 
-export const insert_picture = (data: {
-  title?: string;
-  url?: string;
-  image_url: string;
-  caption?: string;
-  credit?: string;
-  topics?: Array<{ dataset: string; topic: string }>;
-}): number => {
+export const insert_picture = (
+  data: {
+    title?: string;
+    url?: string;
+    image_url: string;
+    caption?: string;
+    credit?: string;
+    topics?: Array<{ dataset: string; topic: string }>;
+  },
+  rebuild_index = true
+): number => {
   const db = get_db();
   const title = data.title ?? `Picture ${Date.now()}`;
   const url = data.url ?? `https://example.com/p/${Date.now()}`;
@@ -136,7 +145,7 @@ export const insert_picture = (data: {
     $caption: data.caption ?? '',
     $credit: data.credit ?? null,
   });
-  for (const t of data.topics ?? []) {
+  for (const t of data.topics ?? [{ dataset: 'TestDataset', topic: 'TestTopic' }]) {
     db.prepare('INSERT OR IGNORE INTO datasets (name, source_url) VALUES (?, ?)').run(
       t.dataset,
       `https://en.wikipedia.org/wiki/${t.dataset}`
@@ -146,18 +155,25 @@ export const insert_picture = (data: {
       t.dataset,
       t.topic
     );
+    ensure_topic_bucket(t.dataset, t.topic);
+  }
+  if (rebuild_index) {
+    rebuild_feed_index();
   }
   return item_id;
 };
 
-export const insert_quote = (data: {
-  text: string;
-  url: string;
-  author: string;
-  author_url: string;
-  author_image?: string | null;
-  quote_year?: string | null;
-}): number => {
+export const insert_quote = (
+  data: {
+    text: string;
+    url: string;
+    author: string;
+    author_url: string;
+    author_image?: string | null;
+    quote_year?: string | null;
+  },
+  rebuild_index = true
+): number => {
   const db = get_db();
   const title = data.text ?? `Quote ${Date.now()}`;
   const url = data.url ?? `https://en.wikiquote.org/wiki/test/${Date.now()}`;
@@ -186,12 +202,25 @@ export const insert_quote = (data: {
     'Quotes',
     'Quote of the Day'
   );
+  ensure_topic_bucket('Quotes', 'Quote of the Day');
+  if (rebuild_index) {
+    rebuild_feed_index();
+  }
   return item_id;
+};
+
+const ensure_topic_bucket = (dataset: string, topic: string): void => {
+  const db = get_db();
+  db.prepare('INSERT OR IGNORE INTO topic_buckets (dataset, topic, bucket) VALUES (?, ?, ?)').run(
+    dataset,
+    topic,
+    `${dataset} x ${topic}`
+  );
 };
 
 export const insert_topic_bucket = (dataset: string, topic: string, bucket: string): void => {
   const db = get_db();
-  db.prepare('INSERT INTO topic_buckets (dataset, topic, bucket) VALUES (?, ?, ?)').run(
+  db.prepare('INSERT OR REPLACE INTO topic_buckets (dataset, topic, bucket) VALUES (?, ?, ?)').run(
     dataset,
     topic,
     bucket

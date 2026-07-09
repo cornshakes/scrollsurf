@@ -35,6 +35,7 @@ export interface Quote extends BaseFeedItem {
 }
 
 export type FeedItem = Article | Picture | Quote;
+export type FeedItemType = FeedItem['type'];
 
 export interface TopicStat {
   topic: string;

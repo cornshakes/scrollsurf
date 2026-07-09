@@ -207,6 +207,9 @@ describe('migrate — real history', () => {
       'users',
       'user_items',
       'user_clicks',
+      'bucket_set_items',
+      'bucket_set_buckets',
+      'bucket_set_counts',
     ]) {
       expect(tables).toContain(expected);
     }
@@ -226,6 +229,7 @@ describe('migrate — real history', () => {
     expect(has_object(db, 'idx_item_topics_item')).toBe(true);
     expect(has_object(db, 'idx_items_type')).toBe(true);
     expect(has_object(db, 'idx_user_items_user')).toBe(true);
+    expect(has_object(db, 'idx_bucket_set_items_group')).toBe(true);
     expect(has_object(db, 'feed_items')).toBe(false);
     expect(has_object(db, 'user_settings')).toBe(false);
 

@@ -1,4 +1,5 @@
 import { open_db } from '@/lib/db/connection';
+import { rebuild_feed_index } from '@/lib/db/feed-index';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { type DatabaseSync } from 'node:sqlite';
@@ -235,15 +236,27 @@ const import_feed_items = async (e2e_db: DatabaseSync) => {
 const init_db = async () => {
   const e2e_db_path = path.join('e2e', '.data', 'scrollsurf.db');
   const db = open_db(e2e_db_path);
+  let seeded = false;
   const item_count = db.prepare('select 1 from items limit 1').get();
   if (!item_count) {
     await import_feed_items(db);
+    seeded = true;
   }
   const quote_count = db.prepare('select 1 from quotes limit 1').get();
   if (!quote_count) {
     seed_quotes(db);
+    seeded = true;
   }
   db.close();
+
+  if (seeded) {
+    // The dev server already rebuilt the feed index at boot, before this
+    // seeding ran (Playwright starts the webServer before globalSetup) — so a
+    // freshly seeded fixture DB has an empty index. Rebuild it here. The env
+    // var must point at the e2e dir or get_db() would open the real DB.
+    process.env.SCROLLSURF_DATA_DIR = path.join('e2e', '.data');
+    rebuild_feed_index();
+  }
 
   // The fixture DB persists across runs, but `test_email` accounts are
   // deterministic — purge them so a re-run doesn't hit the unique email

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="919" height="559" fill="#ffffff" stroke="#e2e8f0" rx="8"/>
+  <text x="20" y="34" font-size="16" font-weight="600" fill="#0f172a">Serving one page of the feed (10 slots)</text>
+
+  <!-- weigh groups -->
+  <rect x="24" y="56" width="872" height="116" rx="10" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="44" y="84" font-size="13" font-weight="600" fill="#334155">Weigh every (type, bucket set) group</text>
+  <text x="44" y="108" font-size="12.5" fill="#334155">weight = affinity boost &#215; type share &#247; type pool size</text>
+  <text x="44" y="130" font-size="11.5" fill="#64748b">liked sets appear a few times more often, disliked ones a few times less &#8212; never zero</text>
+  <text x="44" y="148" font-size="11.5" fill="#64748b">dividing by pool size keeps the shares stable no matter how many items each type has</text>
+  <rect x="600" y="96" width="130" height="24" rx="12" fill="#dbeafe" stroke="#93c5fd"/>
+  <text x="665" y="112" font-size="11.5" fill="#1e40af" text-anchor="middle">articles 82&#8202;%</text>
+  <rect x="738" y="96" width="130" height="24" rx="12" fill="#dcfce7" stroke="#86efac"/>
+  <text x="803" y="112" font-size="11.5" fill="#166534" text-anchor="middle">pictures 10&#8202;%</text>
+  <rect x="600" y="128" width="130" height="24" rx="12" fill="#fef3c7" stroke="#fcd34d"/>
+  <text x="665" y="144" font-size="11.5" fill="#92400e" text-anchor="middle">quotes 8&#8202;%</text>
+  <text x="746" y="144" font-size="11" fill="#64748b">quotes ignore affinity</text>
+
+  <line x1="460" y1="174" x2="460" y2="202" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+
+  <!-- stage 1 -->
+  <rect x="24" y="206" width="872" height="88" rx="10" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="44" y="234" font-size="13" font-weight="600" fill="#1e40af">Stage 1 &#8212; pick a group for each of the 10 slots</text>
+  <text x="44" y="258" font-size="12.5" fill="#1e40af">chance &#8733; unseen items in the group &#215; group weight</text>
+  <text x="44" y="280" font-size="11.5" fill="#3b82f6">each pick reduces that group&#8217;s unseen count, so a group can&#8217;t be chosen more often than it has items left</text>
+
+  <line x1="460" y1="296" x2="460" y2="324" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+
+  <!-- stage 2 -->
+  <rect x="24" y="328" width="872" height="72" rx="10" fill="#dcfce7" stroke="#4ade80"/>
+  <text x="44" y="356" font-size="13" font-weight="600" fill="#166534">Stage 2 &#8212; pick the items inside each chosen group</text>
+  <text x="44" y="380" font-size="12.5" fill="#166534">uniform random among that group&#8217;s items the user hasn&#8217;t seen yet &#8212; within a group, every item is an equal candidate</text>
+
+  <line x1="460" y1="402" x2="460" y2="430" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+
+  <!-- finish -->
+  <rect x="24" y="434" width="872" height="60" rx="10" fill="#faf5ff" stroke="#c084fc"/>
+  <text x="44" y="460" font-size="13" font-weight="600" fill="#6b21a8">Finish</text>
+  <text x="44" y="482" font-size="12.5" fill="#6b21a8">mark the served items as seen (they won&#8217;t come up again) &#8594; load their full content per type &#8594; return the page</text>
+
+  <text x="20" y="524" font-size="11.5" fill="#64748b" font-style="italic">The two stages together are exactly a weighted lottery over all unseen items &#8212; but the work is proportional to a few hundred groups,</text>
+  <text x="20" y="540" font-size="11.5" fill="#64748b" font-style="italic">not ~120,000 items. On the Raspberry Pi that took the request from ~2 seconds to tens of milliseconds.</text>
+</svg>

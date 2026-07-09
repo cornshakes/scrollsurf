@@ -294,3 +294,19 @@ That's also how I (you) might adjust it in the future - just change the topic_bu
 
 # Email setup
 To use my icloud account for sending emails, I created an "app-specific password".
+
+# It's been a while.
+
+Usually, I use this diary to document development details, and there would have been quite a bit to write down. This time it's only about claude, and my claude flow has kind of settled recently. Oddly enough, I've come back to doing things manually quite a lot - it's easier on the brain sometimes. A while ago (before this project) I got so annoyed with github copilot suggestions that I turned it all off. I should probably look into better auto complete options to see what I can use there.
+
+# Fable Again
+I used Fable for another hard task - improve get_feed_items performance, something that I just couldn't do with my very limited time. Sure, I would look at what can be precomputed, build an index for it and then use that for queries, but it would take me so much longer that it would be almost impractical, given that I have other things on my mind too.
+
+Something that helps me is to delete all the comments and then make it rewrite them according to my instructions. Otherwise, it just keeps adding more words for every change. It is now obivous to me that this knowledge needs some higher level documentation to be able to survive, so let's add diagrams!
+
+I am actually able to make some improvements, e.g. simplifying code by assuming that all items have topic buckets, when the original accounted for missing buckets because of 1 missing mapping. Deleting redundant tests & double-checky extra code that I instead want to fail if my data is actually bad. There's lots of code like that, a kind of code that makes it all work even when it shouldn't.
+
+Manually editing & refactoring the code is also very helpful in understanding everything (I mean that's what that's about isn't it). I do simple things like splitting one-liners into blocks with nicely named variables, extracting and merging functions and types, adding and removing comments.
+
+Towards the end, the refactoring really got heavy. It's totally different and (I hope) much more understandable now. Fable is happy to loop with complex cursor mechanisms, use one GenericType all the way etc, but my brain isn't.
+Now that I'm done, I feel like I'm not. This one feature took so long I can't believe this is it.

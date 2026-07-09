@@ -18,6 +18,7 @@
     "playwright-ui": "playwright test --ui",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
+    "test:e2e:reset-db": "rm -rf e2e/.data",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "coverage:open": "open coverage/lcov-report/index.html",
