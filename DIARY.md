@@ -302,7 +302,7 @@ Usually, I use this diary to document development details, and there would have 
 # Fable Again
 I used Fable for another hard task - improve get_feed_items performance, something that I just couldn't do with my very limited time. Sure, I would look at what can be precomputed, build an index for it and then use that for queries, but it would take me so much longer that it would be almost impractical, given that I have other things on my mind too.
 
-Something that helps me is to delete all the comments and then make it rewrite them according to my instructions. Otherwise, it just keeps adding more words for every change. It is now obivous to me that this knowledge needs some higher level documentation to be able to survive, so let's add diagrams!
+Something that helps me is to delete all the comments and then make it rewrite them according to my instructions. Otherwise, it just keeps adding more words for every change. It is now obivous to me that this knowledge needs some higher level documentation to be able to survive, so let's add [diagrams](./docs/Dataflow.md)! I always hated mermaid but obv don't like to manually make svgs - but now that that's easy too, md with svgs is my obious format choice.
 
 I am actually able to make some improvements, e.g. simplifying code by assuming that all items have topic buckets, when the original accounted for missing buckets because of 1 missing mapping. Deleting redundant tests & double-checky extra code that I instead want to fail if my data is actually bad. There's lots of code like that, a kind of code that makes it all work even when it shouldn't.
 
