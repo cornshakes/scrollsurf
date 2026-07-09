@@ -1,6 +1,6 @@
 # Scrollsurf
 
-[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net) and read the [diary](./DIARY.md)!
+[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net) and read the [diary](./DIARY.md#fable-again)!
 
 
 Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike them, and visit the full articles on wikipedia itself. The articles that it shows you are randomly selected from these datasets:
@@ -43,16 +43,25 @@ Then, you can categorize the articles by running
 
 ```bash
 npm run categorize
+npm run categorize-commons
 ```
 
 Currently, that's not very useful - it just builds a huge category tree that you can look at.
-After downloading at least one dataset, you can
+
+Then you have to manually assign topic buckets (long story)
+```bash
+npm run unify-topics
+```
+
+And then you should be able to 
 
 ```bash
 npm run dev
 ```
 
-and go to [http://localhost:3000](http://localhost:3000)
+and go to [http://localhost:3000](http://localhost:3000).  
+But let's not kid ourselves, this is likely to fail at some point because it only ever ran on my machine.
+Let me know if you need help :)
 
 ## Clicks, Likes & Dislikes
 
