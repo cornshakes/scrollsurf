@@ -1,9 +1,17 @@
 # Scrollsurf
 
-[Visit this app on my raspberry](https://scrollsurf.tail812f0.ts.net) and read the [diary](./DIARY.md#fable-again)!
+[Visit this app on my raspberry!](https://scrollsurf.tail812f0.ts.net)  
 
+With scrollsurf you can  
+   - scroll through the best wikipedia articles, wikimedia pictures, and wikiquote quotes
+   - vote on items to influence your feed
+   - look at all your voted items
+   - log in with your e-mail to sync your laptop and phone
+   - download all your data (seen, clicked, liked, disliked items)
+   - withdraw cookie consent to make me forget everything
+   - read my [diary](./DIARY.md#fable-again)  
 
-Scrollsurf lets you scroll through wikipedia article abstracts, like/dislike them, and visit the full articles on wikipedia itself. The articles that it shows you are randomly selected from these datasets:
+The articles, pictures and quotes are randomly selected from these datasets:
 
 - [The 50000 most vital articles](https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level_5)
 
