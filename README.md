@@ -79,10 +79,15 @@ Read more about how it all works in [Dataflow.md](./docs/Dataflow.md).
 
 ## Cookies, Accounts & Login
 
+Consent is recorded in the client-readable **`ss_consent`** cookie (`granted` / `denied` /
+`unknown`). When you try to vote on a feed item without having granted consent, the consent dialog opens instead.
+
 Once the user agrees to use cookies, their seen items, likes and clicks are stored with the cookie as the key. So when the cookie is cleared or expires after inactivity, that data is lost. Logging in with an email binds that history to an account, which multiple browser cookies can then point at.
 
+The `tokens` table maps each browser cookie to a row in `users`, and several cookies can point at the same account. An anonymous user is a `users` row with no email. Stale cookies are swept after `USER_INACTIVITY_DAYS` (default 14) of inactivity by `cleanup_inactive_users` on startup — the underlying user row and its history survive, only the cookie is dropped.
 
-The `tokens` table maps each browser cookie to a row in `users`, and several cookies can point at the same account. An anonymous user is a `users` row with no email. Stale cookies are swept after `USER_INACTIVITY_DAYS` (default 14 of inactivity by `cleanup_inactive_users` on startup — the underlying user row and its history survive, only the cookie is dropped.
+When revoking cookie consent, you can choose to leave your anonymized data for research, but by default all your data will be deleted.
+
 
 ### Passwordless email login
 
@@ -115,15 +120,6 @@ When "logging in", i.e. changing from anonymous to email, the anonymous account'
 the anonymous identity is repointed to the account, and the anon user row is deleted.
 When "switching" accounts, i.e. changing from one email account to another, the browser cookie is pointed to the other account without any further changes.
 
-### Consent & revoking it
-
-Consent is recorded in the client-readable **`ss_consent`** cookie (`granted` / `denied` /
-`unknown`), surfaced through `ConsentContext` in
-[CookieConsent.tsx](src/components/CookieConsent.tsx). Voting and link-click tracking are
-consent-gated: without `granted` consent the client never fires the request and opens the
-consent dialog instead.
-
-**Revoking consent while logged in** (`unlink_email`) clears the email field only — the account's history stays intact but is **no longer recoverable by email re-login**. Logging in again with the same email therefore lands in the "email is new" branch and creates a fresh, empty account.
 
 ## Integration Testing
 
