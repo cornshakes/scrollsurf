@@ -310,3 +310,10 @@ Manually editing & refactoring the code is also very helpful in understanding ev
 
 Towards the end, the refactoring really got heavy. It's totally different and (I hope) much more understandable now. Fable is happy to loop with complex cursor mechanisms, use one GenericType all the way etc, but my brain isn't.
 Now that I'm done, I feel like I'm not. This one feature took so long I can't believe this is it.
+
+# Result
+
+So this was fun; I will leave this project for now. At first, I was amazed at what claude can do, and I wanted to make it do even more of that.
+Soon I came to realize the obvious - coding is not the bottleneck anymore, planning and review is, *even for personal projects*.
+In my next project, I will go way less yolo i.e. I will stop doing monster commits. Instead I'll go back to branches with multiple smaller commits that are easy to review. The issues/plans themselves should be smaller too - it's still ok to e.g. first do all the backend parts and then all the frontend parts in separate issues, to keep it small. I might create tracking issues / plans a level above. I should also be more strict regarding code / design quality from the beginning - that's the cool part, I can afford to get it right the first time, especially when working with small changesets.
+
