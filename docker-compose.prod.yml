@@ -9,6 +9,11 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_SERVE_CONFIG: /config/serve.json
       TS_USERSPACE: "false"
+      # The Pi runs a 6.18 kernel, which ships no legacy iptables backend
+      # (no ip_tables.ko / iptable_filter.ko — only nf_tables). Without this,
+      # tailscaled fails to build its filter table and Funnel TLS handshakes
+      # are reset at the edge (browsers report PR_END_OF_FILE_ERROR).
+      TS_DEBUG_FIREWALL_MODE: nftables
     volumes:
       - ts-state:/var/lib/tailscale
       - ${DATA_DIR_HOST}/serve.json:/config/serve.json:ro
