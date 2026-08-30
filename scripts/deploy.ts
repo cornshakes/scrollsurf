@@ -6,7 +6,7 @@ import path from 'node:path';
 const [, , command, target] = process.argv;
 
 if (!command || !target || (target !== 'test' && target !== 'prod')) {
-  console.error('Usage: deploy.ts <up|down|logs|funnel> <test|prod>');
+  console.error('Usage: deploy.ts <up|down|logs> <test|prod>');
   process.exit(1);
 }
 
@@ -17,77 +17,82 @@ if (!existsSync(path.resolve(env_file))) {
 }
 process.loadEnvFile(path.resolve(env_file));
 
-const pi_ssh = process.env.PI_SSH;
+const ssh_host = process.env.SSH_HOST;
+const docker_context = process.env.DOCKER_CONTEXT;
 const data_dir_host = process.env.DATA_DIR_HOST;
 
-if (!pi_ssh) {
-  throw new Error(`PI_SSH must be set in ${env_file}`);
+if (!ssh_host) {
+  throw new Error(`SSH_HOST must be set in ${env_file}`);
+}
+if (!docker_context) {
+  throw new Error(`DOCKER_CONTEXT must be set in ${env_file}`);
 }
 if (command === 'up') {
   if (!data_dir_host) {
     throw new Error(`DATA_DIR_HOST must be set in ${env_file}`);
   }
-  if (target === 'prod' && !process.env.TS_AUTHKEY) {
-    throw new Error(`TS_AUTHKEY must be set in ${env_file} for prod deploys`);
-  }
 }
+
+// The box is amd64, the Pi is arm64. A remote build on the box leaves the image
+// where it is needed; the Mac can only cross-build for the Pi and ship it over.
+const build_mode = target === 'prod' ? 'remote' : 'local';
+const platform = target === 'prod' ? 'linux/amd64' : 'linux/arm64';
 
 const compose_file = `docker-compose.${target}.yml`;
 const project = `scrollsurf-${target}`;
-const dc = `docker --context pi compose -p ${project} --env-file ${env_file} -f ${compose_file}`;
+const dc = `docker --context ${docker_context} compose -p ${project} --env-file ${env_file} -f ${compose_file}`;
 
 const run = (cmd: string) => execSync(cmd, { stdio: 'inherit' });
 
+// `compose up` against a missing external network fails with an error that says
+// nothing about how to repair it, so check first and name the fix.
+const check_caddy_net = () => {
+  try {
+    execSync(`docker --context ${docker_context} network inspect caddy_net`, { stdio: 'ignore' });
+  } catch {
+    throw new Error(
+      `The external network caddy_net does not exist on the ${docker_context} context. ` +
+        'Create it with `docker --context ' +
+        docker_context +
+        ' network create caddy_net`, or bring up the proxy in ~/code/box-caddy first.'
+    );
+  }
+};
+
 if (command === 'up') {
-  if (arch() !== 'arm64') {
-    throw new Error(`Local build requires an ARM64 machine (current: ${arch()}).`);
+  if (target === 'prod') {
+    check_caddy_net();
   }
   const datasets_dir = path.resolve('datasets');
   const has_datasets =
     existsSync(datasets_dir) && readdirSync(datasets_dir).some((f) => f.endsWith('.db'));
   if (has_datasets) {
-    run(`rsync -av --delete ${datasets_dir}/ ${pi_ssh}:${data_dir_host}/datasets/`);
+    run(`rsync -av --delete ${datasets_dir}/ ${ssh_host}:${data_dir_host}/datasets/`);
   } else {
     console.warn(
       `No *.db files in ${datasets_dir} — skipping dataset sync. ` +
         'Run the download-* scripts first if the app should have content.'
     );
   }
-  if (target === 'prod') {
-    // Push the Funnel serve config to an absolute path on the Pi. A relative
-    // bind mount in the compose file resolves against the local (Mac) path and
-    // is fabricated as an empty dir on the remote daemon, so copy it explicitly.
-    const serve_config = path.resolve('tailscale/serve.json');
-    if (!existsSync(serve_config)) {
-      throw new Error(`${serve_config} not found — required for prod Funnel`);
-    }
-    run(`rsync -av ${serve_config} ${pi_ssh}:${data_dir_host}/serve.json`);
-  }
   const image = `scrollsurf-${target}`;
   const commit_id = execSync('git rev-parse --short HEAD').toString().trim();
-  run(`docker build --platform linux/arm64 --build-arg COMMIT_ID=${commit_id} -t ${image} .`);
-  run(`docker save ${image} | gzip | ssh ${pi_ssh} docker load`);
-  run(`${dc} up -d`);
-  if (target === 'prod') {
-    console.warn('\nChecking Tailscale Funnel status...');
-    try {
-      run(`${dc} exec ts-scrollsurf tailscale funnel status`);
-    } catch {
-      console.warn('(funnel status unavailable — container may still be starting)');
+  if (build_mode === 'local') {
+    if (arch() !== 'arm64') {
+      throw new Error(`Local build requires an ARM64 machine (current: ${arch()}).`);
     }
+    run(`docker build --platform ${platform} --build-arg COMMIT_ID=${commit_id} -t ${image} .`);
+    run(`docker save ${image} | gzip | ssh ${ssh_host} docker load`);
+  } else {
+    // The remote daemon already holds the built image — no save/load round trip.
+    run(
+      `docker --context ${docker_context} build --build-arg COMMIT_ID=${commit_id} -t ${image} .`
+    );
   }
+  run(`${dc} up -d`);
 } else if (command === 'logs') {
-  // not logging output from tailscale sidecar container
-  // run(`${dc} logs -f`);
   run(`${dc} logs -f app`);
 } else if (command === 'down') {
   run(`${dc} down`);
-} else if (command === 'funnel') {
-  if (target !== 'prod') {
-    console.error('funnel command is only available for the prod target');
-    process.exit(1);
-  }
-  run(`${dc} exec ts-scrollsurf tailscale funnel status`);
 } else {
   console.error(`Unknown command: ${command}`);
   process.exit(1);

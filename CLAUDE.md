@@ -60,7 +60,7 @@ notices.
 # Tech stack
 
 - **Next.js 16.2.9** (App Router) + **React 19.2.7**. Output mode `standalone`;
-  deployed to a Raspberry Pi via `scripts/deploy.ts`.
+  deployed via `scripts/deploy.ts` — test to a Raspberry Pi, prod to the box.
 - **MUI v9** (`@mui/material`) for all UI — styling is the `sx` prop only. **No
   Tailwind, no CSS modules** in components. Theme and light/dark color schemes
   live in `src/components/App.tsx`.
@@ -89,9 +89,8 @@ notices.
 | `npm run test:e2e:ui`     | Playwright interactive UI                                           |
 | `test:e2e:reset-db`       | removes the e2e fixture db                                          |
 | `deploy:test              | prod`                                                               |
-| `pi:logs:test             | prod`                                                               |
-| `pi:funnel`               | Turn on tailscale funnel                                            |
-| `pi:down:test             | prod`                                                               |
+| `logs:test                | prod`                                                               |
+| `down:test                | prod`                                                               |
 
 # Architecture
 

@@ -2,13 +2,13 @@
 
 # [Plan 1 — Move prod from the Pi to the box](plan-1.md)
 
-1. Make host, docker context and build mode per-target in scripts/deploy.ts []
-2. Turn the prod compose file into a caddy tenant []
-3. Drop Tailscale from the deploy script and delete tailscale/serve.json []
-4. Rename the pi:\* npm scripts and update .env.example []
-5. Add sites/scrollsurf.caddy to the box-caddy project []
-6. Update DEPLOY.md, README.md and CLAUDE.md []
-7. Cut over on the box []
+1. Make host, docker context and build mode per-target in scripts/deploy.ts [x]
+2. Turn the prod compose file into a caddy tenant [x]
+3. Drop Tailscale from the deploy script and delete tailscale/serve.json [x]
+4. Rename the pi:\* npm scripts and update .env.example [x]
+5. Add sites/scrollsurf.caddy to the box-caddy project [x]
+6. Update DEPLOY.md, README.md and CLAUDE.md [x]
+7. Cut over on the box [x]
 
 ## Notes
 

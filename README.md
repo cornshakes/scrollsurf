@@ -1,6 +1,6 @@
 # Scrollsurf
 
-[Visit this app on my raspberry!](https://scrollsurf.tail812f0.ts.net)
+[Visit this app!](https://scrollsurf.cornshakes.at)
 
 With scrollsurf you can
 
