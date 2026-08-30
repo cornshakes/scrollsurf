@@ -11,7 +11,7 @@ const GITHUB_USER = 'cornshakes';
 const GITHUB_URL = `https://github.com/${GITHUB_USER}`;
 const GITHUB_AVATAR = `${GITHUB_URL}.png`;
 
-const CONTACT_EMAIL = '86-bowling-treat@icloud.com';
+const CONTACT_EMAIL = 'michael@cornshakes.at';
 const CONTACT_SUBJECT = 'Scrollsurf feedback';
 const CONTACT_BODY = "Hi! I've been using Scrollsurf and wanted to say:\n\n";
 const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
