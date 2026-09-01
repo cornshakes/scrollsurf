@@ -2,11 +2,13 @@
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
+RUN npm install -g npm@12
 COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
+RUN npm install -g npm@12
 ENV NEXT_TELEMETRY_DISABLED=1 \
 NODE_OPTIONS=--max-old-space-size=2048
 ARG COMMIT_ID
