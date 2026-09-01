@@ -5,6 +5,7 @@
 import { chunk } from 'es-toolkit';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
+import { skip_discovery } from './discovery';
 import { fetch_article_content, title_to_url } from './wiki';
 
 const BATCH_SIZE = 15;
@@ -67,22 +68,37 @@ const open_reference_db = (filename: string, title: string, source_url: string) 
   return db;
 };
 
-// Phase 1 with caching: discover article titles once, persist them to
-// discovered_articles, and flag completion in metadata. Re-runs read the cache.
+// Phase 1: always re-run discovery so upstream additions are picked up, and
+// merge the result into discovered_articles. Discovery is cheap (a handful of
+// index-page fetches) next to phase 2, and INSERT OR IGNORE keeps it idempotent:
+// titles already downloaded keep their done flag and are not re-fetched.
+// Pass --no-discover (or SKIP_DISCOVERY=1) to read the cache instead.
 const discover_with_cache = async (
   db: DatabaseSync,
   discover: () => Promise<DiscoveredArticle[]>
 ): Promise<DiscoveredArticle[]> => {
-  const fetched = db.prepare("SELECT 1 FROM metadata WHERE key = 'urls_fetched'").get();
-  if (fetched) {
+  const read_cache = (): DiscoveredArticle[] => {
     const rows = db.prepare('SELECT title, topic FROM discovered_articles').all() as {
       title: string;
       topic: string;
     }[];
-    const unique = new Set(rows.map((r) => r.title)).size;
-    process.stdout.write(`Phase 1: Skipped (${unique} unique articles already discovered).\n`);
-    return rows.map((r) => ({ title: r.title, topic: r.topic || undefined }));
+    return rows.map((row) => ({ title: row.title, topic: row.topic || undefined }));
+  };
+
+  if (skip_discovery()) {
+    const cached = read_cache();
+    const unique = new Set(cached.map((entry) => entry.title)).size;
+    process.stdout.write(
+      `Phase 1: Skipped by request (${unique} unique articles already discovered).\n`
+    );
+    return cached;
   }
+
+  const known_before = new Set(
+    (db.prepare('SELECT DISTINCT title FROM discovered_articles').all() as { title: string }[]).map(
+      (row) => row.title
+    )
+  );
 
   process.stdout.write('Phase 1: Discovering article URLs...\n');
   const discovered = await discover();
@@ -90,13 +106,23 @@ const discover_with_cache = async (
     'INSERT OR IGNORE INTO discovered_articles (title, topic) VALUES (?, ?)'
   );
   db.exec('BEGIN');
-  for (const { title, topic } of discovered) insert.run(title, topic ?? '');
+  for (const { title, topic } of discovered) {
+    insert.run(title, topic ?? '');
+  }
   db.prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES ('urls_fetched', '1')").run();
   db.exec('COMMIT');
 
-  const unique = new Set(discovered.map((d) => d.title)).size;
-  process.stdout.write(`Found ${unique} unique articles.\n`);
-  return discovered;
+  const unique_titles = new Set(discovered.map((entry) => entry.title));
+  const added = [...unique_titles].filter((title) => !known_before.has(title)).length;
+  const missing = [...known_before].filter((title) => !unique_titles.has(title)).length;
+  process.stdout.write(
+    `Found ${unique_titles.size} unique articles (${added} new since last run` +
+      `${missing > 0 ? `, ${missing} no longer listed upstream` : ''}).\n`
+  );
+
+  // Return the union of freshly discovered and previously cached entries: an
+  // article dropped upstream stays in the dataset rather than losing its topics.
+  return read_cache();
 };
 
 export const download_dataset = async (options: DownloadDatasetOptions): Promise<void> => {

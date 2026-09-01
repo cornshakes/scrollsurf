@@ -159,15 +159,49 @@ section subpages; etc.). Shared helpers live in `scripts/lib/`:
 
 - `dataset.ts` / `pictures-dataset.ts` / `quotes-dataset.ts` — the three-phase
   discover→batch-download orchestration for articles, pictures, and quotes.
-- `wiki.ts` / `commons.ts` / `wikiquote.ts` — Wikipedia, Wikimedia Commons, and
-  Wikiquote API clients.
+- `wiki.ts` / `commons.ts` — Wikipedia and Wikimedia Commons API clients. (The
+  Wikiquote client is `wikiquote_api` in `scripts/datasets/download-quotes.ts`;
+  there is no `lib/wikiquote.ts`.)
 - `mediawiki.ts` — the shared serial MediaWiki client (serial pacing, `maxlag`,
-  exponential backoff, gzip) — where API etiquette is enforced.
+  exponential backoff, gzip, on-disk response cache) — where API etiquette is
+  enforced.
+- `discovery.ts` — the `--no-discover` / `SKIP_DISCOVERY=1` escape hatch shared
+  by the article and picture pipelines.
 
 All download scripts are resumable: already-downloaded items are skipped.
 **Datasets are download-once, no backfill** — if a download bug ships bad data,
 fix the bug, delete the reference DB, and redownload; never add repair/migration
 machinery to the pipeline.
+
+### Discovery re-runs; content does not
+
+"Download-once" applies to an item's **content**, not to the set of items.
+Phase 1 (discovery) re-runs on **every** invocation so items added upstream are
+picked up; the inserts are `INSERT OR IGNORE` and phase 2 is gated on a per-row
+`done` flag, so nothing already downloaded is re-fetched. Discovery costs a
+handful of index-page fetches against thousands of content fetches, so this is
+cheap. Pass `--no-discover` (or `SKIP_DISCOVERY=1`, see
+`scripts/lib/discovery.ts`) to skip it when only resuming an interrupted phase 2.
+
+Items **delisted upstream are kept**, not pruned: discovery returns the union of
+freshly discovered and previously cached entries, so an article demoted from a
+list keeps its topics rather than silently losing them. Each run reports
+`N new since last run, M no longer listed upstream`.
+
+> [!WARNING]
+> Never gate discovery behind a one-shot "already discovered" flag. Two such
+> latches (a `urls_fetched` metadata key for articles/pictures, a
+> `needs_discovery` row-count check for quotes) made every dataset permanently
+> unable to see new items — they were removed deliberately. A dataset that
+> reports "0 new" must have actually re-read its source this run.
+
+Quotes carry two extra wrinkles. `Wikiquote:QOTD by month` **lags reality** — it
+linked only through June 2026 while July–September already existed — so
+`download-quotes.ts` also generates the predictable month titles, probes which
+exist, and unions them with the index links. And a QOTD month page gains one
+entry per day, so a month parsed mid-month is short: `reopen_incomplete_months`
+re-opens any past month whose stored quotes fall short of its day count, and the
+current month is re-opened unconditionally.
 
 ## SQLite & the `src/lib/db/` layer
 
@@ -394,6 +428,35 @@ All etiquette is enforced in `scripts/lib/mediawiki.ts` per
 — serial requests only (batch titles with `|`), descriptive `User-Agent`,
 `maxlag`, backoff on `429`/`503`, gzip, `format=json`, no re-fetching cached
 data. Route all MediaWiki calls through it; don't bypass it.
+
+### Response cache & TTL
+
+`create_mediawiki_api` caches every non-error response on disk in
+`scripts/.cache/mediawiki.db` (Keyv + SQLite), keyed by endpoint + sorted params.
+A hit skips both the request and the serial-pacing delay.
+
+**Entries never expire by default.** That is correct for immutable content — an
+article's extract for a given title — which is the bulk of what a download
+fetches. It is **wrong for any page whose content grows over time**: index and
+listing pages gain entries, and a QOTD month page gains one per day. An
+unexpiring copy of such a page makes new items permanently invisible, which is
+exactly how a stale June 2026 month page looked like a genuine upstream gap.
+
+So: **any call that reads a mutable listing/index page must pass a TTL** —
+`api(params, { ttl_ms: DISCOVERY_TTL_MS })` (1 hour). Current TTL'd call sites:
+`fetch_wikitext` (`wiki.ts`), `commons_fetch_wikitext` (`commons.ts`), the
+Commons subpage lister, and the QOTD month index / month HTML / month existence
+probe in `download-quotes.ts`. Content fetches deliberately stay unexpiring.
+
+To force a refetch by hand, delete the matching rows rather than the whole cache
+(rebuilding 1GB+ of content is needless load on the API):
+
+```bash
+sqlite3 scripts/.cache/mediawiki.db "delete from keyv where key like '%prop=wikitext%';"
+```
+
+If a download reports no new items and you suspect the source did change, check
+the cache before concluding the source is unchanged.
 
 ## Testing
 

@@ -75,9 +75,69 @@ export const open_quotes_db = (filename: string): DatabaseSync => {
   return db;
 };
 
-export const needs_discovery = (db: DatabaseSync): boolean => {
+export const count_months = (db: DatabaseSync): number => {
   const row = db.prepare('SELECT COUNT(*) AS n FROM discovered_months').get() as { n: number };
-  return row.n === 0;
+  return row.n;
+};
+
+// Clears the done flag for a month page so it is parsed again — used for the
+// month in progress, which gains a new quote every day.
+export const reopen_month = (db: DatabaseSync, page: string): void => {
+  db.prepare('UPDATE discovered_months SET done = 0 WHERE page = ?').run(page);
+};
+
+// Months whose stored quotes stop short of the month's length were parsed while
+// the month was still in progress (the QOTD page gains one entry per day), so
+// they need re-parsing. `pages` maps a month page title to the number of days
+// that month has; only past months are worth checking.
+export const reopen_incomplete_months = (
+  db: DatabaseSync,
+  pages: Map<string, number>
+): string[] => {
+  const counts = db
+    .prepare(
+      `SELECT substr(qotd_date, 1, 7) AS month, COUNT(*) AS n FROM quotes
+       WHERE qotd_date IS NOT NULL GROUP BY month`
+    )
+    .all() as unknown as { month: string; n: number }[];
+  const by_month = new Map(counts.map((row) => [row.month, row.n]));
+
+  const reopened: string[] = [];
+  const update = db.prepare('UPDATE discovered_months SET done = 0 WHERE page = ? AND done = 1');
+  for (const [page, days_in_month] of pages) {
+    const month_key = month_key_for_page(page);
+    if (month_key && (by_month.get(month_key) ?? 0) < days_in_month) {
+      const result = update.run(page);
+      if (Number(result.changes) > 0) {
+        reopened.push(page);
+      }
+    }
+  }
+  return reopened;
+};
+
+const MONTH_NUMBERS = new Map(
+  [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ].map((name, index) => [name, String(index + 1).padStart(2, '0')])
+);
+
+// "Wikiquote:Quote of the day/June 2026" -> "2026-06"
+const month_key_for_page = (page: string): string | null => {
+  const match = page.match(/\/([A-Za-z]+) (\d{4})$/);
+  const month = match && MONTH_NUMBERS.get(match[1]);
+  return match && month ? `${match[2]}-${month}` : null;
 };
 
 export const record_months = (db: DatabaseSync, pages: string[]): void => {

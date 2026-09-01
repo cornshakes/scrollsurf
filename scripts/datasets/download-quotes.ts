@@ -1,7 +1,9 @@
 import * as cheerio from 'cheerio';
 import {
   open_quotes_db,
-  needs_discovery,
+  count_months,
+  reopen_month,
+  reopen_incomplete_months,
   record_months,
   get_undone_months,
   mark_month_done,
@@ -19,7 +21,8 @@ import {
   type DiscoveredQuote,
   type AuthorImage,
 } from '../lib/quotes-dataset';
-import { create_mediawiki_api } from '../lib/mediawiki';
+import { create_mediawiki_api, DISCOVERY_TTL_MS } from '../lib/mediawiki';
+import { skip_discovery } from '../lib/discovery';
 
 export const wikiquote_api = create_mediawiki_api('https://en.wikiquote.org/w/api.php');
 
@@ -71,6 +74,89 @@ const qotd_date_from_url = (day_url: string): string | null => {
 };
 
 // Fetch monthly QOTD subpage titles from the index page.
+// Maps each month page title to how many days that month has, so a partially
+// parsed month can be detected. The current month is excluded — it is re-opened
+// unconditionally and is not "incomplete" in the same sense.
+const days_in_month_pages = (pages: string[]): Map<string, number> => {
+  const current = current_month_page();
+  const result = new Map<string, number>();
+  for (const page of pages) {
+    if (page === current) {
+      continue;
+    }
+    const match = page.match(/\/([A-Za-z]+) (\d{4})$/);
+    if (!match) {
+      continue;
+    }
+    const month_index = MONTH_NAMES.indexOf(match[1]);
+    if (month_index < 0) {
+      continue;
+    }
+    result.set(page, new Date(Number(match[2]), month_index + 1, 0).getDate());
+  }
+  return result;
+};
+
+// The month page for today, in the same "Wikiquote:Quote of the day/Month YYYY"
+// form fetch_month_pages produces.
+const current_month_page = (): string => {
+  const now = new Date();
+  const month = now.toLocaleString('en-US', { month: 'long' });
+  return `Wikiquote:Quote of the day/${month} ${now.getFullYear()}`;
+};
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+// Every month page title in [YEAR_MIN, YEAR_MAX] up to the current month —
+// months beyond it cannot exist yet.
+const expected_month_pages = (): string[] => {
+  const now = new Date();
+  const pages: string[] = [];
+  for (let year = YEAR_MIN; year <= YEAR_MAX; year++) {
+    const last_month = year === now.getFullYear() ? now.getMonth() : MONTH_NAMES.length - 1;
+    for (let month = 0; month <= last_month; month++) {
+      pages.push(`Wikiquote:Quote of the day/${MONTH_NAMES[month]} ${year}`);
+    }
+  }
+  return pages;
+};
+
+// Keeps only the titles that exist on Wikiquote (batched, 50 titles per query).
+const filter_existing_pages = async (titles: string[]): Promise<string[]> => {
+  const existing: string[] = [];
+  for (let index = 0; index < titles.length; index += 50) {
+    const batch = titles.slice(index, index + 50);
+    const params = new URLSearchParams({
+      action: 'query',
+      titles: batch.join('|'),
+      format: 'json',
+      formatversion: '2',
+    });
+    const data = (await wikiquote_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
+      query: { pages: Array<{ title: string; missing?: boolean }> };
+    };
+    for (const page of data.query.pages) {
+      if (!page.missing) {
+        existing.push(page.title);
+      }
+    }
+  }
+  return existing;
+};
+
 // Filters to titles matching "Wikiquote:Quote of the day/Month YYYY" in [YEAR_MIN, YEAR_MAX].
 const fetch_month_pages = async (): Promise<string[]> => {
   const results: string[] = [];
@@ -90,7 +176,7 @@ const fetch_month_pages = async (): Promise<string[]> => {
       params.set('plcontinue', plcontinue);
     }
 
-    const data = (await wikiquote_api(params)) as {
+    const data = (await wikiquote_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
       query: { pages: Array<{ links?: Array<{ title: string }> }> };
       continue?: { plcontinue: string };
     };
@@ -109,7 +195,15 @@ const fetch_month_pages = async (): Promise<string[]> => {
     plcontinue = data.continue?.plcontinue;
   } while (plcontinue);
 
-  return results.sort();
+  // "Wikiquote:QOTD by month" lags behind: as of writing it links only through
+  // June 2026 while later month pages already exist. Month titles are fully
+  // predictable, so union the index links with every month in range that really
+  // exists — otherwise recent months would never be discovered.
+  const extra = await filter_existing_pages(
+    expected_month_pages().filter((page) => !results.includes(page))
+  );
+
+  return [...results, ...extra].sort();
 };
 
 // Extract day-entry quotes from a monthly QOTD page's rendered HTML. Each day's
@@ -220,7 +314,9 @@ const fetch_month_quotes = async (page: string): Promise<DiscoveredQuote[]> => {
     formatversion: '2',
   });
 
-  const data = (await wikiquote_api(params)) as {
+  // A month page gains an entry every day, so this must expire — an unexpiring
+  // copy is what previously froze a month at the day it was first parsed.
+  const data = (await wikiquote_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
     parse?: { text: string };
     error?: { code: string; info: string };
   };
@@ -496,7 +592,9 @@ const fetch_quote_times_from_page = async (
     formatversion: '2',
   });
 
-  const data = (await wikiquote_api(params)) as {
+  // A month page gains an entry every day, so this must expire — an unexpiring
+  // copy is what previously froze a month at the day it was first parsed.
+  const data = (await wikiquote_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
     parse?: { text: string };
     error?: { code: string; info: string };
   };
@@ -598,19 +696,30 @@ const fetch_source_quote_times = async (
 const run = async (): Promise<void> => {
   const db = open_quotes_db('quotes.db');
 
-  // Phase 1: Discover month pages
-  if (needs_discovery(db)) {
+  // Phase 1: Discover month pages. This re-runs on every download so months
+  // published since the last run are picked up; record_months is INSERT OR
+  // IGNORE, so months already parsed keep their done flag.
+  if (skip_discovery()) {
+    const undone = get_undone_months(db);
+    process.stdout.write(`Phase 1: Skipped by request (${undone.length} months remaining).\n`);
+  } else {
     process.stdout.write(`Phase 1: Discovering month pages for years ${YEAR_MIN}–${YEAR_MAX}...\n`);
+    const known_before = count_months(db);
     const month_pages = await fetch_month_pages();
     if (month_pages.length === 0) {
       process.stdout.write(`No month pages found for years ${YEAR_MIN}–${YEAR_MAX}.\n`);
       return;
     }
     record_months(db, month_pages);
-    process.stdout.write(`Found ${month_pages.length} month pages.\n`);
-  } else {
-    const undone = get_undone_months(db);
-    process.stdout.write(`Phase 1: Skipped (${undone.length} months remaining).\n`);
+    // A QOTD page gains one entry per day, so a month parsed while it was still
+    // in progress is missing its later days. Re-parse the current month and any
+    // past month whose stored quotes fall short of its length.
+    reopen_month(db, current_month_page());
+    const reopened = reopen_incomplete_months(db, days_in_month_pages(month_pages));
+    process.stdout.write(
+      `Found ${month_pages.length} month pages (${count_months(db) - known_before} new since last run` +
+        `${reopened.length > 0 ? `, ${reopened.length} incomplete month(s) re-opened` : ''}).\n`
+    );
   }
 
   // Phase 2: Download and parse each month

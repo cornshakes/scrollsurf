@@ -5,6 +5,7 @@ import {
   commons_fetch_image_content,
   commons_fetch_categories,
 } from '../lib/commons';
+import { DISCOVERY_TTL_MS } from '../lib/mediawiki';
 
 // Commons: namespace is namespace 4
 const COMMONS_NS = 4;
@@ -57,7 +58,8 @@ const fetch_subpages = async (): Promise<{ title: string; topic: string }[]> => 
       ...(apcontinue ? { apcontinue } : {}),
     });
 
-    const data = (await commons_api(params)) as {
+    // The subpage list grows as new galleries are added — must expire.
+    const data = (await commons_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
       query: { allpages: { title: string }[] };
       continue?: { apcontinue: string };
     };

@@ -12,11 +12,28 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const REQUEST_DELAY_MS = 500;
 
+// Staleness bound for requests that read a page whose content grows over time
+// (dataset index pages, QOTD month pages). One hour keeps a single download run
+// — and back-to-back runs while iterating — on one fetch, while guaranteeing a
+// re-run tomorrow sees today's additions.
+export const DISCOVERY_TTL_MS = 60 * 60 * 1000;
+
+export interface RequestOptions {
+  // Milliseconds this response stays cacheable. Omitted means cache forever.
+  ttl_ms?: number;
+}
+
 // Persistent on-disk cache of API responses, keyed by endpoint + query params.
 // A cache hit skips both the network request and the serial-pacing delay, so
 // re-runs (and rebuilds after deleting a reference DB) avoid re-fetching data we
 // already have — exactly what API:Etiquette's "don't re-fetch cached data" asks
 // for. Delete scripts/.cache/ to force a fresh fetch.
+//
+// Entries are cached forever by default, which is right for the immutable
+// content a download's phase 2 fetches (an article's extract for a given title).
+// It is wrong for the listing/index pages discovery reads — those gain entries
+// over time, and an unexpiring copy makes new items permanently invisible. Such
+// callers pass `{ ttl_ms: ... }` (see DISCOVERY_TTL_MS) to bound staleness.
 const cache_dir = path.join(process.cwd(), 'scripts', '.cache');
 fs.mkdirSync(cache_dir, { recursive: true });
 const response_cache = new Keyv<unknown>({
@@ -101,7 +118,7 @@ export const create_mediawiki_api = (api_url: string) => {
     hooks: { afterResponse: [maxlag_as_503] },
   });
 
-  return async (params: URLSearchParams): Promise<unknown> => {
+  return async (params: URLSearchParams, options: RequestOptions = {}): Promise<unknown> => {
     const cache_key = cache_key_for(api_url, params);
     const cached = await response_cache.get(cache_key);
     if (cached !== undefined) {
@@ -112,7 +129,7 @@ export const create_mediawiki_api = (api_url: string) => {
     const data = await client.post(api_url, { body: params }).json();
     await sleep(REQUEST_DELAY_MS); // API-etiquette serial pacing
     if (!is_error_response(data)) {
-      await response_cache.set(cache_key, data);
+      await response_cache.set(cache_key, data, options.ttl_ms);
     }
     return data;
   };

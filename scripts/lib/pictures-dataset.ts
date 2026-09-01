@@ -4,6 +4,7 @@
 import { chunk } from 'es-toolkit';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
+import { skip_discovery } from './discovery';
 import { fetch_image_content, type ImageInfo } from './wiki';
 
 const BATCH_SIZE = 50;
@@ -66,19 +67,35 @@ const open_pictures_db = (filename: string, title: string, source_url: string) =
   return db;
 };
 
+// Phase 1: always re-run discovery so pictures newly promoted upstream are
+// picked up, and merge the result into discovered_pictures. INSERT OR IGNORE
+// keeps it idempotent — rows already downloaded keep their done flag and are not
+// re-fetched. Pass --no-discover (or SKIP_DISCOVERY=1) to read the cache instead.
 const discover_with_cache = async (
   db: DatabaseSync,
   discover: () => Promise<DiscoveredPicture[]>
 ): Promise<DiscoveredPicture[]> => {
-  const fetched = db.prepare("SELECT 1 FROM metadata WHERE key = 'urls_fetched'").get();
-  if (fetched) {
-    const rows = db
+  const read_cache = (): DiscoveredPicture[] =>
+    db
       .prepare('SELECT file_title, caption, credit, topic FROM discovered_pictures')
       .all() as unknown as DiscoveredPicture[];
-    const unique = new Set(rows.map((r) => r.file_title)).size;
-    process.stdout.write(`Phase 1: Skipped (${unique} unique pictures already discovered).\n`);
-    return rows;
+
+  if (skip_discovery()) {
+    const cached = read_cache();
+    const unique = new Set(cached.map((entry) => entry.file_title)).size;
+    process.stdout.write(
+      `Phase 1: Skipped by request (${unique} unique pictures already discovered).\n`
+    );
+    return cached;
   }
+
+  const known_before = new Set(
+    (
+      db.prepare('SELECT DISTINCT file_title FROM discovered_pictures').all() as {
+        file_title: string;
+      }[]
+    ).map((row) => row.file_title)
+  );
 
   process.stdout.write('Phase 1: Discovering picture URLs...\n');
   const discovered = await discover();
@@ -92,9 +109,17 @@ const discover_with_cache = async (
   db.prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES ('urls_fetched', '1')").run();
   db.exec('COMMIT');
 
-  const unique = new Set(discovered.map((d) => d.file_title)).size;
-  process.stdout.write(`Found ${unique} unique pictures.\n`);
-  return discovered;
+  const unique_titles = new Set(discovered.map((entry) => entry.file_title));
+  const added = [...unique_titles].filter((file_title) => !known_before.has(file_title)).length;
+  const missing = [...known_before].filter((file_title) => !unique_titles.has(file_title)).length;
+  process.stdout.write(
+    `Found ${unique_titles.size} unique pictures (${added} new since last run` +
+      `${missing > 0 ? `, ${missing} no longer listed upstream` : ''}).\n`
+  );
+
+  // Return the union of freshly discovered and previously cached entries: a
+  // picture dropped upstream stays in the dataset rather than losing its topics.
+  return read_cache();
 };
 
 export const download_pictures_dataset = async (

@@ -160,6 +160,29 @@ npm run playwright-ui       # same, but with Playwright's interactive UI
 npm run test:e2e:update     # updates screenshots
 ```
 
+### Keeping the datasets up to date
+
+Wikipedia and Wikiquote keep adding items, so re-run the same
+`npm run download-*` scripts to catch up. They are incremental: each run
+re-reads the source lists and downloads new items. Items that were removed from
+a source list upstream are kept rather than deleted.
+
+Each run prints what it found, e.g.
+
+```
+Found 44361 unique articles (822 new since last run, 183 no longer listed upstream).
+807 new articles to download (43737 already downloaded).
+```
+
+- Responses are cached on disk in `scripts/.cache/`. Pages that grow over time
+  (the source index pages) are re-fetched at most hourly, so if you re-run twice
+  in a row the second run will legitimately report no changes.
+- Add `-- --no-discover` to skip re-reading the source lists entirely — useful
+  when you only want to resume a download that was interrupted partway through.
+
+After adding new items, re-run `npm run unify-topics` (below) in case they
+introduced a topic that has no bucket yet.
+
 ## Future inspiration
 
 These

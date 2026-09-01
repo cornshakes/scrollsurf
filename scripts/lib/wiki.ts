@@ -1,4 +1,4 @@
-import { create_mediawiki_api } from './mediawiki';
+import { create_mediawiki_api, DISCOVERY_TTL_MS } from './mediawiki';
 
 export const wiki_api = create_mediawiki_api('https://en.wikipedia.org/w/api.php');
 
@@ -19,7 +19,9 @@ export const fetch_wikitext = async (page: string): Promise<string> => {
     format: 'json',
     formatversion: '2',
   });
-  const data = (await wiki_api(params)) as {
+  // Index/listing pages gain entries over time, so this must expire — an
+  // unexpiring copy makes newly listed articles permanently undiscoverable.
+  const data = (await wiki_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
     parse?: { wikitext: string };
     error?: { code: string };
   };

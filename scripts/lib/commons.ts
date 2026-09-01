@@ -1,7 +1,7 @@
 import { chunk } from 'es-toolkit';
 import { decodeHTML } from 'entities';
 import type { ImageInfo } from './wiki';
-import { create_mediawiki_api } from './mediawiki';
+import { create_mediawiki_api, DISCOVERY_TTL_MS } from './mediawiki';
 
 export const commons_api = create_mediawiki_api('https://commons.wikimedia.org/w/api.php');
 
@@ -13,7 +13,10 @@ export const commons_fetch_wikitext = async (page: string): Promise<string> => {
     format: 'json',
     formatversion: '2',
   });
-  const data = (await commons_api(params)) as { parse: { wikitext: string } };
+  // Gallery pages gain entries over time — must expire (see fetch_wikitext).
+  const data = (await commons_api(params, { ttl_ms: DISCOVERY_TTL_MS })) as {
+    parse: { wikitext: string };
+  };
   return data.parse.wikitext;
 };
 
