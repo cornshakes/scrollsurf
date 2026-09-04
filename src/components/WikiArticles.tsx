@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useLayoutEffect, useEffect } from 'react';
 import NextLink from 'next/link';
 import Image from 'next/image';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
@@ -66,11 +66,9 @@ const renderViewIcon = (v: View) => {
 const WikiArticles = () => {
   const [view, setView] = useState<View>('random');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [scroll_node, set_scroll_node] = useState<HTMLDivElement | null>(null);
   const { scrollTopRef } = useFeed();
   const { account, openLogin, logout } = useAuth();
   const { consent } = useConsent();
-  const scroll_nodeRef = useRef<HTMLDivElement | null>(null);
 
   const download_my_data = async () => {
     const data = await export_my_data();
@@ -89,14 +87,24 @@ const WikiArticles = () => {
   };
 
   useLayoutEffect(() => {
-    if (view === 'random' && scroll_nodeRef.current) {
-      scroll_nodeRef.current.scrollTop = scrollTopRef.current;
+    if (view === 'random') {
+      window.scrollTo(0, scrollTopRef.current);
     }
-  }, [view, scroll_node, scrollTopRef]);
+  }, [view, scrollTopRef]);
+
+  useEffect(() => {
+    const on_scroll = () => {
+      if (view === 'random') {
+        scrollTopRef.current = window.scrollY;
+      }
+    };
+    window.addEventListener('scroll', on_scroll, { passive: true });
+    return () => window.removeEventListener('scroll', on_scroll);
+  }, [view, scrollTopRef]);
 
   // Default hysteresis encodes scroll direction: true when scrolling down,
   // false when scrolling up or at the very top.
-  const trigger = useScrollTrigger({ target: scroll_node });
+  const trigger = useScrollTrigger();
   const showIcon = !trigger;
 
   const switchView = (v: View) => {
@@ -109,8 +117,7 @@ const WikiArticles = () => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
-        position: 'relative',
+        flex: 1,
       }}
     >
       <IconButton
@@ -119,7 +126,7 @@ const WikiArticles = () => {
         data-testid="menu-button"
         onClick={() => setDrawerOpen(true)}
         sx={{
-          position: 'absolute',
+          position: 'fixed',
           top: 8,
           left: 8,
           zIndex: (theme) => theme.zIndex.appBar,
@@ -218,19 +225,7 @@ const WikiArticles = () => {
         </List>
       </Drawer>
 
-      <Box
-        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overflowAnchor: 'none' }}
-        data-testid="feed-scroll"
-        ref={(node: HTMLDivElement | null) => {
-          scroll_nodeRef.current = node;
-          set_scroll_node(node);
-        }}
-        onScroll={(event) => {
-          if (view === 'random') {
-            scrollTopRef.current = event.currentTarget.scrollTop;
-          }
-        }}
-      >
+      <Box sx={{ flex: 1, overflowAnchor: 'none' }} data-testid="feed-scroll">
         <Typography variant="h6" component="h1" sx={{ pl: 8, pr: 2, pt: 2.2, pb: 0.5 }}>
           Scrollsurf
         </Typography>

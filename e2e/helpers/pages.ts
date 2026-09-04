@@ -102,9 +102,7 @@ export const open_menu = async (page: Page) => {
     return;
   }
   // scroll up to make button appear, then click
-  await page
-    .getByTestId('feed-scroll')
-    .evaluate((el) => el.scrollBy({ behavior: 'instant', top: -1 }));
+  await page.evaluate(() => window.scrollBy({ behavior: 'instant', top: -1 }));
   await page.getByTestId('menu-button').click();
 };
 
